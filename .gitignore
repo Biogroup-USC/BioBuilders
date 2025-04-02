@@ -1,0 +1,25 @@
+# Python files
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+
+# Enviroments
+venv/
+.env/
+.venv/
+
+# Database
+*.db-journal
+*.sqlite3
+
+# Cache
+*.egg-info/
+*.egg
+*.manifest
+*.spec
+build/
+dist/
+.cache/
+.mypy_cache/
+.pytest_cache/
