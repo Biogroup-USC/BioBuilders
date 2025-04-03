@@ -123,6 +123,22 @@ def get_parameters_from_CSV(CSVfile: str = None, CSVsep: str = None, CSVheader: 
         # Get the keys and values for unit
         keys = Df.loc[Df[section_col] == section, key_col].tolist()
         values = Df.loc[Df[section_col] == section, value_col].tolist()
+        
+        # Convert the values from string to float and interger if it is posible, 
+        # otherwise it remains as string.
+        new_values = []
+        for value in values:
+            try:
+                new_value = float(value)
+                if new_value.is_integer():
+                    new_values.append(int(new_value))
+                else:
+                    new_values.append(new_value)
+            
+            except ValueError:
+                new_value = str(value)
+                new_values.append(new_value)
+        values = new_values
 
         # Add the parameters of each section to the Param_Dictionary
         Param_Dict[section] = dict(zip(keys,values))

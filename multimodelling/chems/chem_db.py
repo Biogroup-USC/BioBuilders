@@ -282,7 +282,7 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         data = cur.fetchall()
         return data
     
-    def get_certain_data_from_db(self, CAS = None, properties: list = None):
+    def get_certain_data_from_db(self, ID = None, properties: list = None):
         """
 
         This method is used to return the selected properties of the chemical whose CAS
@@ -295,16 +295,17 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         #Setting the cursor
         cur = self.get_db_cursor()
 
-        # Check if a CAS number is provided
-        if CAS == None:
-            raise ValueError("You must provide a CAS number because it is the primary key of the table")
+        # Check if a ID is provided
+        if ID == None:
+            raise ValueError("You must provide the ID of the chemical")
 
         # Getting the data
         Results = {}
         for element in properties:
-                cur.execute("SELECT {} FROM Chemical_properties WHERE CAS = ?".format(element), (CAS,))
+                column = f'"{element}"'
+                cur.execute("SELECT {} FROM Chemical_properties WHERE ID = ?".format(column), (ID,))
                 data = cur.fetchone()
-                Results[element] = data[0]
+                Results[element] = data[0] if data else None
         return Results
 
     def get_dataframe_from_db(self):
