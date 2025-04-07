@@ -1,18 +1,46 @@
 """
+
+This script contains all the code used to build the multimodelling chemical database
+used to store all the chemicals from the case studies. As consequence, when a new chemical
+is created it will be searched in the two databases included in BioSTEAM and in the multimodelling
+database. If the chemical is in no one, then it must be defined.
+
+This code also allows the user to create its own database and _build_database could be taken as an 
+example.
+
 """
 import sqlite3
 import pandas as pd
+from datetime import datetime
+import pytz
+from appdirs import user_data_dir
+import os
+import shutil
 
-__all__ = ('ChemDataBase')
+__all__ = ("ChemDataBase",)
 
 class ChemDataBase:          #TODO I´d like to create anoter table for chemical composition of feedstocks, probably inside the Multimodelling_Chem.db
+    
+    Column_Keys = {
+        "MW_g_per_mol":["MW","Mol_weight"],
+        "Cp_J_per_g_K":["Cp","cp"],
+        "Rho_kg_per_m3":["rho","Rho","Density","density"],
+        "Hvap_J_per_mol":["Hvap","hvap"],
+        "V_m3_per_mol":["V", "MolarVolume","v"],
+        "formula":["Formula","formula"],
+        "description":["Description","description"],
+        "ID":["ID"],
+        "CAS":["CAS"],
+        "Phase":["Phase","phase"],
+        "Last_Modification": ["Last_Modification"],
+    }
 
     def __init__(self, dbname: str = None):
         """
         
-        Create a ChemDataBase object by providing the name of the database in your current
-        directory or the name of the database you want to create. This class allows to either
-        create or manage a database of chemicals to reuse this chemicals into MultiModelling.
+        Create a ChemDataBase object which allows the user to build a SQL database for chemical
+        properties in the file path provided as the database name. This is the same code used for 
+        creating the multimodelling database. 
         
         ARGUMENTS:
         
@@ -27,6 +55,35 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         # Initialize the connection property
         self._connection = None
 
+        # Initialize the set_timezone property
+        self._timezone = None
+
+    @property
+    def timezone(self):
+        """
+
+        This property defines the timezone for the time stamp.
+        It could be changed following the next example:
+
+        >>> import pytz
+        >>> MyDB = ChemDataBase()
+        >>> MyDB.timezone = pytz.timezone('Europe/Madrid')
+
+        """
+        if self._timezone is None:
+            self._timezone = pytz.timezone('Europe/Madrid')
+            return self._timezone
+    
+    @property
+    def current_timestamp(self):
+        """
+        
+        This property uses the timezone defined and returns the
+        data and time in the format used by SQL.
+
+        """
+        return datetime.now(self.timezone).isoformat(sep=' ', timespec='seconds')
+
     @property
     def connection(self):
         """
@@ -40,6 +97,59 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
             self._connection = sqlite3.connect(self.dbname)
         return self._connection
     
+    @classmethod
+    def copy_multimodelling_db(cls):
+        """
+        """
+        # Name of the SQL file
+        DB_Filename = "Multimodelling_Chem.db"
+        
+        # Name of the folder in AppData/Local
+        Appname = "Multimodelling_Database"
+
+        # Get the data directory of the user
+        User_Dir = user_data_dir(Appname, appauthor = False)
+        os.makedirs(User_Dir,exist_ok = True)
+
+        # Build the whole path
+        User_DB_Path = os.path.join(User_Dir,DB_Filename)
+
+        # Check if the database already exists in this directory
+        if not os.path.exists(User_DB_Path):
+            # Copy the database from the package
+            Current_Directory = os.path.dirname(__file__)
+            Internal_DB_Path = os.path.join(Current_Directory,"database",DB_Filename)
+
+            # Check if the database exists in the installed package
+            if not os.path.exists(Internal_DB_Path):
+                raise FileNotFoundError("The internal database could not be found in: {}".format(Internal_DB_Path))
+            
+            # Copy the package database to the AppData/Local folder
+            shutil.copy(Internal_DB_Path,User_DB_Path)
+            print("Database copied to: {}".format(User_DB_Path))
+        else:
+            # If the database exists, give the user the path
+            print("The database was found in: {}".format(User_DB_Path))
+        
+        # Return the ChemDataBase connected to the database
+        return cls(User_DB_Path)
+
+    @classmethod
+    def delete_multimodelling_db(cls):
+        """
+        """
+        # Name of the App
+        Appname = "Multimodelling_Database"
+
+        # Get the user directory
+        User_Dir = user_data_dir(Appname, appauthor = False)
+
+        if os.path.exists(User_Dir):
+            shutil.rmtree(User_Dir)
+            print("User database folder deleted: {}".format(User_Dir))
+        else:
+            print("User database folder does not exist: {}".format(User_Dir))
+
     def commit_changes(self):
         """
 
@@ -60,7 +170,7 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
             self._connection.close()
             self._connection = None
     
-    def create_table(self):
+    def create_table_chemical_properties(self):
         """
 
         This method is used to create the table of chemical properties if it 
@@ -77,17 +187,17 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
                     ID TEXT PRIMARY KEY, 
                     formula TEXT,
                     Description TEXT,
-                    "MW g/mol" REAL CHECK ("MW g/mol" > 0), 
+                    MW_g_per_mol REAL CHECK (MW_g_per_mol > 0), 
                     Phase TEXT, 
-                    "Cp J/(g*k)", 
-                    "Rho kg/m3" REAL CHECK ("Rho kg/m3" > 0), 
-                    "Hvap J/mol",
-                    "V m3/mol",
-                    Creation_Date TIMESTAMP DEFAULT CURRENT_TIMESTAMP                       
+                    Cp_J_per_g_K REAL, 
+                    Rho_kg_per_m3 REAL CHECK (Rho_kg_per_m3 > 0), 
+                    Hvap_J_per_mol REAL,
+                    V_m3_per_mol REAL,
+                    Last_Modification TEXT                       
         );                                                                                  
         """)
-        return self.commit_changes()                                                                #TODO Adjust the CURRENT_TIMESTAMP to the Europe/Madrid timezone usig pytz
-                                                                                                    # The idea is to transform this into a property or a class attribute.
+        return self.commit_changes()
+                                                                    
     def get_db_cursor(self):
         """
 
@@ -97,7 +207,7 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         """
         return self.connection.cursor()
 
-    def verify_creation_new_table(self):
+    def get_table_names(self):
         """
 
         This method is used to display the tables of the database ensuring
@@ -108,8 +218,8 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         Cur = self.get_db_cursor()
 
         # Get the name of the tables inside the database
-        Res = Cur.execute("SELECT name FROM sqlite_master")
-        return print(Res.fetchone())
+        Res = Cur.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        return print(Res)
     
     def insert_data_into_db(self,   
                             ID = None,
@@ -134,7 +244,7 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
 
         ID (str): The name of the chemical.
 
-        CAS (str): The CAS number of the chemical and the primary key of the database.
+        CAS (str): The CAS number of the chemical.
 
         formula (str): The formula of the chemical. Note that it must be a string.
 
@@ -147,14 +257,19 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         Rho (float): Constant density model (kg/m3).
 
         Hvap (float): Heat of vaporisation (J/mol) model as function of temperature (K).
+
+        V (float): Molar volume (m3/mol).
         
         """
         # Check if the connection is well initialized 
         if self.connection is None:
             raise ValueError("A connection to database must be provided")
-        
+
         # Setting the cursor
         cur = self.get_db_cursor()
+
+        # Setting timezone
+        Timestamp = self.current_timestamp
 
         # Check if the chemical already exists in the database
         cur.execute("SELECT * FROM Chemical_properties WHERE ID = ? OR CAS = ?",(ID,CAS))
@@ -175,25 +290,30 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
             Rho if Rho is not None else None,
             Hvap if Hvap is not None else None,
             V if V is not None else None,
-
         )
 
         # Insert the data provided into the database
-        cur.execute("""INSERT INTO Chemical_properties (CAS, ID, formula, description, "MW g/mol", Phase, "Cp J/(g*k)", "Rho kg/m3", "Hvap J/mol", "V m3/mol") VALUES(?, ?, ?, ?, ?, ?, ?,?,?,?)""", Add)
+        cur.execute("""INSERT INTO Chemical_properties 
+                    (CAS, ID, formula, description, MW_g_per_mol, Phase, Cp_J_per_g_K, Rho_kg_per_m3, Hvap_J_per_mol, V_m3_per_mol, Last_Modification) 
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", Add + (Timestamp,))
 
         # Commint the changes in the database
         self.commit_changes()
         return print("CAS:{} ID:{}, formula:{}, MW:{}, Phase:{}, Cp:{}, Rho:{}, Hvap:{}, V:{} added to the database".format(CAS, ID, formula, MW, Phase, Cp, Rho, Hvap, V))
     
-    def remove_data_from_db(self, ID, CAS):
+    def remove_data_from_db(self, ID: str = None, CAS: str = None):
         """
         
         This method is used to removed certain chemical from the
         database using the ID or CAS as identification. Note that
         the ID is not interpreted in this database as UNIQUE, this 
-        only corresponds to CAS number.
+        only corresponds to CAS number. However, the ID remains as
+        the primary key.
 
         """
+        if ID is None and CAS is None:
+            raise ValueError("At least one of ID or CAS must be provided")
+
         # Get the cursor
         Cur = self.get_db_cursor()
 
@@ -203,8 +323,12 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         # Check if the chemical was succesfully deleted
         if Cur.rowcount == 0:
             print("No matching chemical found in the database")
-        else: 
-            print("The Chemical {} with CAS: {} was succesfully deleted from the database".format(ID, CAS))
+        elif ID is None: 
+            print("The Chemical with CAS: {} was succesfully deleted from the database".format(CAS))
+        elif CAS is None:
+            print("The Chemical {} was succesfully deleted from the database".format(ID))
+        else:
+            print("The Chemical {} with CAS: {} was succesfully deleted from the database".format(ID,CAS))
 
         self.commit_changes()
 
@@ -225,17 +349,22 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
 
         MW (float): Molecular weight (g/mol).
 
-        Phase_ref (str): The phase reference of the chemical. Must be one of this: 's','g','l'
+        Phase (str): The phase reference of the chemical. Must be one of this: 's','g','l'
 
         Cp (float): Constant Heat Capacity model (J/g).
 
         Rho (float): Constant density model (kg/m3).
 
         Hvap (float): Heat of vaporisation (J/mol) model as function of temperature (K).
+
+        V (float): Molar volume (m3/mol).
         
         """
         # Setting the cursor
         Cur = self.get_db_cursor()
+
+        # Setting the timestamp
+        Timestamp = self.current_timestamp
 
         # Check if the chemical exist in the database
         Cur.execute("SELECT * FROM Chemical_properties WHERE ID = ? OR CAS = ?",(ID, CAS))
@@ -247,20 +376,23 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         Columns_Info = Cur.fetchall()
         Columns_Name = [col[1] for col in Columns_Info]
 
+        # Convert arguments to table names
+        Properties_Translated = self.translate_column_alias_dict(properties)
+
         # Checking that only valid column names are provided
-        for key in properties.keys():
+        for key in Properties_Translated.keys():
             if key not in Columns_Name:
                 raise KeyError("The {} key is not recognised as a valid column".format(key))
             else:
                 continue
         
         # Updating the database
-        Update_Clause = ",".join(f'"{key}" = ?' for key in properties.keys())
-        Query = f"UPDATE Chemical_properties SET {Update_Clause}, Creation_Date = CURRENT_TIMESTAMP WHERE ID = ? OR CAS = ?"
-        Query_Parameters = list(properties.values()) + [ID, CAS]
+        Update_Clause = ",".join(f'"{key}" = ?' for key in Properties_Translated.keys())
+        Query = f"UPDATE Chemical_properties SET {Update_Clause}, Last_Modification = ? WHERE ID = ? OR CAS = ?"
+        Query_Parameters = list(Properties_Translated.values()) + [Timestamp,ID, CAS]
         Cur.execute(Query, Query_Parameters)
         
-        # Commit the changes in the database once the loop has ended
+        # Commit the changes in the database
         self.commit_changes()
 
         return print(f"The {','.join(properties.keys())} properties of {','.join(filter(None, [ID,CAS]))} have been updated")
@@ -289,7 +421,7 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         is provided. The properties that the user wants to extract from database must be
         defined inside the list "properties".
         
-        Properties: (ID, formula, MW, Phase_ref, Cp, Rho, Hvap)
+        Properties: (CAS, formula, MW, Phase, Cp, Rho, Hvap, V)
         
         """
         #Setting the cursor
@@ -299,10 +431,13 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         if ID == None:
             raise ValueError("You must provide the ID of the chemical")
 
+        # Translate the list to match the column names
+        Properties_Translated = self.translate_column_alias_list(properties)
+
         # Getting the data
         Results = {}
-        for element in properties:
-                column = f'"{element}"'
+        for element in Properties_Translated:
+                column = element
                 cur.execute("SELECT {} FROM Chemical_properties WHERE ID = ?".format(column), (ID,))
                 data = cur.fetchone()
                 Results[element] = data[0] if data else None
@@ -318,6 +453,90 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         # Read the SQL database converting it into a pandas DataFrame
         Df = pd.read_sql_query("Select * FROM Chemical_properties", self.connection)
 
-        # Save the pandas DataFrame as an excel 
-        Df.to_excel(self.dbname, index = False)
+        # Save the pandas DataFrame as an excel
+        Excel_Filename = self.dbname.replace(".db",".xlsx") 
+        Df.to_excel(Excel_Filename, index = False)
         return Df
+    
+    def check_chemical(self, ID: str = None, CAS: str = None):
+        """
+
+        This method is used to check if the chemical provided exists in the database.
+
+        ARGUMENTS:
+
+        - ID (str): the name of the chemical.
+
+        - CAS (str): the CAS number of the chemical.
+
+        """
+        if ID is None and CAS is None:
+            raise ValueError("At least one of 'ID' or 'CAS' must be provided")
+        
+        Cur = self.get_db_cursor()
+        
+        if ID is not None and CAS is not None:
+            Cur.execute("SELECT 1 FROM Chemical_properties WHERE ID = ? OR CAS = ?",(ID, CAS))
+        elif ID is not None:
+            Cur.execute("SELECT 1 FROM Chemical_properties WHERE ID = ?",(ID,))
+        else:
+            Cur.execute("SELECT 1 FROM Chemical_properties WHERE CAS = ?",(CAS,))
+        
+        return Cur.fetchone() is not None
+    
+    def translate_column_alias_dict(self, input_dict: dict = None):
+        """
+
+        This method is used to translate the keys of the dictionary provided
+        to match the column names of the database.
+
+        ARGUMENTS:
+
+        - input_dict (dict): This dictionary contains the {column: value} pair
+
+        Note that the dictionary used to translate this dictionary is a class attribute.
+
+        """
+        # Check if the input dictionary is provided
+        if input_dict is None:
+            raise ValueError("No input dictionary for translating it")
+        
+        # Build the alias map
+        Alias_Map = {}
+        for real_name, aliases in self.Column_Keys.items():
+            for alias in aliases:
+                Alias_Map[alias.lower()] = real_name
+        
+        # Translate
+        Translated = {}
+        for key, value in input_dict.items():
+            Translated_Key = Alias_Map.get(key.lower(), key)
+            Translated[Translated_Key] = value
+        
+        return Translated
+    
+    def translate_column_alias_list(self, input_list: list = None):
+        """
+
+        This method is used to translate a list of names to match the 
+        column names of the database.
+
+        ARGUMENTS:
+
+        - input_list (list): This list contains the alias of the column names.
+
+        Note that the dictionary used to translate this list is a class attribute.
+
+        """
+        # Check if the input list is provided
+        if input_list is None:
+            raise ValueError("No input list for translating it")
+        
+        # Build the alias map
+        Alias_Map = {}
+        for real_name, aliases in self.Column_Keys.items():
+            for alias in aliases:
+                Alias_Map[alias.lower()] = real_name
+        
+        # Return the list with the translated column names
+        return [Alias_Map.get(str(col).lower(), str(col)) for col in input_list]

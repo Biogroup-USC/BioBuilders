@@ -1,0 +1,3 @@
+recursive-include multimodelling *.py
+exclude multimodelling/chems/_build_database.py
+exclude multimodelling/test.py

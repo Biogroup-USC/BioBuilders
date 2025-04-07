@@ -2,7 +2,7 @@
 """
 import biosteam as bst
 
-__all__ = ["BatchEnzymaticTreatment"]
+__all__ = ["BatchEnzymaticTreatment",]
 
 class BatchEnzymaticTreatment(bst.AbstractStirredTankReactor):
     """

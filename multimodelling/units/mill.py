@@ -2,7 +2,7 @@
 """
 import biosteam as bst
 
-__all__ = ["Mill"]
+__all__ = ("Mill",)
 
 class Mill(bst.Unit):
     """

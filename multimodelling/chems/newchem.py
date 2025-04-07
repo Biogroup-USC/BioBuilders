@@ -1,8 +1,9 @@
 """
 """
 import thermosteam as tmo
+from .chem_db import ChemDataBase
 
-__all__=('ChemManager')
+__all__=('ChemManager',)
 
 class ChemManager:
 
@@ -79,13 +80,9 @@ class ChemManager:
 
         #Create a dictionary to transformate the keys avoiding errors
         Transformed_Keys = {
-            'Rho': 'rho',
-            'Default': 'default',
-            'Phase_ref': 'phase_ref',
-            'Phase_Ref': 'phase_ref',
-            'Cache': 'cache',
-            'Formula': 'formula',
-            'Phase': 'phase'
+            'Rho': 'rho','Default': 'default','Phase_ref': 'phase_ref','Phase_Ref': 'phase_ref',
+            'Cache': 'cache','Formula': 'formula','Phase': 'phase','MW_g_per_mol': 'MW',
+            'Cp_J_per_g_K': 'Cp','Rho_kg_per_m3': 'rho', 'Hvap_J_per_mol': 'Hvap','V_m3_per_mol': 'V',
         }
         
         for chem in self.chems:
@@ -107,15 +104,38 @@ class ChemManager:
                     )
                 )
                 except LookupError:
-                    # Create a dictionary with the compulsory arguments         #TODO Add by default MW = 1 to not interfere with how units handle the chemicals
-                    chem_args = {'ID': chem, 'search_db': False}                #avoiding errors during unit.run() and Stream creation
+                    # Create a dictionary with the compulsory arguments         
+                    chem_args = {'ID': chem, 'search_db': False}                
+                    
+                    # Check if the chemical exists in the multimodelling database
+                    DB = ChemDataBase()
+                    DB = DB.copy_multimodelling_db()
 
-                    # Add the properties defined in the input dictionary
-                    if properties and chem in properties:
+                    # If the chem is in the database, get its properties
+                    if DB.check_chemical(chem):
+                        Chem_Properties = DB.get_certain_data_from_db(chem,[
+                            "Rho","MW","formula","Cp","Hvap","V","Phase"
+                        ])
+                        print(Chem_Properties)
+                        for prop, value in Chem_Properties.items():
+                            key = Transformed_Keys.get(prop, prop)
+                            if isinstance(value,str):
+                                # Convert the numbers to float
+                                try:
+                                    chem_args[key] = float(value)
+                                except ValueError:
+                                    chem_args[key] = value
+                            else:
+                                chem_args[key] = value
+                    # If the chem is not in any database, get the properties from the dictionary provided
+                    elif properties and chem in properties:
+                        # Add the properties defined in the input dictionary
                         for prop, value in properties[chem].items():
                             key = Transformed_Keys.get(prop, prop)
                             chem_args[key] = value
                     else:
+                        # if the chemical is not in the ChEDL database, BioSTEAM database, multimodelling database and 
+                        # its properties are not defined, it gives back an error
                         raise LookupError("The chemical {} properties must be provided".format(chem))
                 
                     # Add the chemical

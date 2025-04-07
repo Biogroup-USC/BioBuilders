@@ -2,7 +2,7 @@
 """
 import biosteam as bst
 
-__all__ = ["ShellHeatExchanger"]
+__all__ = ("ShellHeatExchanger",)
 
 class ShellHeatExchanger(bst.Unit):
     """

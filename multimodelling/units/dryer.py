@@ -2,7 +2,7 @@
 """
 import biosteam as bst
 
-__all__ = ("Dryer")
+__all__ = ("Dryer",)
 
 class Dryer(bst.Unit):
     """
