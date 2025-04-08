@@ -2,9 +2,9 @@
 """
 import biosteam as bst
 
-__all__ = ["BatchEnzymaticTreatment",]
+__all__ = ("BatchEnzymaticTreatment",)
 
-class BatchEnzymaticTreatment(bst.AbstractStirredTankReactor):
+class BatchEnzymaticTreatment(bst.Unit):
     """
 
     Create a Enzymatic CSTR inheriting from AbstractStirredTankReactor (BioSTEAM) which 
@@ -12,7 +12,7 @@ class BatchEnzymaticTreatment(bst.AbstractStirredTankReactor):
     the chemicals like water, NaOH or Enzyme have to be added using a second stream called 
     auxiliar stream.
 
-    ARGUMENTS:
+    ARGUMENTS:                                                                                  #TODO document this better
 
     -   ID (str): This ID refers to the name of this unit.
 
@@ -20,54 +20,63 @@ class BatchEnzymaticTreatment(bst.AbstractStirredTankReactor):
 
     -   outs(list): List of output streams. In this case, there is 1 possible outputs].
 
-    -   time (float): Reaction time. set to 5 h by default.
+    -   time (float): Reaction time. Set to 5 h by default.
 
-    -   loadingtime (float): Loading time. set to 15 min by default.    
+    -   loadCIPtime (float): Loading and CIP time. Set to 1 h by default.    
 
-    -   reaction (dict or str): This argument is either a dict or a str. If the 
-        desired reaction is not in the pre-defined reactions, provide it as 
-        {reactioname: Reaction object (BioSTEAM)}. When using the pre-defined ones, 
+    -   reaction (dict or str): This argument is either a str or a ReactionSystem object
+        from BioSTEAM. If the desired reaction is not in the pre-defined reactions, provide 
+        it as {reactioname: Reaction object (BioSTEAM)}. When using the pre-defined ones, 
         provide one of the following list:
 
-            "Prot_Lib_TS_Viscozyme" 
-            Structural_Protein -> Protein; Yield = 0.712; 
-            basis = 'wt'
+            >>> "Prot_Lib_TS_Viscozyme" 
+            >>> Structural_Protein -> Protein; Yield = 0.712; 
+            >>> basis = 'wt'
 
-            "Prot_Lib_TS_Trypsin"
-            Structural_Protein -> Peptides; Yield = 0.12;
-            basis = 'wt'
-        
-    Notes: 
-    Only 1 reaction is supported at this moment. Implementing more than one 
-    in the same CSTR will be further added.
+            >>> "Prot_Lib_TS_Trypsin"
+            >>> Structural_Protein -> Peptides; Yield = 0.12;
+            >>> basis = 'wt'
 
+            >>> "Prot_Hydrolysis_Trypsin"
+            >>> Protein -> Peptides; Yield = 1
+            >>> basis = 'wt'
+    
+    -   V_wf (float): Fraction of the reactor which corresponds to working volume. Default to 0.8.
+
+    -   V_max (float): Maximum volume per reactor. Default to 200 m3.
+    
+    -   kW_per_m3 (float): Power consumption due to stirring. Default to 0.180 kW/m3.
+
+    -   opertaing_P (float): Pressure inside the reactor. Default to 101325 Pa.
+
+    -   length_to_diameter (float): length-diameter ratio of the reactor for design purpouses.
+        default to 2.
+    
     """
     _N_ins = 2
     _N_outs = 1
-    kW_per_m3_default = (0.79*1000*(1.417**3)*(0.373**5))/90    #kW/m3       using 1 m3 data --> http://dx.doi.org/10.1016/j.jclepro.2016.06.164
-    V_wf_default = 0.8      
-    tau_default = 5         #h
-    tau_0_default = 15/60   #h
-    batch_default = True
-    _units = 'kg/hr'
-    
+    _units = {
+        'Power': 'kW/m3',
+    }
+
     Pre_Defined_Reactions = {       # Reaction stoichiometry                                    # Yield-based Reactant              # Yield     # Weight or Mol
         "Prot_Lib_TS_Viscozyme" :   {"reaction":{'Structural_Protein' : -1,'Protein': 1},       "reactant": 'Structural_Protein',   "X": 0.712, "basis" : 'wt'},
         "Prot_Lib_TS_Trypsin" :     {"reaction":{'Structural_Protein' : -1, 'Peptides': 1},     "reactant": 'Structural_Protein',   "X": 0.12,  "basis": 'wt'},
         "Prot_hydrolysis_Trypsin":  {"reaction": {'Protein': -1, 'Peptides': 1},                "reactant": 'Protein',              "X": 1.0,   "basis": 'wt'},
     }
 
-    def _init(self, reaction: dict | str = None, time: float = None, loadingtime: float = None):
+    def _init(self, 
+              reaction: dict | str = None, 
+              time: float = None, 
+              loadCIPtime: float = None,
+              operating_T: float = None,
+              operating_P: float = None
+              ):
         """
 
-        This method initializes the unit chosing the reaction from the pre-defined
-        reactions dictionary if reaction = str or creating a new reaction attribute
-        if reaction = dict. The dictionary must have the following structure: 
-        {"reaction name" : Reaction object (BioSTEAM)} 
-
-        Notes: 
-        Only 1 reaction is supported at this moment. Implementing more than one                 
-        in the same CSTR will be further added.
+        This method initialises the BatchEnzymaticTreatment object allowing to select
+        a predifined reaction if reaction = str or a reaction system providing a BioSTEAM
+        ReactionSystem object. Note that a Reaction object could be provided.
 
         """
         # The reaction attribute could be a new reaction provided by the user or 
@@ -82,25 +91,26 @@ class BatchEnzymaticTreatment(bst.AbstractStirredTankReactor):
                 )
             else:
                 raise ValueError("Reaction {} is not defined. Use a predefined or provide a dictionary".format(reaction))
-        elif isinstance(reaction, dict):
-            if reaction.values() > 1:
-                raise ValueError("More than 1 reaction is not yet supported")
-            else:
-                self.reaction = reaction.values()   #TODO: add parallel reactions and series reaction. For now, only one works
+        elif isinstance(reaction, object):
+            self.reaction = reaction
         else:
             raise ValueError("A reaction must be provided")
-        
-        # If not time provided, default to 5 h
-        self.tau_default = time if time is not None else self.tau_default
 
-        # If not loading_time provided, default to 15 min
-        self.tau_0_default = loadingtime if loadingtime is not None else self.tau_0_default
-                
+        # The other parameters
+        self.time = time
+        self.loadCIPtime = loadCIPtime
+        self._operating_T = operating_T
+        self._operating_P = operating_P
+        self._kW_per_m3 = None
+        self._V_wf = None
+        self._V_max = None
+
     def _run(self):
         """
-        
-                                                #TODO Document the run function explaining how the mass balance is simulated
 
+        The mass balance is simulated as Out = In + Generation. The generation term
+        corresponds to the enzymatic reaction.
+        
         """
         # Define the input streams
         Feed = self.ins[0]
@@ -114,12 +124,75 @@ class BatchEnzymaticTreatment(bst.AbstractStirredTankReactor):
         Load.mix_from([Feed, Aux], energy_balance = False)
        
         # Perform the reaction
+        Product.T = self.operating_T
         Product.copy_flow(Load)
-        self.reaction(Product) 
+        self.reaction(Product)
+    
+    @property
+    def kW_per_m3(self):
+        """
+        """
+        if self._kW_per_m3 is None:
+            self._kW_per_m3 = (0.79*1000*(1.417**3)*(0.373**5))/90    #kW/m3       using 1 m3 data --> http://dx.doi.org/10.1016/j.jclepro.2016.06.164
+        return self._kW_per_m3
+    
+    @property
+    def operating_T(self):
+        """
+        """
+        if self._operating_T is None:
+            self._operating_T = 273.15 + 37.0
+            raise Warning("The temperature is {} K by default".format(self._operating_T))
+        return self._operating_T
+    
+    @property
+    def operating_P(self):
+        """
+        """
+        if self._operating_P is None:
+            self._operating_P = 101325
+            raise Warning("The Pressure is {} bar by default".format(self._operating_P))
+        return self._operating_P
+    
+    @property
+    def V_wf(self):
+        """
+        """
+        if self._V_wf is None:
+            self._V_wf = 0.80
+        return self._V_wf
+    
+    @property
+    def V_max(self):
+        """
+        """
+        if self._V_max is None:
+            self._V_max = 200   #m3
+        return self._V_max
 
-    def _design(self):
-        #self.heat_utilities[0]()                                #TODO Use this method to add the heat utility
-        pass
+    def _desing(self):
+        """
+        """
+        Design = self.design_results
+        Ins1, Ins2 = self.ins
+        Out = self.outs
 
-    def _cost(self):
-        pass
+        # Calculate the reactor volume
+        Inputs_F_Vol = (Ins1.F_vol + Ins2.F_vol)
+        V_0 = Inputs_F_Vol
+
+        # Calculate the number of batches needed to operate in semi-continuous
+        tau = self.time
+        tau_0 = self.loadCIPtime
+        V_wf = self.V_wf
+        V_max = self.V_max
+        N = V_0 / (V_max*V_wf) * (tau+tau_0) + 1
+        
+        # Minimum 2 reactor
+        if N < 2:
+            N = 2
+        
+        # Design tools from BioSTEAM to get the batch size
+        Design.update(bst.design_tools.size_batch(V_0,tau,tau_0,N,V_wf))
+        print(Design)
+        V_reactor = Design['Reactor volume']

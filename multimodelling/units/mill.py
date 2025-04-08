@@ -26,13 +26,18 @@ class Mill(bst.Unit):
 
     _N_ins = 1
     _N_outs = 2
-    _units = 'kg/hr'
+    _units = {
+        'Power': 'kWh/kg'
+    }
     
     def _init(self, losses):
         # The _init method is used to add input parameters to the AbstractUnit
         if not (0 <= losses <= 1):
             raise ValueError("Losses must be between 0 and 1 (fractional value).")
         self.losses = losses
+        
+        # Initialize the properties
+        self._power_consumption = None
 
     def _run(self):
         """
@@ -56,8 +61,24 @@ class Mill(bst.Unit):
         Losses.copy_like(feed)
         Losses.F_mass = (self.losses)*feed.F_mass
 
+    @property
+    def power_consumption(self):
+        """
+
+        This property refers to the power consumption as kWh
+
+        """
+        if self._power_consumption is None:
+            self._power_consumption = 1.1 *3600    # Aurelie uses 1.1 kW for 0.5 g
+        return self._power_consumption
+
     def _design(self):
-        pass
+        """
+        """
+        self.add_power_utility(self.power_consumption/3600)
 
     def _cost(self):
-        pass
+        """
+        """
+
+        
