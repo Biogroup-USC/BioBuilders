@@ -76,5 +76,6 @@ DB.insert_data_into_db(
     formula = 'C11H25NO3',
     MW = 104.17 + 115.15,
     Rho = 1010,
+    Phase = 'l',
     Cp = 2.05,
 )
