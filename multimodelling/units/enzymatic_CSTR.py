@@ -40,26 +40,30 @@ class BatchEnzymaticTreatment(bst.Unit):
             >>> "Prot_Hydrolysis_Trypsin"
             >>> Protein -> Peptides; Yield = 1
             >>> basis = 'wt'
-    
+
+    -   operting_P (float): Pressure inside the reactor. Default to 101325 Pa.
+
+    -   operating_T (float): Temperature inside the reactor. Default to 310.25 K.
+
+    ATTRIBUTES:
+
     -   V_wf (float): Fraction of the reactor which corresponds to working volume. Default to 0.8.
 
     -   V_max (float): Maximum volume per reactor. Default to 200 m3.
     
     -   kW_per_m3 (float): Power consumption due to stirring. Default to 0.180 kW/m3.
-
-    -   opertaing_P (float): Pressure inside the reactor. Default to 101325 Pa.
-
-    -   length_to_diameter (float): length-diameter ratio of the reactor for design purpouses.
-        default to 2.
     
     """
     _N_ins = 2
     _N_outs = 1
     _units = {
         'Power': 'kW/m3',
+        'Reactor volume': 'm3',
+        'Batch time': 'h',
+        'Loading and cleaning time': 'h',
     }
 
-    Pre_Defined_Reactions = {       # Reaction stoichiometry                                    # Yield-based Reactant              # Yield     # Weight or Mol
+    Predefined_Reactions = {        # Reaction stoichiometry                                    # Yield-based Reactant              # Yield     # Weight or Mol
         "Prot_Lib_TS_Viscozyme" :   {"reaction":{'Structural_Protein' : -1,'Protein': 1},       "reactant": 'Structural_Protein',   "X": 0.712, "basis" : 'wt'},
         "Prot_Lib_TS_Trypsin" :     {"reaction":{'Structural_Protein' : -1, 'Peptides': 1},     "reactant": 'Structural_Protein',   "X": 0.12,  "basis": 'wt'},
         "Prot_hydrolysis_Trypsin":  {"reaction": {'Protein': -1, 'Peptides': 1},                "reactant": 'Protein',              "X": 1.0,   "basis": 'wt'},
@@ -75,19 +79,19 @@ class BatchEnzymaticTreatment(bst.Unit):
         """
 
         This method initialises the BatchEnzymaticTreatment object allowing to select
-        a predifined reaction if reaction = str or a reaction system providing a BioSTEAM
+        a predefined reaction if reaction = str or a reaction system providing a BioSTEAM
         ReactionSystem object. Note that a Reaction object could be provided.
 
         """
         # The reaction attribute could be a new reaction provided by the user or 
         # a pre-defined reaction 
         if isinstance(reaction, str):
-            if reaction in self.Pre_Defined_Reactions:
+            if reaction in self.Predefined_Reactions:
                 self.reaction = bst.Reaction(
-                    reaction = self.Pre_Defined_Reactions[reaction]["reaction"],
-                    reactant = self.Pre_Defined_Reactions[reaction]["reactant"],
-                    X = self.Pre_Defined_Reactions[reaction]["X"],
-                    basis = self.Pre_Defined_Reactions[reaction]["basis"]
+                    reaction = self.Predefined_Reactions[reaction]["reaction"],
+                    reactant = self.Predefined_Reactions[reaction]["reactant"],
+                    X = self.Predefined_Reactions[reaction]["X"],
+                    basis = self.Predefined_Reactions[reaction]["basis"]
                 )
             else:
                 raise ValueError("Reaction {} is not defined. Use a predefined or provide a dictionary".format(reaction))
@@ -120,7 +124,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         Product = self.outs[0]
 
         # Mix both streams
-        Load = bst.Stream('Ghost', units = 'kg/hr')
+        Load = bst.Stream(units = 'kg/hr')
         Load.mix_from([Feed, Aux], energy_balance = False)
        
         # Perform the reaction
@@ -142,7 +146,9 @@ class BatchEnzymaticTreatment(bst.Unit):
         """
         if self._operating_T is None:
             self._operating_T = 273.15 + 37.0
-            raise Warning("The temperature is {} K by default".format(self._operating_T))
+            print("")
+            print("The temperature is {} K by default".format(self._operating_T))
+            print("")
         return self._operating_T
     
     @property
@@ -151,7 +157,9 @@ class BatchEnzymaticTreatment(bst.Unit):
         """
         if self._operating_P is None:
             self._operating_P = 101325
-            raise Warning("The Pressure is {} bar by default".format(self._operating_P))
+            print("")    
+            print("The Pressure is {} bar by default".format(self._operating_P))
+            print("")
         return self._operating_P
     
     @property
@@ -170,29 +178,51 @@ class BatchEnzymaticTreatment(bst.Unit):
             self._V_max = 200   #m3
         return self._V_max
 
-    def _desing(self):
+    def _design(self):
         """
         """
         Design = self.design_results
         Ins1, Ins2 = self.ins
         Out = self.outs
+        Load = bst.Stream(units = 'kg/hr')
+        Load.copy_like(Ins1)
+        Load.mix_from([Ins1, Ins2], energy_balance = False)
 
         # Calculate the reactor volume
         Inputs_F_Vol = (Ins1.F_vol + Ins2.F_vol)
         V_0 = Inputs_F_Vol
 
         # Calculate the number of batches needed to operate in semi-continuous
-        tau = self.time
-        tau_0 = self.loadCIPtime
-        V_wf = self.V_wf
-        V_max = self.V_max
+        tau = self.time             # h
+        tau_0 = self.loadCIPtime    # h
+        V_wf = self.V_wf            
+        V_max = self.V_max          # m3
         N = V_0 / (V_max*V_wf) * (tau+tau_0) + 1
         
-        # Minimum 2 reactor
+        # Minimum 2 reactor: There must be at least 2 reactor to operate in semi-continuous
         if N < 2:
             N = 2
         
-        # Design tools from BioSTEAM to get the batch size
-        Design.update(bst.design_tools.size_batch(V_0,tau,tau_0,N,V_wf))
-        print(Design)
-        V_reactor = Design['Reactor volume']
+        # Add the reactor volume, the number of reactors, batch time and loading+cleaning time
+        Design['Reactor volume'] = V_0/V_wf         # m3
+        Design['Number of reactors'] = N
+        Design['Batch time'] = tau                  # h
+        Design['Loading and cleaning time'] = tau_0 # h
+
+        # Add the power utility
+        Power_Stirring = self.kW_per_m3 * Design["Reactor volume"]
+        self.add_power_utility(Power_Stirring)
+
+        # Add the heat utility assuming that the process is adiabatic
+        Tf = self.operating_T                   # K
+        Ti = Load.T                             # K
+        Duty = Load.Cp * (Tf-Ti) * Load.F_mass  # kJ/h
+        self.add_heat_utility(Duty, T_in = Ti, T_out = Tf)
+    
+    def _cost(self):
+        """
+        """
+        # Calculate the purchase cost for each reactor
+        V_reactor = self.design_results['Reactor volume']
+        N_reactors = self.design_results['Number of reactors']
+        

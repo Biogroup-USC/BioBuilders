@@ -22,6 +22,10 @@ class Mill(bst.Unit):
     - losses (float): The losses associated to this process. This parameter is represented as (g losses/
     g feed) and it is treated as a separation factor.
 
+    ATTRIBUTES:
+
+    - power_consumption (float): The power consumption in kWh/kg feed
+
     """
 
     _N_ins = 1
@@ -30,11 +34,12 @@ class Mill(bst.Unit):
         'Power': 'kWh/kg'
     }
     
-    def _init(self, losses):
+    def _init(self, losses: float = None, time: float = None):
         # The _init method is used to add input parameters to the AbstractUnit
         if not (0 <= losses <= 1):
             raise ValueError("Losses must be between 0 and 1 (fractional value).")
         self.losses = losses
+        self.tau = time
         
         # Initialize the properties
         self._power_consumption = None
@@ -65,20 +70,23 @@ class Mill(bst.Unit):
     def power_consumption(self):
         """
 
-        This property refers to the power consumption as kWh
+        This property refers to the power consumption as kWh/kg
 
         """
         if self._power_consumption is None:
-            self._power_consumption = 1.1 *3600    # Aurelie uses 1.1 kW for 0.5 g
+            self._power_consumption = 1.1 * 3600 * self.tau/0.0005 # Aurelie uses 1.1 kW for 0.5 g
         return self._power_consumption
 
     def _design(self):
         """
         """
-        self.add_power_utility(self.power_consumption/3600)
+        Ins1, = self.ins
+        # Add the power utility
+        self.add_power_utility(self.power_consumption * Ins1.F_mass)
 
     def _cost(self):
         """
         """
+        
 
         

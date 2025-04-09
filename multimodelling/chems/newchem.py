@@ -114,9 +114,9 @@ class ChemManager:
                     # If the chem is in the database, get its properties
                     if DB.check_chemical(chem):
                         Chem_Properties = DB.get_certain_data_from_db(chem,[
-                            "Rho","MW","formula","Cp","Hvap","V","Phase"
+                            "Rho","MW","formula","Phase","Hvap","V","Cp"
                         ])
-                        print(Chem_Properties)
+
                         for prop, value in Chem_Properties.items():
                             key = Transformed_Keys.get(prop, prop)
                             if isinstance(value,str):
@@ -137,7 +137,7 @@ class ChemManager:
                         # if the chemical is not in the ChEDL database, BioSTEAM database, multimodelling database and 
                         # its properties are not defined, it gives back an error
                         raise LookupError("The chemical {} properties must be provided".format(chem))
-                
+                    
                     # Add the chemical
                     chemicals.append(tmo.Chemical(**chem_args))                 
 
