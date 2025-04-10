@@ -31,7 +31,8 @@ class Mill(bst.Unit):
     _N_ins = 1
     _N_outs = 2
     _units = {
-        'Power': 'kWh/kg'
+        'Power': 'kW',
+        'Specific Power': 'kWh/kg'
     }
     
     def _init(self, losses: float = None, time: float = None):
@@ -74,19 +75,41 @@ class Mill(bst.Unit):
 
         """
         if self._power_consumption is None:
-            self._power_consumption = 1.1 * 3600 * self.tau/0.0005 # Aurelie uses 1.1 kW for 0.5 g
-        return self._power_consumption
+            self._power_consumption = 0.016     # kWh/kg from http://dx.doi.org/10.1016/j.jclepro.2016.06.164 / 16 kWh/ton is the upper value for grinding
+        return self._power_consumption          # Aurelie uses 1.1 kW to grind 0.5 g for 5 minutes (2,200 kWh/kg) which leads to 17204.00 USD/hr in utilities
 
     def _design(self):
         """
         """
+        Design = self.design_results
         Ins1, = self.ins
+
+        # Power
+        Power = self.power_consumption * Ins1.F_mass
+        Design['Specific Power'] = self.power_consumption
+        Design['Power'] = Power
+
         # Add the power utility
-        self.add_power_utility(self.power_consumption * Ins1.F_mass)
+        self.add_power_utility(Power)
 
     def _cost(self):
         """
         """
-        
+        # Load all the design parameters needed
+        Power = self.design_results['Power']
 
-        
+        # Calculate the baseline purchase cost for the attrition mill
+        ## The base cost accounts for the attrition mill. Rule of the Thumb: DOI: 10.1002/9783527611119. Appendix D
+        Mill_baseline_Cost = 30000 * (Power/23)**0.63   # Mill costs includes auxiliar equipment and drive but motor
+        self.baseline_purchase_costs['Mill equipment'] = Mill_baseline_Cost
+        Motor_baseline_Cost = 0
+
+        ## The material, pressure and temperature factor are assumed to be 1
+        self.F_D['Mill equipment'] = self.F_M['Mill equipment'] = self.F_P['Mill equipment'] = 1
+
+        ## The installation costs are assumed to be 0, so the bare module factor = 1
+        self.F_BM['Mill equipment'] = 1
+
+        ## Scale the costs using CEPCI
+        CE_base = 100
+        self.baseline_purchase_costs['Mill equipment'] *= bst.CE/CE_base
