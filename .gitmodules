@@ -1,3 +1,4 @@
 [submodule "multiscale-modelling-biorefinery-case-studies"]
 	path = multiscale-modelling-biorefinery-case-studies
 	url = https://github.com/Biogroup-USC/multiscale-modelling-biorefinery-case-studies.git
+	branch = main
