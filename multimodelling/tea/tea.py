@@ -1,5 +1,6 @@
 """
 """
+import numpy as np
 import biosteam as bst
 
 __all__ = (
@@ -8,7 +9,7 @@ __all__ = (
 )
 
 def Load_Process_Settings(
-            CEPCI: float = 567.5,           # CEPCI is 567.5 (2013) by default (BioSTEAM)
+            CEPCI: float = 567.5,           # CEPCI is 567.5 (2017) by default (BioSTEAM)
             electricity: float = 0.0782,    # electricity price is 0.0782 USD/kWh by default (BioSTEAM)
             heatutility: list | dict = None,
             coolutility: list | dict = None,
@@ -100,16 +101,42 @@ def Load_Process_Settings(
 class TEA(bst.TEA):
     """
     """
-    def __init__(self, system, IRR, duration, depreciation, income_tax, operating_days, lang_factor,
-                 labor_cost, fringe_benefits, property_tax, property_insurance, supplies, maintenance, administration,
-                 construction_schedule, startup_months, startup_FOCfrac, startup_VOCfrac, startup_salesfrac, 
-                 WC_over_FCI, finance_interest, finance_years, finance_fraction, accumulate_interest_during_construction = False):
+    def __init__(self,
+                 system: object = None,
+                 IRR: float = 0.10,                         # 10% is a common target in medium-risk industrial projects
+                 duration: tuple = None,                    
+                 depreciation: str | np.ndarray = 'SL',     # Straight line 
+                 income_tax: float = 0.25,                  # 25% is the corporate tax rate in Spain
+                 operating_days: float = 330,               # 330 days by default 
+                 lang_factor: float = 5.0,                  # For biorefineries using lignocellulosic wastes and high-risk technologies https://doi.org/10.3390/resources13110156
+                 labor_cost: float = None,                  
+                 fringe_benefits: float = 0.30,             # 30% is a typical for Western Europe / Spain 
+                 property_tax: float = 0.01,                # 1% of FCI as an estimation for industrial property taxes 
+                 property_insurance: float = 0.005,         # 0.5% of FCI is a standard for latge-scale process plants
+                 supplies: float = 0.05,                    # 5% is a common assumption for indirect material expenses
+                 maintenance: float = 0.03,                 # 3% is an industry average for bio-based facilities
+                 administration: float = 0.01,              # 1% is a typical value for admin and support services in industrial operations
+                 construction_schedule: tuple = (0.5, 0.5), # 50% firt year and 50% the sencond by default 
+                 startup_months: float = 0,                 # The startup is not taken into account
+                 startup_FOCfrac: float = 0,                # The startup is not taken into account
+                 startup_VOCfrac: float = 0,                # The startup is not taken into account
+                 startup_salesfrac: float = 0,              # The startup is not taken into account
+                 WC_over_FCI: float = 0.15,                 # 15% from Smith, R. (2016). *Chemical Process Design and Integration* (2nd ed.). Wiley. ISBN: 978-1-119-99013-0
+                 finance_interest: float = None, 
+                 finance_years: int = None, 
+                 finance_fraction: float = None, 
+                 accumulate_interest_during_construction: bool = False
+                ):
+        
+        # Call to parent constructor
         super().__init__(system, IRR, duration, depreciation, income_tax, operating_days, lang_factor, 
                          construction_schedule, startup_months, startup_FOCfrac, startup_VOCfrac, startup_salesfrac, 
                          WC_over_FCI, finance_interest, finance_years, finance_fraction, accumulate_interest_during_construction)
+        
+        # Parameters
         self.labor_cost = labor_cost
         self.fringe_benefits = fringe_benefits
-        self.property_tax = property_tax
+        self.property_tax = property_tax 
         self.property_insurance = property_insurance
         self.supplies= supplies
         self.maintenance = maintenance
