@@ -127,7 +127,7 @@ class BatchEnzymaticTreatment(bst.Unit):
 
         # Mix both streams
         Load = bst.Stream(units = 'kg/hr')
-        Load.mix_from([Feed, Aux], energy_balance = False)
+        Load.mix_from([Feed, Aux], energy_balance = True)
        
         # Perform the reaction
         Product.T = self.operating_T
@@ -206,7 +206,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         Out = self.outs
         Load = bst.Stream(units = 'kg/hr')
         Load.copy_like(Ins1)
-        Load.mix_from([Ins1, Ins2], energy_balance = False)
+        Load.mix_from([Ins1, Ins2], energy_balance = True)
 
         # Calculate the reactor volume
         Inputs_F_Vol = (Ins1.F_vol + Ins2.F_vol)
