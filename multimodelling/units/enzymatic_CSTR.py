@@ -201,6 +201,7 @@ class BatchEnzymaticTreatment(bst.Unit):
     def _design(self):
         """
         """
+        # Load the dictionary of results
         Design = self.design_results
         Ins1, Ins2 = self.ins
         Out = self.outs
@@ -263,5 +264,5 @@ class BatchEnzymaticTreatment(bst.Unit):
         self.F_BM['Reactor'] = 1
 
         ## Scale the costs using CEPCI
-        CE_base = 100
-        self.baseline_purchase_costs['Reactor'] *= bst.CE/CE_base
+        CE_Base = 100
+        self.baseline_purchase_costs['Reactor'] *= bst.CE/CE_Base

@@ -1,6 +1,7 @@
 """
 """
 import biosteam as bst
+from ..mathtools import log_mean
 
 __all__ = ("ShellHeatExchanger",)
 
@@ -29,12 +30,16 @@ class ShellHeatExchanger(bst.Unit):
     """                            
     _N_ins = 1
     _N_outs = 1
+    _units = {
+        'Area': 'm2'
+    }
 
-    def _init(self, Tout: float = None, Cp: float = None):      
+    def _init(self, Tout: float = None, Cp: float = None, U: float = None):      
         if Tout is None:
             raise ValueError("A Tout must be provided")        
         self.Cp = Cp
-        self.Tout = Tout            
+        self.Tout = Tout
+        self.U = U if U is not None else 1500 # set by default to steam (hot) - water (cold) https://doi.org/10.1016/B978-0-08-102599-4.00012-6 
         self._energy_balance_type = None
         self._tau = None
         self._heat_consumption = None
@@ -130,7 +135,7 @@ class ShellHeatExchanger(bst.Unit):
         if self.energy_balance_type == 'kWh/kg':
             Heat_Consumption = Fluid_Cp * Dif_Temp / 3600
         elif self.energy_balance_type == 'kWh':
-            Mass = self.tau * Cold_Fluid.get_total_flow('kg/hr')
+            Mass = Cold_Fluid.get_total_flow('kg/hr')
             Heat_Consumption = Fluid_Cp * Mass * Dif_Temp / 3600
 
         # Define the results of the energy balance depending on the temperature difference
@@ -142,6 +147,13 @@ class ShellHeatExchanger(bst.Unit):
             self._cool_consumption = Heat_Consumption
 
     def _design(self):
+        """
+        """
+        # Load the dictionary of results
+        Design = self.design_results
+        Ins1 = self.ins[0]
+        Out1 = self.outs[0]
+        
         # Check if the utilities have been initialized
         if not self.heat_utilities:
             self.heat_utilities = [bst.HeatUtility()]
@@ -158,12 +170,49 @@ class ShellHeatExchanger(bst.Unit):
         if self.energy_balance_type == 'kWh/kg':
             Energy_Flow = Energy * self.ins[0].get_total_flow('kg/hr') * 3600   # from kWh/kg to kJ/hr
         elif self.energy_balance_type == 'kWh':
-            Energy_Flow = Energy/self.tau * 3600                                # from kWh to kJ/hr
+            Energy_Flow = Energy * 3600                                         # from kWh to kJ/hr
         else:
             raise ValueError("Invalid energy balance type. Use 'kWh/kg or kWh")
-        
+
         # Add the heat utility
         self.heat_utilities[0](Energy_Flow, self.ins[0].T, self.outs[0].T)
+        
+        # Heat utility Tin and Tout
+        Hot_Fluid = self.heat_utilities[0].inlet_utility_stream
+        T_Hot_Fluid_in = Hot_Fluid.T
+        Flow = Hot_Fluid.get_total_flow('kg/hr')
+        Cp = Hot_Fluid.Cp
+        Hcond = Hot_Fluid.Hvap
+        T_Hot_Fluid_out = (Energy_Flow - Hcond) / (Cp * Flow) + T_Hot_Fluid_in
 
-    def _cost(self):                # El consumo en kWh encaja en costes operativos. El balance de energía lo puedo resolver en run
-        pass
+        # Get the difference of temperature
+        dTin = T_Hot_Fluid_out - Ins1.T
+        dTout = T_Hot_Fluid_in - self.Tout
+        
+        # Calculate the exchange area
+        Area = (Energy_Flow*1000/(3600))/(self.U*log_mean(dTin,dTout))
+        
+        # Add the Area to the results dictionary
+        Design['Area'] = Area
+
+    def _cost(self):
+        """
+        """
+        # Load all the design parameters
+        Area = self.design_results['Area']
+
+        # Calculate the baseline purchase cost
+        ## The base cost accounts for floating head, shell and bare tube
+        ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
+        Exchanger_Purchase_Cost = 70000 * (Area/100)**0.71
+        self.baseline_purchase_costs['Heat Exchanger'] = Exchanger_Purchase_Cost
+
+        ## Material, pressure and temperature factors are assumed to be 1
+        self.F_D['Heat Exchanger'] = self.F_M['Heat Exchanger'] = self.F_P['Heat Exchanger'] = 1
+
+        ## The installation costs are assumed to be 0, so the bare module factor is 1
+        self.F_BM['Heat Exchanger'] = 1
+
+        ## Scale the costs using the CEPCI
+        CE_Base = 100
+        self.baseline_purchase_costs['Heat Exchanger'] *= bst.CE/CE_Base
