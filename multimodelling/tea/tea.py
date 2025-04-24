@@ -44,18 +44,19 @@ def Load_Process_Settings(
             this dictionary is the following: {Stream object : price}. The Stream object is the bst.Stream().
 
         """
+        Settings = bst.settings
         # CEPCI
-        bst.settings.CEPCI = CEPCI
+        Settings.CEPCI = CEPCI
 
         # Electricity price
-        bst.settings.electricity_price = electricity
+        Settings.electricity_price = electricity
 
         # Set the heat utility
+        Heat_Utility_ = bst.HeatUtility
         Heat_Utility_List = []
         if heatutility is None:
             # by default the only heat utility used is low pressure steam produced on-site
-            Heat_Utility = bst.settings.get_agent('low_pressure_steam')
-            bst.settings.heating_agents = [Heat_Utility]
+            Heat_Utility = Heat_Utility_.get_heating_agent('low_pressure_steam')
             Heat_Utility.heat_transfer_efficiency = 0.9   #       by default from https://biosteam.readthedocs.io/en/latest/tutorial/Sugarcane_ethanol_biorefinery.html 
             Heat_Utility.T = 529.2                        # K     by default from https://biosteam.readthedocs.io/en/latest/tutorial/Sugarcane_ethanol_biorefinery.html
             Heat_Utility.P = 44e5                         # Pa    by default from https://biosteam.readthedocs.io/en/latest/tutorial/Sugarcane_ethanol_biorefinery.html
@@ -63,19 +64,25 @@ def Load_Process_Settings(
         elif isinstance(heatutility, list):
             # A list of heat utilities from BioSTEAM could be provided and the P, T and heat effiency values are the default 
             for utility in heatutility:
-                Heat_Utility = bst.settings.get_agent(utility)
+                Heat_Utility = Heat_Utility_.get_heating_agent(utility)
                 Heat_Utility_List.append(Heat_Utility)
-            bst.settings.heating_agents = Heat_Utility_List
         elif isinstance(heatutility, dict):
+            # A dictionary which contains the BioSTEAM heat utility as keys and its cost as value
             for utility in heatutility.keys():
-                pass
+                try:
+                    Heat_Utility = Heat_Utility_.get_heating_agent(utility)
+                    Heat_Utility.regeneration_price = heatutility[utility]*Heat_Utility.MW
+                    Heat_Utility_List.append(Heat_Utility)
+                except LookupError:
+                    Settings.stream_prices[utility] = heatutility[utility]
+                    Heat_Utility_List.append(heatutility[utility])
         
         # Set the cool utility
+        Cool_Utility_ = bst.HeatUtility
         Cool_Utility_List = []
         if coolutility is None:
             # by default the only heat utility used is low pressure steam produced on-site
-            Cool_Utility = bst.settings.get_agent('cooling_water')
-            bst.settings.cooling_agents = [Cool_Utility]
+            Cool_Utility = Cool_Utility_.get_cooling_agent('cooling_water')
             Cool_Utility.heat_transfer_efficiency = 0.9   #     by default from https://biosteam.readthedocs.io/en/latest/tutorial/Sugarcane_ethanol_biorefinery.html 
             Cool_Utility.T = 273.15 + 25                  # K   Set to 25ºC by default
             Cool_Utility.P = 101325                       # Pa  by default in BioSTEAM 
@@ -83,13 +90,19 @@ def Load_Process_Settings(
         elif isinstance(coolutility, list):
             # A list of heat utilities from BioSTEAM could be provided and the P, T and heat effiency values are the default from BioSTEAM
             for utility in coolutility:
-                Cool_Utility = bst.settings.get_agent(utility)
+                Cool_Utility = Cool_Utility_.get_cooling_agent(utility)
                 Cool_Utility_List.append(Cool_Utility)
-            bst.settings.heating_agents = Cool_Utility_List
         elif isinstance(coolutility, dict):
+            # A dictionary which contains the BioSTEAM cool utility as keys and its cost as value
             for utility in coolutility.keys():
-                pass
-        
+                try:
+                    Cool_Utility = Cool_Utility_.get_cooling_agent(utility)
+                    Cool_Utility.cost = coolutility[utility]
+                    Cool_Utility_List.append(Cool_Utility)
+                except LookupError:
+                    Settings.stream_prices[utility] = coolutility[utility]
+                    Cool_Utility_List.append(coolutility[utility])
+
         # Set the prices of the process streams given
         for stream in streamsprice.keys():
             if not isinstance(stream, object):

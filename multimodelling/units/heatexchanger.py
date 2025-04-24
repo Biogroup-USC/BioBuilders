@@ -193,7 +193,7 @@ class ShellHeatExchanger(bst.Unit):
         Area = (Energy_Flow*1000/(3600))/(self.U*log_mean(dTin,dTout))
         
         # Add the Area to the results dictionary
-        Design['Area'] = Area
+        Design['Area'] = Area                                                      #TODO Create another heat exchanger for area < 20 m2 
 
     def _cost(self):
         """
