@@ -75,7 +75,7 @@ def Load_Process_Settings(
                     Heat_Utility_List.append(Heat_Utility)
                 except LookupError:
                     Settings.stream_prices[utility] = heatutility[utility]
-                    Heat_Utility_List.append(heatutility[utility])
+                    Heat_Utility_List.append(utility)
         
         # Set the cool utility
         Cool_Utility_ = bst.HeatUtility
