@@ -2,6 +2,7 @@
 """
 import biosteam as bst
 from typing import Optional
+import math
 
 __all__ = (
     "SLEPFbySplit",
@@ -134,40 +135,48 @@ class SLEPFbySplit(bst.Unit):
     def _cost(self):
         pass
 
-class SLECbySplit(bst.Unit):                    #TODO change the documentation                                                
+class SLECbySplit(bst.Unit):                                                
     """ 
 
-    Create a Solid-Liquid extraction modelled as a CSTR for mixing the solid with the solvent and a 
-    pressure filter that separates the two phases. The extraction is modelled based on the split
-    factor which represents the mass of certain compound extracted per its input mass. Moreover, 
-    it is important to remark that the amount of washing stream used in the filtration, which is 
-    retained by te solid, is calculated using the moisture parameter.           
+    Create a unit that models a Solid-Liquid Extraction. 
+    
+    The SLE is modelled as a Agitated tank for mixing the solids and the solvent followed 
+    by a centrifuge that separates the two phases.           
 
-    - ID (str): Name of the unit.
+    Parameters
+    ----------
+    ID : str
+        Name of the unit.
     
 
-    - ins (list): List of input streams (BioSTEAM object). This unit has 2 inputs. [Feed, Solvent]
+    ins : list 
+        List of input streams (BioSTEAM object). This unit has 2 inputs. [Feed, Solvent]
     
 
-    - outs (list): List of output streams (BioSTEAM object). This unit has 2 outputs. [Extract, Raffinate]
+    outs : list 
+        List of output streams (BioSTEAM object). This unit has 2 outputs. [Extract, Raffinate]
     
 
-    - sfi (dict): Dictionary with the following structure: {"A": 0.5, "B": 0.9}. This means that 50% of A and 90% of B will be extracted by the 
-    solvent.  
+    sfi : dict 
+        Dictionary with the following structure: {"A": 0.5, "B": 0.9}. This means that 50% of A and 90% of B will be extracted by the 
+        solvent.  
    
 
-    - moisture_content (float): percentage of solvent retained in the solids. Default to 0.40 kg of solvent per kg of dry solids.
+    moisture_content : float 
+        Percentage of solvent retained in the solids. Default to 0.40 kg of solvent per kg of dry solids.
    
 
-    - tau (float):Residence time in h.
+    tau : float
+        Residence time in h.
 
     
-    - kW_per_m3 (float): The power consumption due to stirring. The default is set to 0.1803 kW/m3 using the Piccino calculation for 1 m3 reactor: 
-    http://dx.doi.org/10.1016/j.jclepro.2016.06.164.
+    kW_per_m3 : float 
+        The power consumption due to stirring. The default is set to 0.1803 kW/m3 using the Piccino calculation for 1 m3 reactor: 
+        http://dx.doi.org/10.1016/j.jclepro.2016.06.164.
     
 
-    - operating_T (float): The operating temperature is set to 298.15 K by default.
-    
+    operating_T : float 
+        The operating temperature is set to 298.15 K by default.
 
     """
     # Inlets
@@ -191,13 +200,17 @@ class SLECbySplit(bst.Unit):                    #TODO change the documentation
     # Default power consumption by centrifuge (kWh/kg)
     kW_per_kg_default: Optional[float] = 0.01                                      # kWh/ton = 10 --> http://dx.doi.org/10.1016/j.jclepro.2016.06.164 
 
+    # Default working volume fraction
+    V_wf_default: Optional[float] = 0.80
+
     def _init(self,
               sfi: dict = None,
               moisture_content: float = None,
               tau: float = None,
               kW_per_m3: Optional[float] = None,
               kW_centrifuge: Optional[float] = None,
-              operating_T: Optional[float] = None
+              operating_T: Optional[float] = None,
+              V_wf: Optional[float] = None
               ):
         """
         """
@@ -207,7 +220,8 @@ class SLECbySplit(bst.Unit):                    #TODO change the documentation
         self.operating_T = self.T_default if operating_T is None else operating_T
         self.kW_per_m3 = self.kW_per_m3_default if kW_per_m3 is None else kW_per_m3
         self.kW_per_kg = self.kW_per_kg_default if kW_centrifuge is None else kW_centrifuge
-        
+        self.V_wf = self.V_wf_default if V_wf is None else V_wf
+
     def _run(self):
         """
         """
@@ -234,7 +248,7 @@ class SLECbySplit(bst.Unit):                    #TODO change the documentation
         Solvent_Retained_Ratio = (self.moisture * Raffinate.get_total_flow('kg/hr'))/Solvent.get_total_flow('kg/hr')
         
         ## Create a mock stream to store the chemicals retained
-        Solvent_Retained = bst.Stream('Mock', units = 'kg/hr')
+        Solvent_Retained = bst.Stream(units = 'kg/hr')
         Solvent_Retained.copy_like(Solvent)
         Solvent_Retained.F_mass = Solvent_Retained_Ratio * Solvent.F_mass
 
@@ -254,7 +268,89 @@ class SLECbySplit(bst.Unit):                    #TODO change the documentation
                 raise ValueError("There is negative flows in this units because the solvent is not enough to match the moisture content")
 
     def _design(self):
-        pass
+        """
+        """
+        # Load the dictionary of results
+        Design = self.design_results
+
+        # Load the streams of the unit and mix them
+        Ins1, Ins2 = self.ins
+        Outs1, Outs1 = self.outs
+        Load = bst.Stream(units = 'kg/hr')
+        Load.copy_like(Ins1)
+        Load.mix_from([Ins1,Ins2], energy_balance = True)
+
+        # Load the parameters
+        V_wf = self.V_wf
+
+        # Calculate the mixing tank volume
+        Inputs_F_Vol = (Ins1.F_vol + Ins2.F_vol)
+        V_0 = Inputs_F_Vol * self.tau
+
+        # Add the reactor volume
+        Design['Mixing tank volume'] = V_0/V_wf
+
+        # Calculate the flow rate and the number of centrifuges
+        Centrifuge_Flow_Rate = Load.F_vol
+
+        # Calculate the number of centrifuges
+        Maximum_Flow_Rate = 2.2 * (60/100)
+        if Centrifuge_Flow_Rate > Maximum_Flow_Rate:
+            N = Centrifuge_Flow_Rate/Maximum_Flow_Rate
+            Design['Centrifuge flow rate'] = Centrifuge_Flow_Rate/N
+            self.parallel['Centrifuge'] = N
+        else:
+            Design['Centrifuge flow rate'] = Centrifuge_Flow_Rate
+
+        # Add the heat utility
+        Tf = self.operating_T                   # K
+        Ti = Load.T                             # K 
+        Duty = Load.Cp * (Tf-Ti) * Load.F_mass  # kJ/h
+        self.add_heat_utility(Duty, T_in = Ti, T_out = Tf)
+
+        # Add power utility: Reactor agitation and centrifuge operation
+        Power_Stirring = self.kW_per_m3 * Design['Mixing tank volume'] + self.kW_per_kg * Load.F_mass
+        self.add_power_utility(Power_Stirring)
+
+        
 
     def _cost(self):
-        pass
+        """
+        """
+        # Load all the design parameters needed to calculate the costs
+        V_Tank = self.design_results['Mixing tank volume']
+        Flow_Centrifuge = self.design_results['Centrifuge flow rate']
+
+        # Calculate the baseline purchase cost for the mixing tank
+        ## The base cost accounts for jacketed agitated vessel.
+        ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
+        Mixing_Tank_Purchase_Cost = 75000 * (V_Tank/3)**0.53
+        self.baseline_purchase_costs['Mixing Tank'] = Mixing_Tank_Purchase_Cost
+
+        ## The material, pressure and temperature factors are assumed to be 1
+        self.F_D['Mixing Tank'] = self.F_M['Mixing Tank'] = self.F_P['Mixing Tank'] = 1
+
+        ## The installation costs are assumed to be 0
+        self.F_BM['Mixing Tank'] = 1
+
+        ## Scale the costs using CEPCI
+        CE_Base = 1000
+        self.baseline_purchase_costs['Mixing Tank'] *= bst.CE/CE_Base
+
+        # Calculate the baseline purchase costs for the centrifuge
+        ## The base cost accounts for a centrifuge used in continuous extraction including flexible connections,
+        ## explosion-proof motor, variable speed drive, ammeter and tachometer.
+        ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
+        Flow_Centrifuge_L_s = Flow_Centrifuge * (1000/60)
+        Centrifuge_Purchase_Cost = 220000 * (Flow_Centrifuge_L_s/2.2)**0.25
+        self.baseline_purchase_costs['Centrifuge'] = Centrifuge_Purchase_Cost
+
+        ## The material, pressure and temperature factors are assumed to be 1
+        self.F_D['Centrifuge'] = self.F_M['Centrifuge'] = self.F_P['Centrifuge'] = 1
+
+        ## The installation costs are assumed to be 0
+        self.F_BM['Centrifuge'] = 1
+
+        ## Scale the costs using CEPCI
+        CE_Base = 1000
+        self.baseline_purchase_costs['Centrifuge'] *= bst.CE/CE_Base

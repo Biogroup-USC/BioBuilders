@@ -264,5 +264,5 @@ class BatchEnzymaticTreatment(bst.Unit):
         self.F_BM['Reactor'] = 1
 
         ## Scale the costs using CEPCI
-        CE_Base = 100
+        CE_Base = 1000
         self.baseline_purchase_costs['Reactor'] *= bst.CE/CE_Base

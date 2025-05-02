@@ -111,5 +111,5 @@ class Mill(bst.Unit):
         self.F_BM['Mill equipment'] = 1
 
         ## Scale the costs using CEPCI
-        CE_base = 100
+        CE_base = 1000
         self.baseline_purchase_costs['Mill equipment'] *= bst.CE/CE_base
