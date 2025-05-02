@@ -139,7 +139,12 @@ class ChemManager:
                         raise LookupError("The chemical {} properties must be provided".format(chem))
                     
                     # Add the chemical
-                    chemicals.append(tmo.Chemical(**chem_args))                 
+                    Chemical = tmo.Chemical(**chem_args)
+                    if Chemical.phase_ref == 'l':                           #FIXME The V is not properly calculated using the defined chemicals
+                        Rho = Chemical.rho('l', 298.15, 101325)
+                        Vm = Chemical.MW/Rho
+                        Chemical.V.add_model('CONST', Vm, phase = 'l')
+                    chemicals.append(Chemical)                         
 
         #Compile all defined chemicals
         chemicals.compile(skip_checks=True)
