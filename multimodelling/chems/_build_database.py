@@ -21,6 +21,26 @@ DB.insert_data_into_db(
     description = "Viscozyme is a commercial solution that has pectinase activity"
     )
 
+# Viscozyme
+DB.insert_data_into_db(
+    ID = "Protein", 
+    MW = 1, 
+    Phase = 's', 
+    V = 1*(1/1350),     # m3/mol 
+    Rho = 1350, 
+    Cp = 1.364, 
+    )
+
+# Viscozyme
+DB.insert_data_into_db(
+    ID = "Peptides", 
+    MW = 1, 
+    Phase = 's', 
+    V = 1*(1/1350),     # m3/mol 
+    Rho = 1350, 
+    Cp = 1.364, 
+    )
+
 # Structural_Protein
 DB.insert_data_into_db(
     ID="Structural_Protein", 

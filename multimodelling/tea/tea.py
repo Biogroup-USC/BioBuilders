@@ -121,7 +121,7 @@ class TEA(bst.TEA):
                  depreciation: str | np.ndarray = 'SL',     # Straight line 
                  income_tax: float = 0.25,                  # 25% is the corporate tax rate in Spain
                  operating_days: float = 330,               # 330 days by default 
-                 lang_factor: float = 5.0,                  # For biorefineries using lignocellulosic wastes and high-risk technologies https://doi.org/10.3390/resources13110156
+                 lang_factor: float = None,                 # If no Lang factor is defined, all the installation costs are calculated using the bare module factor
                  labor_cost: float = None,                  
                  fringe_benefits: float = 0.30,             # 30% is a typical for Western Europe / Spain 
                  property_tax: float = 0.01,                # 1% of FCI as an estimation for industrial property taxes 

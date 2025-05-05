@@ -110,6 +110,10 @@ class BatchEnzymaticTreatment(bst.Unit):
         self._kW_per_m3 = None
         self._V_wf = None
         self._V_max = None
+        self._Base_Cost = None
+        self._Base_Volume = None
+        self._Base_n_Cost = None
+        self._CE_Base = None
 
     def _run(self):
         """
@@ -245,6 +249,62 @@ class BatchEnzymaticTreatment(bst.Unit):
         Duty = Load.Cp * (Tf-Ti) * Load.F_mass  # kJ/h
         self.add_heat_utility(Duty, T_in = Ti, T_out = Tf)
     
+    @property
+    def Base_Cost(self):
+        """
+        """
+        if self._Base_Cost is None:
+            self._Base_Cost = 75000.0   # USD
+        return self._Base_Cost
+    
+    @Base_Cost.setter
+    def Base_Cost(self,value):
+        """
+        """
+        self._Base_Cost = value
+    
+    @property
+    def Base_Volume(self):
+        """
+        """
+        if self._Base_Volume is None:
+            self._Base_Volume = 3.0     # m3
+        return self._Base_Volume
+
+    @Base_Volume.setter
+    def Base_Volume(self,value):
+        """
+        """
+        self._Base_Volume = value
+    
+    @property
+    def Base_n_Cost(self):
+        """
+        """
+        if self._Base_n_Cost is None:
+            self._Base_n_Cost = 0.53
+        return self._Base_n_Cost
+
+    @Base_n_Cost.setter
+    def Base_n_Cost(self, value):
+        """
+        """
+        self._Base_n_Cost = value
+    
+    @property
+    def CE_Base(self):
+        """
+        """
+        if self._CE_Base is None:
+            self._CE_Base = 1000.0
+        return self._CE_Base
+    
+    @CE_Base.setter
+    def CE_Base(self, value):
+        """
+        """
+        self._CE_Base = value
+    
     def _cost(self):
         """
         """
@@ -254,7 +314,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         # Calculate the baseline purchase cost for each reactor
         ## The base cost accounts for jacketed agitated vessel. 
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Reactor_Purchase_Cost = 75000 * (V_reactor/3)**0.53        
+        Reactor_Purchase_Cost = self.Base_Cost * (V_reactor/self.Base_Volume)**self.Base_n_Cost        
         self.baseline_purchase_costs['Reactor'] = Reactor_Purchase_Cost
         
         ## The material, pressure and temperature factor are assumed to be 1
@@ -264,5 +324,5 @@ class BatchEnzymaticTreatment(bst.Unit):
         self.F_BM['Reactor'] = 1
 
         ## Scale the costs using CEPCI
-        CE_Base = 1000
+        CE_Base = self.CE_Base
         self.baseline_purchase_costs['Reactor'] *= bst.CE/CE_Base
