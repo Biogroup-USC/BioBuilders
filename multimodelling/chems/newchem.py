@@ -87,22 +87,20 @@ class ChemManager:
         
         for chem in self.chems:
             try:
-                chemicals.append(
-                    tmo.Chemical(
+                Chemical = tmo.Chemical(
                         ID = chem,
                         search_db = True,
                         db = 'ChEDL'
                     )
-                )
+
             except LookupError:
                 try:
-                    chemicals.append(
-                    tmo.Chemical(
+                    Chemical = tmo.Chemical(
                         ID = chem,
                         search_db = True,
                         db = 'BioSTEAM'
                     )
-                )
+                
                 except LookupError:
                     # Create a dictionary with the compulsory arguments         
                     chem_args = {'ID': chem, 'search_db': False}                
@@ -138,13 +136,11 @@ class ChemManager:
                         # its properties are not defined, it gives back an error
                         raise LookupError("The chemical {} properties must be provided".format(chem))
                     
-                    # Add the chemical
+                    # Create the chemical using the chem_args
                     Chemical = tmo.Chemical(**chem_args)
-                    if Chemical.phase_ref == 'l':                           #FIXME The V is not properly calculated using the defined chemicals
-                        Rho = Chemical.rho('l', 298.15, 101325)
-                        Vm = Chemical.MW/Rho
-                        Chemical.V.add_model('CONST', Vm, phase = 'l')
-                    chemicals.append(Chemical)                         
+            
+            # Add the chemical       
+            chemicals.append(Chemical)                         
 
         #Compile all defined chemicals
         chemicals.compile(skip_checks=True)
