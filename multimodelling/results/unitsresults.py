@@ -61,8 +61,12 @@ class Display_Units_Results:
         # Get the dataframe of each unit
         for unit in self.units:
             
-            # unit results
-            Unit_Results = unit.results()
+            try:
+                # unit results
+                Unit_Results = unit.results()
+            except Exception as e:
+                print(f"[ERROR] Failed to get results for unit {unit.ID}: {e}")
+                continue
 
             if not Unit_Results.empty:
                 
