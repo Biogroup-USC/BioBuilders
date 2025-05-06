@@ -320,8 +320,17 @@ class BatchEnzymaticTreatment(bst.Unit):
         ## The material, pressure and temperature factor are assumed to be 1
         self.F_D['Reactor'] = self.F_M['Reactor'] = self.F_P['Reactor'] = 1
 
-        ## The installation costs are assumed to be 0, so the bare module factor = 1
-        self.F_BM['Reactor'] = 1
+        ## The Bare module factor which account for installation costs is calculated as the sum of delivery, installation,
+        ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
+        ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
+        ### Factors
+        Delivery = 0.10
+        Installation = 0.60             # Metal tanks
+        Instrumentation_Control = 0.50
+        Piping = 0.31                   # Solid-Fluid   
+        ### Calculate the bare module
+        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
+        self.F_BM['Reactor'] = Bare_Module
 
         ## Scale the costs using CEPCI
         CE_Base = self.CE_Base
