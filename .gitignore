@@ -23,3 +23,6 @@ dist/
 .cache/
 .mypy_cache/
 .pytest_cache/
+
+# My own file for testing biosteam features
+test.py

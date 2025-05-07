@@ -17,28 +17,31 @@ DB.insert_data_into_db(
     Phase = 's', 
     V = 1*(1/1350),     # m3/mol 
     Rho = 1350, 
-    Cp = 1.364, 
+    Cp = 1.364,
+    Hf = -285830,       # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     description = "Viscozyme is a commercial solution that has pectinase activity"
     )
 
-# Viscozyme
+# Protein
 DB.insert_data_into_db(
     ID = "Protein", 
     MW = 1, 
     Phase = 's', 
     V = 1*(1/1350),     # m3/mol 
     Rho = 1350, 
-    Cp = 1.364, 
+    Cp = 1.364,
+    Hf = -285830        # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2
     )
 
-# Viscozyme
+# Peptides
 DB.insert_data_into_db(
     ID = "Peptides", 
     MW = 1, 
     Phase = 's', 
     V = 1*(1/1350),     # m3/mol 
     Rho = 1350, 
-    Cp = 1.364, 
+    Cp = 1.364,
+    Hf = -285830        # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
 
 # Structural_Protein
@@ -49,7 +52,8 @@ DB.insert_data_into_db(
     V = 1*(1/1350),     # m3/mol 
     Rho = 1350, 
     Cp = 1.364, 
-    description = "Protein embedded into the cell wall matrix"
+    description = "Protein embedded into the cell wall matrix",
+    Hf = -285830        # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
 
 # Trypsin 
@@ -60,7 +64,8 @@ DB.insert_data_into_db(
     V = 1*(1/1350),     # m3/mol       
     Rho = 1350, 
     Cp = 1.364, 
-    description = "Enzyme that hydrolyses proteins"
+    description = "Enzyme that hydrolyses proteins",
+    Hf = -285830        # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
 
 # Non_Protein
@@ -71,7 +76,8 @@ DB.insert_data_into_db(
     V = 1*(1/1100),     # m3/mol 
     Rho = 1100, 
     Cp = 1.364, 
-    description = "Non-proteic fraction of tomato seeds"
+    description = "Non-proteic fraction of tomato seeds",
+    Hf = -285830        # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
 
 # Phenolic_Compounds
@@ -84,7 +90,8 @@ DB.insert_data_into_db(
     Phase = 's',
     V = 536.9*(1/0.899),    # m3/mol
     Rho = 0.899,            # https://doi.org/10.1155/2024/6252426 from lycopene
-    Cp = 2.1                # Similar to cutin
+    Cp = 2.1,               # Similar to cutin
+    Hf = -285830        # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
 
 # Cutin

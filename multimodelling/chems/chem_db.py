@@ -33,20 +33,24 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         "CAS":["CAS"],
         "Phase":["Phase","phase"],
         "Last_Modification": ["Last_Modification"],
+        "Hf_J_per_mol":["Hf"]
     }
 
     def __init__(self, dbname: str = None):
         """
         
+        Database for chemicals commonly used in biorefineries.
+
         Create a ChemDataBase object which allows the user to build a SQL database for chemical
         properties in the file path provided as the database name. This is the same code used for 
         creating the multimodelling database. 
         
-        ARGUMENTS:
-        
-        dbname (str): Name of the database. If the database already exists in your current directory
-        write "mydirectory.db". However, a new database could be created by writing a 
-        new name "mynewdatabase.db".
+        Parameters
+        ----------
+        dbname : str
+                Name of the database. If the database already exists in your current directory
+                write "mydirectory.db". However, a new database could be created by writing a 
+                new name "mynewdatabase.db".
     
         """
         # The default name of the database is "MultiModelling_Chem.db"
@@ -63,8 +67,10 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         """
 
         This property defines the timezone for the time stamp.
-        It could be changed following the next example:
+        It could be changed following the example.
 
+        Example
+        -------
         >>> import pytz
         >>> MyDB = ChemDataBase()
         >>> MyDB.timezone = pytz.timezone('Europe/Madrid')
@@ -100,6 +106,12 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
     @classmethod
     def copy_multimodelling_db(cls):
         """
+
+        This method is used to download the Multimodelling database
+        and change the cursor of the current database directory to 
+        the directory of Multimodelling. Note that it should be inside
+        %AppData%.
+
         """
         # Name of the SQL file
         DB_Filename = "Multimodelling_Chem.db"
@@ -137,6 +149,10 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
     @classmethod
     def delete_multimodelling_db(cls):
         """
+
+        This method deletes the Multimodelling database previously created using
+        the method called copy_multimodelling_db.
+
         """
         # Name of the App
         Appname = "Multimodelling_Database"
@@ -193,6 +209,7 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
                     Rho_kg_per_m3 REAL CHECK (Rho_kg_per_m3 > 0), 
                     Hvap_J_per_mol REAL,
                     V_m3_per_mol REAL,
+                    Hf_J_per_mol REAL,
                     Last_Modification TEXT                       
         );                                                                                  
         """)
@@ -231,34 +248,44 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
                             Cp = None, 
                             Rho = None, 
                             Hvap = None,
+                            Hf = None,
                             V = None):
         """
 
         This method is used to add data into the database. If certain chemical
         already exists, the code will raise an error.
        
-        ARGUMENTS:
+        Parameters
+        ----------
+        ID : str 
+            The name of the chemical.
 
-        cursor: The cursor of the database which is obtained using the get_db_cursor
-        method if the table exists. Otherwise, use create_table method.
+        CAS : str
+            The CAS number of the chemical.
 
-        ID (str): The name of the chemical.
+        formula : str 
+            The formula of the chemical. Note that it must be a string.
 
-        CAS (str): The CAS number of the chemical.
+        MW : float 
+            Molecular weight (g/mol).
 
-        formula (str): The formula of the chemical. Note that it must be a string.
+        Phase : str
+            The phase of the chemical. Must be one of this: 's','g','l'
 
-        MW (float): Molecular weight (g/mol).
+        Cp : float
+            Constant Heat Capacity model (J/g).
 
-        Phase (str): The phase of the chemical. Must be one of this: 's','g','l'
+        Rho : float
+            Constant density model (kg/m3).
 
-        Cp (float): Constant Heat Capacity model (J/g).
+        Hvap : float
+            Heat of vaporisation (J/mol) model as function of temperature (K).
 
-        Rho (float): Constant density model (kg/m3).
-
-        Hvap (float): Heat of vaporisation (J/mol) model as function of temperature (K).
-
-        V (float): Molar volume (m3/mol).
+        V : float
+            Molar volume (m3/mol).
+        
+        Hf : float
+            Enthalpy of formation (J/mol).
         
         """
         # Check if the connection is well initialized 
@@ -283,23 +310,24 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
             CAS if CAS is not None else None,
             ID if ID is not None else None,
             formula if formula is not None else None,
-            description if description is not None else None,
-            MW if MW is not None else None,
+            description if description is not None else 0,
+            MW if MW is not None else 1,
             Phase if Phase is not None else None,
-            Cp if Cp is not None else None,
-            Rho if Rho is not None else None,
-            Hvap if Hvap is not None else None,
-            V if V is not None else None,
+            Cp if Cp is not None else 0,
+            Rho if Rho is not None else 0,
+            Hvap if Hvap is not None else 0,
+            Hf if Hvap is not None else 0,
+            V if V is not None else 0,
         )
 
         # Insert the data provided into the database
         cur.execute("""INSERT INTO Chemical_properties 
-                    (CAS, ID, formula, description, MW_g_per_mol, Phase, Cp_J_per_g_K, Rho_kg_per_m3, Hvap_J_per_mol, V_m3_per_mol, Last_Modification) 
-                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", Add + (Timestamp,))
+                    (CAS, ID, formula, description, MW_g_per_mol, Phase, Cp_J_per_g_K, Rho_kg_per_m3, Hvap_J_per_mol, Hf_J_per_mol, V_m3_per_mol, Last_Modification) 
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", Add + (Timestamp,))
 
         # Commint the changes in the database
         self.commit_changes()
-        return print("CAS:{} ID:{}, formula:{}, MW:{}, Phase:{}, Cp:{}, Rho:{}, Hvap:{}, V:{} added to the database".format(CAS, ID, formula, MW, Phase, Cp, Rho, Hvap, V))
+        return print("CAS:{} ID:{}, formula:{}, MW:{}, Phase:{}, Cp:{}, Rho:{}, Hvap:{}, Hf: {}, V:{} added to the database".format(CAS, ID, formula, MW, Phase, Cp, Rho, Hvap, Hf, V))
     
     def remove_data_from_db(self, ID: str = None, CAS: str = None):
         """
@@ -338,26 +366,43 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         This method is used to update the properties of certain chemical which corresponds 
         to the ID or the CAS number provided. 
         
-        PROPERTIES: dictionary with the form {Property: newvalue}. The current properties that
-        can be updated are the next:
+        Parameters
+        ----------
+        properties : dict 
+            dictionary with the form {Property: newvalue}. The properties available
+            are exposed above.
 
-        ID (str): The name of the chemical.
+        Properties
+        ----------
+        ID : str 
+            The name of the chemical.
 
-        CAS (str): The CAS number of the chemical and the primary key of the database.
+        CAS : str
+            The CAS number of the chemical.
 
-        formula (str): The formula of the chemical. Note that it must be a string.
+        formula : str 
+            The formula of the chemical. Note that it must be a string.
 
-        MW (float): Molecular weight (g/mol).
+        MW : float 
+            Molecular weight (g/mol).
 
-        Phase (str): The phase reference of the chemical. Must be one of this: 's','g','l'
+        Phase : str
+            The phase of the chemical. Must be one of this: 's','g','l'
 
-        Cp (float): Constant Heat Capacity model (J/g).
+        Cp : float
+            Constant Heat Capacity model (J/g).
 
-        Rho (float): Constant density model (kg/m3).
+        Rho : float
+            Constant density model (kg/m3).
 
-        Hvap (float): Heat of vaporisation (J/mol) model as function of temperature (K).
+        Hvap : float
+            Heat of vaporisation (J/mol) model as function of temperature (K).
 
-        V (float): Molar volume (m3/mol).
+        V : float
+            Molar volume (m3/mol).
+        
+        Hf : float
+            Enthalpy of formation (J/mol).
         
         """
         # Setting the cursor
@@ -419,10 +464,50 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
 
         This method is used to return the selected properties of the chemical whose CAS
         is provided. The properties that the user wants to extract from database must be
-        defined inside the list "properties".
+        defined inside the list "properties" as a str.
         
-        Properties: (CAS, formula, MW, Phase, Cp, Rho, Hvap, V)
+        Properties
+        ----------
+        ID : str 
+            The name of the chemical.
+
+        CAS : str
+            The CAS number of the chemical.
+
+        formula : str 
+            The formula of the chemical. Note that it must be a string.
+
+        MW : float 
+            Molecular weight (g/mol).
+
+        Phase : str
+            The phase of the chemical. Must be one of this: 's','g','l'
+
+        Cp : float
+            Constant Heat Capacity model (J/g).
+
+        Rho : float
+            Constant density model (kg/m3).
+
+        Hvap : float
+            Heat of vaporisation (J/mol) model as function of temperature (K).
+
+        V : float
+            Molar volume (m3/mol).
         
+        Hf : float
+            Enthalpy of formation (J/mol).
+        
+        Example
+        -------
+        >>> DB = ChemDatabase.copy_multimodelling_db()
+        >>> Peptide = DB.get_certain_data_from_db(
+        >>>                 ID = 'Peptides', 
+        >>>                 properties = ['Cp','Rho'] 
+        >>>                 )
+        >>> print(Peptide)
+        {'Cp': 1.365, 'rho': 1350}   
+
         """
         #Setting the cursor
         cur = self.get_db_cursor()
@@ -463,11 +548,13 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
 
         This method is used to check if the chemical provided exists in the database.
 
-        ARGUMENTS:
+        Parameters
+        ----------
+        ID : str 
+            The name of the chemical.
 
-        - ID (str): the name of the chemical.
-
-        - CAS (str): the CAS number of the chemical.
+        CAS : str 
+            The CAS number of the chemical.
 
         """
         if ID is None and CAS is None:
@@ -488,13 +575,13 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         """
 
         This method is used to translate the keys of the dictionary provided
-        to match the column names of the database.
+        to match the column names of the database. Note that the dictionary used 
+        to translate this dictionary is a class attribute.
 
-        ARGUMENTS:
-
-        - input_dict (dict): This dictionary contains the {column: value} pair
-
-        Note that the dictionary used to translate this dictionary is a class attribute.
+        Parameters
+        ----------
+        input_dict : dict 
+            This dictionary contains the {column: value} pair
 
         """
         # Check if the input dictionary is provided
@@ -519,13 +606,15 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         """
 
         This method is used to translate a list of names to match the 
-        column names of the database.
+        column names of the database. Note that the dictionary used to 
+        translate this list is a class attribute.
 
-        ARGUMENTS:
+        Parameters
+        ----------
+        input_list : list 
+            This list contains the alias of the column names.
 
-        - input_list (list): This list contains the alias of the column names.
-
-        Note that the dictionary used to translate this list is a class attribute.
+        
 
         """
         # Check if the input list is provided
