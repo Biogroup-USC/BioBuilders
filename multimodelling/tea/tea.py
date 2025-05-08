@@ -28,7 +28,6 @@ def Load_Process_Settings(
 
         Parameters
         ----------
-
         CEPCI: float
             The CEPCI is the Chemical Engineering Plant Cost Index which is set by default to 567.5 (2013).
         electricity: float
@@ -37,7 +36,7 @@ def Load_Process_Settings(
             This parameter is a list of the heating agents used between the following: 'low_pressure_steam', 'medium_pressure_steam',
             'high_pressure_steam', 'natural_gas'.
         coolutility: list | dict
-            This parameter is a list of the heating agents used between the following: 'cooling_water', 'chilled_water', 'chilled_brine',
+            This parameter is a list of the cooling agents used between the following: 'cooling_water', 'chilled_water', 'chilled_brine',
             'propane', 'propylene', 'ethylene'.
         streamsprice: dict
             The streams price dictionary contains all the prices of certain streams like the raw materials, solvents or others. The structure of

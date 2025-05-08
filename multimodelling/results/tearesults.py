@@ -4,6 +4,7 @@ import pandas as pd
 import biosteam as bst
 from ..tea import TEA
 import matplotlib.pyplot as plt
+from ..mathtools.economy import updating_to_future_value
 
 __all__ = (
     "TEA_Results"
@@ -24,12 +25,40 @@ class TEA_Results:
         else:
             raise ValueError("The TEA object must be a TEA object either from BiosTEAM or Multimodelling.")
 
-    def TEA_report(self, excelreport: bool = False, excelname: str = None):
+    def TEA_report(self, excelreport: bool = False, excelname: str = None, inflation: float = None):
         """
         """
         Filename = excelname if excelname is not None else "TEA_Report.xlsx"
         Dataframe = self.cashflow
-        
+
+        if inflation is not None:
+            # Get the NPV and the years
+            Net_Present_Value = Dataframe.loc[:,'Net present value (NPV) [MM$]'].tolist()
+            Years = Dataframe.index.tolist()
+
+            # Update the NPV to future values
+            Updated_NPV = []
+            Present_Year = Years[0]
+            for value, year in zip(Net_Present_Value, Years):
+                # Update value to year
+                Number_of_Periods = year - Present_Year
+                Future_Value = updating_to_future_value(value = value, growth_rate = inflation, years = Number_of_Periods)
+                # Append the future value to the Updated_NPV list
+                Updated_NPV.append(Future_Value)
+            
+            # Add the Updated NPV column to the Dataframe of the TEA results
+            Dataframe["Updated NPV ({} % inflation)[MM$]".format(inflation*100)] = Updated_NPV
+
+            # Get the updated cumulative NPV
+            Updated_Cumulative_NPV = []
+            Cumulative = 0
+            for value in Updated_NPV:
+                Cumulative += value
+                Updated_Cumulative_NPV.append(Cumulative)
+            
+            # Add the Updated cumulative NPV to the Dataframe of the TEA results
+            Dataframe["Updated Cumulative NPV ({} % inflation)[MM$]".format(inflation*100)] = Updated_Cumulative_NPV
+
         # Display the pandas dataframe
         pd.set_option('display.max_columns', None)
         pd.set_option('display.float_format', '{:.2f}'.format)
@@ -122,4 +151,3 @@ class TEA_Results:
         # Show
         plt.grid(True)
         plt.show()
-

@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='multimodelling',
-    version='0.7.6',
+    version='0.8.6',
     author= "Isaac",
     author_email= "isaacleis.garrote@usc.es",
     description = 'Library for Biorefinery modelling following the Multiscale Approach using BioSTEAM as a Framework',  
