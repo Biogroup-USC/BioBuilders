@@ -16,8 +16,8 @@ DB.insert_data_into_db(
     MW = 1, 
     Phase = 's', 
     V = 1*(1/1350),     # m3/mol 
-    Rho = 1350, 
-    Cp = 1.364,
+    Rho = 1350,         # 1350 kg/m3 is a generic reference value for proteins  https://doi.org/10.1110/ps.04688204  
+    Cp = 1.364,         # kJ(kg*K) same as cellulose https://link.springer.com/article/10.1007/s10853-013-7815-6
     Hf = -285830,       # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     description = "Viscozyme is a commercial solution that has pectinase activity"
     )
@@ -28,8 +28,8 @@ DB.insert_data_into_db(
     MW = 1, 
     Phase = 's', 
     V = 1*(1/1350),     # m3/mol 
-    Rho = 1350, 
-    Cp = 1.364,
+    Rho = 1350,         # 1350 kg/m3 is a generic reference value for proteins  https://doi.org/10.1110/ps.04688204 
+    Cp = 1.364,         # kJ(kg*K) same as cellulose https://link.springer.com/article/10.1007/s10853-013-7815-6
     Hf = -285830        # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2
     )
 
@@ -39,8 +39,8 @@ DB.insert_data_into_db(
     MW = 1, 
     Phase = 's', 
     V = 1*(1/1350),     # m3/mol 
-    Rho = 1350, 
-    Cp = 1.364,
+    Rho = 1350,         # 1350 kg/m3 is a generic reference value for proteins  https://doi.org/10.1110/ps.04688204 
+    Cp = 1.364,         # kJ(kg*K) same as cellulose https://link.springer.com/article/10.1007/s10853-013-7815-6
     Hf = -285830        # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
 
@@ -50,8 +50,8 @@ DB.insert_data_into_db(
     MW = 1, 
     Phase = 's', 
     V = 1*(1/1350),     # m3/mol 
-    Rho = 1350, 
-    Cp = 1.364, 
+    Rho = 1350,         # 1350 kg/m3 is a generic reference value for proteins  https://doi.org/10.1110/ps.04688204 
+    Cp = 1.364,         # kJ(kg*K) same as cellulose https://link.springer.com/article/10.1007/s10853-013-7815-6
     description = "Protein embedded into the cell wall matrix",
     Hf = -285830        # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
@@ -62,8 +62,8 @@ DB.insert_data_into_db(
     MW = 1, 
     Phase = 's', 
     V = 1*(1/1350),     # m3/mol       
-    Rho = 1350, 
-    Cp = 1.364, 
+    Rho = 1350,         # 1350 kg/m3 is a generic reference value for proteins  https://doi.org/10.1110/ps.04688204 
+    Cp = 1.364,         # kJ/(kg*K) same as cellulose 
     description = "Enzyme that hydrolyses proteins",
     Hf = -285830        # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
@@ -74,8 +74,8 @@ DB.insert_data_into_db(
     MW = 1, 
     Phase = 's', 
     V = 1*(1/1100),     # m3/mol 
-    Rho = 1100, 
-    Cp = 1.364, 
+    Rho = 1100,         # 1100 kg/m3 is an aproximate value for tomato seeds    https://doi.org/10.1006/jaer.1993.1016 
+    Cp = 1.364,         # kJ(kg*K) same as cellulose https://link.springer.com/article/10.1007/s10853-013-7815-6 
     description = "Non-proteic fraction of tomato seeds",
     Hf = -285830        # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
@@ -101,7 +101,7 @@ DB.insert_data_into_db(
     CAS = "54990-88-4",
     Phase = 's',
     Cp = 2.1,           #J/(g*K)    https://doi.org/10.1016/S0005-2736(01)00285-1
-    Rho = 1.364,        # kg/m3     (cellulose)
+    Rho = 1.364,        # kJ(kg*K) same as cellulose https://link.springer.com/article/10.1007/s10853-013-7815-6
     V = 1*(1/1364),     # m3/mol 
     )
 
