@@ -47,7 +47,7 @@ class TEA_Results:
                 Updated_NPV.append(Future_Value)
             
             # Add the Updated NPV column to the Dataframe of the TEA results
-            Dataframe["Updated NPV ({} % inflation)[MM$]".format(inflation*100)] = Updated_NPV
+            Dataframe["Updated NPV ({:.2f} % inflation)[MM$]".format(inflation*100)] = Updated_NPV
 
             # Get the updated cumulative NPV
             Updated_Cumulative_NPV = []
@@ -57,7 +57,7 @@ class TEA_Results:
                 Updated_Cumulative_NPV.append(Cumulative)
             
             # Add the Updated cumulative NPV to the Dataframe of the TEA results
-            Dataframe["Updated Cumulative NPV ({} % inflation)[MM$]".format(inflation*100)] = Updated_Cumulative_NPV
+            Dataframe["Updated Cumulative NPV ({:.2f} % inflation)[MM$]".format(inflation*100)] = Updated_Cumulative_NPV
 
         # Display the pandas dataframe
         pd.set_option('display.max_columns', None)
