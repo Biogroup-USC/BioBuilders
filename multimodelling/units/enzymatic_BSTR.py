@@ -8,27 +8,69 @@ __all__ = ("BatchEnzymaticTreatment",)
 class BatchEnzymaticTreatment(bst.Unit):
     """
 
-    Create a Enzymatic CSTR inheriting from AbstractStirredTankReactor (BioSTEAM) which 
-    represents an abstract CSTR modeled as a pressurised vessel. The input is set to 2, so
-    the chemicals like water, NaOH or Enzyme have to be added using a second stream called 
-    auxiliar stream.
+    Create a BSTR to perform an enzymatic treatment.
 
-    ARGUMENTS:                                                                                  #TODO document this better
+    Create a Enzymatic BSTR which is modelled as a non-pressurize jacketed agitated 
+    vessel. This class includes default reactions based on experimental data, but it
+    also supports new reactions defined as bst.Reaction objects. The BSTR has 2 inputs
+    streams which represent the substrate and the auxiliars like water, enzymes or buffers.
 
-    -   ID (str): This ID refers to the name of this unit.
+    Parameters
+    ----------
+    ID : str 
+        This ID refers to the name of this unit.
 
-    -   ins (list): List of input streams. In this case, there are 2 inputs. [Feed, Auxiliar]             
+    ins : list
+        List of input streams. In this case, there are 2 inputs. [Feed, Auxiliar]             
 
-    -   outs(list): List of output streams. In this case, there is 1 possible outputs].
+    outs : list
+        List of output streams. In this case, there is 1 possible outputs].
 
-    -   time (float): Reaction time. Set to 5 h by default.
+    time : float
+        Reaction time. Set to 5 h by default.
 
-    -   loadCIPtime (float): Loading and CIP time. Set to 1 h by default.    
+    time_loading : float
+        Loading time. Set to 0.5 h by default.    
 
-    -   reaction (dict or str): This argument is either a str or a ReactionSystem object
-        from BioSTEAM. If the desired reaction is not in the pre-defined reactions, provide 
-        it as {reactioname: Reaction object (BioSTEAM)}. When using the pre-defined ones, 
-        provide one of the following list:
+    time_CIP : float
+        Clean-in-place time. Set to 1 h by default.
+
+    reaction : dict | str
+        Reaction performed in this reactor. There are 2 option: select one of the 
+        reaction provided above by giving a string or create a new reaction using 
+        the bst.Reaction object. 
+
+    operting_P : float 
+        Pressure inside the reactor. Default to 101325 Pa.
+
+    operating_T : float 
+        Temperature inside the reactor. Default to 310.25 K.
+    
+    Attributes
+    ----------
+    V_wf : float
+        Fraction of the reactor which corresponds to working volume. Default to 0.8.
+
+    V_max : float
+        Maximum volume per reactor. Default to 200 m3.
+    
+    kW_per_m3 : float
+        Power consumption due to stirring. Default to 0.180 kW/m3.
+    
+    Base_Cost : float
+        The cost (USD) of a reactor which volume corresponds to the base volume.
+
+    Base_n_Cost : float
+        The parameter n in the expression: Base_Cost * (Volume/Base_Volume)**n.
+
+    Base_Volume : float
+        The volume (m3) of a BSTR whose cost is the Base_Cost.
+
+    CE_Base : float
+        The CEPCI which corresponds with the Base_Cost
+    
+    Default Reactions
+    -----------------
 
             >>> "Prot_Lib_TS_Viscozyme" 
             >>> Structural_Protein -> Protein; Yield = 0.712; 
@@ -42,69 +84,61 @@ class BatchEnzymaticTreatment(bst.Unit):
             >>> Protein -> Peptides; Yield = 1
             >>> basis = 'wt'
 
-    -   operting_P (float): Pressure inside the reactor. Default to 101325 Pa.
 
-    -   operating_T (float): Temperature inside the reactor. Default to 310.25 K.
-
-    ATTRIBUTES:
-
-    -   V_wf (float): Fraction of the reactor which corresponds to working volume. Default to 0.8.
-
-    -   V_max (float): Maximum volume per reactor. Default to 200 m3.
-    
-    -   kW_per_m3 (float): Power consumption due to stirring. Default to 0.180 kW/m3.
-    
     """
     _N_ins = 2
     _N_outs = 1
     _units = {
         'Power': 'kW/m3',
-        'Reactor volume': 'm3',
+        'Reactor volume (total)': 'm3',
+        'Reactor volume (single)': 'm3',
         'Batch time': 'h',
-        'Loading and cleaning time': 'h',
+        'Loading time': 'h',
+        'CIP time': 'h'
     }
     
 
-    Predefined_Reactions = {        # Reaction stoichiometry                                    # Yield-based Reactant              # Yield     # Weight or Mol
+    Default_Reactions = {           # Reaction stoichiometry                                    # Yield-based Reactant              # Yield     # Weight or Mol
         "Prot_Lib_TS_Viscozyme" :   {"reaction":{'Structural_Protein' : -1,'Protein': 1},       "reactant": 'Structural_Protein',   "X": 0.712, "basis" : 'wt'},
         "Prot_Lib_TS_Trypsin" :     {"reaction":{'Structural_Protein' : -1, 'Peptides': 1},     "reactant": 'Structural_Protein',   "X": 0.12,  "basis": 'wt'},
-        "Prot_hydrolysis_Trypsin":  {"reaction": {'Protein': -1, 'Peptides': 1},                "reactant": 'Protein',              "X": 1.0,   "basis": 'wt'},
+        "Prot_Hydrolysis_Trypsin":  {"reaction": {'Protein': -1, 'Peptides': 1},                "reactant": 'Protein',              "X": 1.0,   "basis": 'wt'},
     }
 
     def _init(self, 
               reaction: dict | str = None, 
               time: float = None, 
-              loadCIPtime: float = None,
+              time_loading: float = None,
+              time_CIP: float = None,
               operating_T: float = None,
               operating_P: float = None
               ):
         """
 
         This method initialises the BatchEnzymaticTreatment object allowing to select
-        a predefined reaction if reaction = str or a reaction system providing a BioSTEAM
-        ReactionSystem object. Note that a Reaction object could be provided.
+        a default reaction if reaction = str or a reaction system providing a BioSTEAM
+        ReactionSystem object.
 
         """
-        # The reaction attribute could be a new reaction provided by the user or 
-        # a pre-defined reaction 
-        if isinstance(reaction, str):
-            if reaction in self.Predefined_Reactions:
-                self.reaction = bst.Reaction(
-                    reaction = self.Predefined_Reactions[reaction]["reaction"],
-                    reactant = self.Predefined_Reactions[reaction]["reactant"],
-                    X = self.Predefined_Reactions[reaction]["X"],
-                    basis = self.Predefined_Reactions[reaction]["basis"]
-                )
-            else:
-                raise ValueError("Reaction {} is not defined. Use a predefined or provide a dictionary".format(reaction))
+        # The reaction parameter could be a new reaction provided by the user or 
+        # a default reaction
+        if reaction in self.Default_Reactions and isinstance(reaction, str): 
+            self.reaction = bst.Reaction(
+                reaction = self.Default_Reactions[reaction]["reaction"],
+                reactant = self.Default_Reactions[reaction]["reactant"],
+                X = self.Default_Reactions[reaction]["X"],
+                basis = self.Default_Reactions[reaction]["basis"]
+            )
+        elif reaction not in self.Default_Reactions and isinstance(reaction, str):
+            raise ValueError("Reaction {} is not defined. Use a predefined or provide a dictionary".format(reaction))
         elif isinstance(reaction, object):
             self.reaction = reaction
         else:
-            raise ValueError("A reaction must be provided")
+            raise ValueError("The reaction parameter must be provided as a bst.Reaction object or a string.")
 
         # The other parameters
         self.time = time
-        self.loadCIPtime = loadCIPtime
+        self.time_loading = time_loading
+        self.time_CIP = time_CIP
         self._operating_T = operating_T
         self._operating_P = operating_P
         self._kW_per_m3 = None
@@ -143,7 +177,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         """
         """
         if self._kW_per_m3 is None:
-            self._kW_per_m3 = (0.79*1000*(1.417**3)*(0.373**5))/90    #kW/m3       using 1 m3 data --> http://dx.doi.org/10.1016/j.jclepro.2016.06.164
+            self._kW_per_m3 = ((0.79*1000*(1.417**3)*(0.373**5))/90)/1    #kW/m3       using 1 m3 data --> http://dx.doi.org/10.1016/j.jclepro.2016.06.164
         return self._kW_per_m3
     
     @kW_per_m3.setter
@@ -159,7 +193,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         if self._operating_T is None:
             self._operating_T = 273.15 + 37.0
             print("")
-            print("The temperature is {} K by default".format(self._operating_T))
+            print("The operating temperature of {} is {} K by default".format(self.ID,self._operating_T))
             print("")
         return self._operating_T
     
@@ -170,7 +204,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         if self._operating_P is None:
             self._operating_P = 101325
             print("")    
-            print("The Pressure is {} bar by default".format(self._operating_P))
+            print("The operating pressure is {} bar by default".format(self.ID,self._operating_P))
             print("")
         return self._operating_P
     
@@ -215,15 +249,17 @@ class BatchEnzymaticTreatment(bst.Unit):
 
         # Calculate the reactor volume
         Inputs_F_Vol = (Ins1.F_vol + Ins2.F_vol)
-        V_0 = Inputs_F_Vol
+        Input_Flow = Inputs_F_Vol
         
         # Calculate the number of batches needed to operate in semi-continuous
-        tau = self.time             # h
-        tau_0 = self.loadCIPtime    # h
+        time = self.time                    # h
+        time_loading = self.time_loading    # h
+        time_CIP = self.time_CIP            # h
         V_wf = self.V_wf            
-        V_max = self.V_max          # m3
-        N = (V_0 * (tau+tau_0))/ (V_max*V_wf) + 1 # One more reactor is always needed to ensure semicontinuos  
-        
+        V_max = self.V_max                  # m3
+        V_0 = Input_Flow * (time + time_loading + time_CIP) # Volume needed for semicontinuous
+        N = ((V_0)/(V_max * V_wf) + 1)      # One more reactor is always needed to ensure semicontinuos  
+
         # Minimum 2 reactor: There must be at least 2 reactor to operate in semicontinuous
         if N < 2:
             N = 2
@@ -234,13 +270,15 @@ class BatchEnzymaticTreatment(bst.Unit):
             N = N0
         
         # Add the reactor volume, the number of reactors, batch time and loading+cleaning time
-        Design['Reactor volume'] = (V_0/V_wf)/N     # m3
-        Design['Batch time'] = tau                  # h
-        Design['Loading and cleaning time'] = tau_0 # h
+        Design['Reactor volume (total)'] = (V_0/V_wf)       # m3
+        Design['Reactor volume (single)'] = (V_0/V_wf)/N    # m3
+        Design['Batch time'] = time                         # h
+        Design['Loading time'] = time_loading               # h
+        Design['CIP time'] = time_CIP                       # h 
         self.parallel['Reactor'] = N
-        print(Design['Reactor volume'])
+        
         # Add the power utility
-        Power_Stirring = self.kW_per_m3 * Design["Reactor volume"]
+        Power_Stirring = self.kW_per_m3 * Design["Reactor volume (total)"]
         self.add_power_utility(Power_Stirring)
 
         # Add the heat utility assuming that the process is adiabatic
@@ -309,7 +347,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         """
         """
         # Load all the design parameters
-        V_reactor = self.design_results['Reactor volume']
+        V_reactor = self.design_results['Reactor volume (total)']
         
         # Calculate the baseline purchase cost for each reactor
         ## The base cost accounts for jacketed agitated vessel. 

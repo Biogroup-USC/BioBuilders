@@ -1,4 +1,4 @@
-from .enzymatic_CSTR import BatchEnzymaticTreatment
+from .enzymatic_BSTR import BatchEnzymaticTreatment
 from .mill import Mill
 from .heatexchanger import ShellHeatExchanger
 from .extraction import *
