@@ -44,7 +44,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         Pressure inside the reactor. Default to 101325 Pa.
 
     operating_T : float 
-        Temperature inside the reactor. Default to 310.25 K.
+        Temperature inside the reactor. Default to 298.15 K.
     
     Attributes
     ----------
@@ -109,8 +109,8 @@ class BatchEnzymaticTreatment(bst.Unit):
               time: float = None, 
               time_loading: float = None,
               time_CIP: float = None,
-              operating_T: float = None,
-              operating_P: float = None
+              operating_T: float = 298.15,
+              operating_P: float = 101325
               ):
         """
 
@@ -139,8 +139,8 @@ class BatchEnzymaticTreatment(bst.Unit):
         self.time = time
         self.time_loading = time_loading
         self.time_CIP = time_CIP
-        self._operating_T = operating_T
-        self._operating_P = operating_P
+        self.operating_T = operating_T
+        self.operating_P = operating_P
         self._kW_per_m3 = None
         self._V_wf = None
         self._V_max = None
@@ -186,28 +186,6 @@ class BatchEnzymaticTreatment(bst.Unit):
         """
         self._kW_per_m3 = value
 
-    @property
-    def operating_T(self):
-        """
-        """
-        if self._operating_T is None:
-            self._operating_T = 273.15 + 37.0
-            print("")
-            print("The operating temperature of {} is {} K by default".format(self.ID,self._operating_T))
-            print("")
-        return self._operating_T
-    
-    @property
-    def operating_P(self):
-        """
-        """
-        if self._operating_P is None:
-            self._operating_P = 101325
-            print("")    
-            print("The operating pressure is {} bar by default".format(self.ID,self._operating_P))
-            print("")
-        return self._operating_P
-    
     @property
     def V_wf(self):
         """
