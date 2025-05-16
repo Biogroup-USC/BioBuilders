@@ -2,7 +2,7 @@
 """
 import biosteam as bst
 from typing import Optional
-import math
+import numpy as np
 
 __all__ = (
     "SLEPFbySplit",
@@ -140,44 +140,52 @@ class SLECbySplit(bst.Unit):
 
     Create a unit that models a Solid-Liquid Extraction. 
     
-    The SLE is modelled as a Agitated tank for mixing the solids and the solvent followed 
-    by a centrifuge that separates the two phases.           
+    The SLE is modelled as an agitated tank to mix the solids and the solvent followed 
+    by a centrifuge that separates the two phases. The volume of the vessel is calculated
+    as V = In_flow * Tau.   
 
     Parameters
     ----------
     ID : str
         Name of the unit.
     
-
     ins : list 
         List of input streams (BioSTEAM object). This unit has 2 inputs. [Feed, Solvent]
     
-
     outs : list 
         List of output streams (BioSTEAM object). This unit has 2 outputs. [Extract, Raffinate]
     
-
     sfi : dict 
         Dictionary with the following structure: {"A": 0.5, "B": 0.9}. This means that 50% of A and 90% of B will be extracted by the 
         solvent.  
-   
 
     moisture_content : float 
         Percentage of solvent retained in the solids. Default to 0.40 kg of solvent per kg of dry solids.
-   
 
     tau : float
         Residence time in h.
 
+    operating_T : float
+        Operating temperature of this unit. Default to 298.15 K.
     
-    kW_per_m3 : float 
+    operating_P : float
+        Operating pressure of this unit. Default to 101325 Pa.
+    
+    Attributes
+    ----------    
+    kW_per_m3_reactor : float 
         The power consumption due to stirring. The default is set to 0.1803 kW/m3 using the Piccino calculation for 1 m3 reactor: 
         http://dx.doi.org/10.1016/j.jclepro.2016.06.164.
     
+    kW_per_kg_centrifuge : float
+        The power consumption of the centrifuge. The default is 0.010 kWh/ton.
 
-    operating_T : float 
-        The operating temperature is set to 298.15 K by default.
-
+    V_wf : float
+        The working volume parameter represents the fraction of the reactor filled. Defaults to 0.80.
+    
+    V_max : float
+        The maximum volume (m3) represents the limit of the tank dimension. Default to 80 m3. 
+            
     """
     # Inlets
     _N_ins = 2
@@ -185,42 +193,36 @@ class SLECbySplit(bst.Unit):
     # Outlets
     _N_outs = 2
 
-    # Set the default moisture_content (kg solvent / kg dry solids)                                     
-    moisture_content_default: Optional[float] = 0.40
-
-    # Default operating temperature (k)
-    T_default: Optional[float] = 273.15 + 25
-
-    # Default residence time (tau)
-    tau_default: Optional[float] = None
-
-    # Default power consumption by agitation (kW/m3)
-    kW_per_m3_default: Optional[float] = (0.79*1000*(1.417**3)*(0.373**5))/90      # using 1 m3 data --> http://dx.doi.org/10.1016/j.jclepro.2016.06.164
-
-    # Default power consumption by centrifuge (kWh/kg)
-    kW_per_kg_default: Optional[float] = 0.01                                      # kWh/ton = 10 --> http://dx.doi.org/10.1016/j.jclepro.2016.06.164 
-
-    # Default working volume fraction
-    V_wf_default: Optional[float] = 0.80
-
     def _init(self,
               sfi: dict = None,
-              moisture_content: float = None,
+              moisture_content: float = 0.40,
               tau: float = None,
-              kW_per_m3: Optional[float] = None,
-              kW_centrifuge: Optional[float] = None,
-              operating_T: Optional[float] = None,
-              V_wf: Optional[float] = None
+              operating_T: float = 298.15,
+              operating_P: float = 101325,
+              kW_per_m3_reactor: float = None,
+              kWh_per_kg_centrifuge: float = None,
+              V_wf: float = None,
+              V_max: float = None
               ):
         """
         """
         self.sfi = sfi
-        self.moisture = self.moisture_content_default if moisture_content is None else moisture_content
-        self.tau = self.tau_default if tau is None else tau
-        self.operating_T = self.T_default if operating_T is None else operating_T
-        self.kW_per_m3 = self.kW_per_m3_default if kW_per_m3 is None else kW_per_m3
-        self.kW_per_kg = self.kW_per_kg_default if kW_centrifuge is None else kW_centrifuge
-        self.V_wf = self.V_wf_default if V_wf is None else V_wf
+        self.moisture = moisture_content
+        self.tau = tau
+        self.operating_T = operating_T
+        self.operating_P = operating_P
+        self._kW_per_m3 = kW_per_m3_reactor
+        self._kWh_per_kg = kWh_per_kg_centrifuge
+        self._V_wf = V_wf
+        self._V_max = V_max
+        self._Base_Cost_Tank = None
+        self._Base_Cost_Centrifuge = None
+        self._Base_Volume_Tank = None
+        self._Base_Diameter_Centrifuge = None
+        self._Base_n_Cost_Tank = None
+        self._Base_n_Cost_Centrifuge = None
+        self._CE_Base_Tank = None
+        self._CE_Base_Centrifuge = None
 
     def _run(self):
         """
@@ -232,40 +234,86 @@ class SLECbySplit(bst.Unit):
         # Define the outlet streams
         Extract = self.outs[0]
         Raffinate = self.outs[1]
-
-        # Run the solid liquid extraction using split factors
-        Extract.copy_flow(Solvent)
         Extract.T = self.operating_T
-        Raffinate.copy_flow(Feed)
-        Raffinate.phase = Feed.phase
         Raffinate.T = self.operating_T
-        for chem in self.sfi.keys():
-            Extract.imass[chem] = self.sfi[chem] * Feed.imass[chem] + Solvent.imass[chem]   # It takes into account if there is any chemical in both Solvent and Feed
-            Raffinate.imass[chem] = (1-self.sfi[chem])* Feed.imass[chem]                    
-        
-        # Run the centrifugation 
-        ## Calculate the ratio of solvent retained
-        Solvent_Retained_Ratio = (self.moisture * Raffinate.get_total_flow('kg/hr'))/Solvent.get_total_flow('kg/hr')
-        
-        ## Create a mock stream to store the chemicals retained
-        Solvent_Retained = bst.Stream(units = 'kg/hr')
-        Solvent_Retained.copy_like(Solvent)
-        Solvent_Retained.F_mass = Solvent_Retained_Ratio * Solvent.F_mass
 
-        ## Add the solvent retained to the raffinate
-        Chems_ID_Solvent = []
-        for element in Solvent_Retained.available_chemicals:
-            Chem_ID = element.ID
-            Chems_ID_Solvent.append(Chem_ID)
-        for chem in Chems_ID_Solvent:
-            Raffinate.imass[chem] = Raffinate.imass[chem] + Solvent_Retained.imass[chem]
-            Extract.imass[chem] = Extract.imass[chem] - Solvent_Retained.imass[chem]
-            if Solvent.imass[chem] != Raffinate.imass[chem] + Extract.imass[chem]:
-                raise ValueError("The amount of {} in {} is not enough to match the moisture content provided".format(chem, Solvent.ID))
-            elif Raffinate.imass[chem] or Extract.imass[chem] > 0:
-                continue
-            else:
-                raise ValueError("There is negative flows in this units because the solvent is not enough to match the moisture content")
+        # The mixture of streams is simulated in the design section to perform the heat utilities.
+        # The mix is simulated here copying the Feed and Solvent streams as Raffinate and Extract
+        Extract.copy_like(Solvent)
+        Raffinate.copy_like(Feed)
+
+        # Simulate the separation using a centrifuge
+        for chem in self.sfi.keys():
+            Extract.imass[chem] = self.sfi[chem] * Feed.imass[chem]
+            Raffinate.imass[chem] = (1-self.sfi[chem]) * Feed.imass[chem]
+        
+        ## Calculate the amount of solvent retained
+        Solvent_Retained = self.moisture * Raffinate.F_mass
+        Solvent_Retained_Ratio = Solvent_Retained/Solvent.F_mass
+        for chemobj in Solvent.available_chemicals:
+            chem = chemobj.ID
+            Extract.imass[chem] = (1-Solvent_Retained_Ratio) * Solvent.imass[chem]
+            Raffinate.imass[chem] = Solvent_Retained_Ratio * Solvent.imass[chem]
+            # Check if there is enough solvent to match the moisture content
+            Solvent_Extract_plus_Raffinate = (Extract.imass[chem] + Raffinate.imass[chem])
+            if not np.isclose(Solvent_Extract_plus_Raffinate, Solvent.imass[chem], rtol = 1e-5, atol = 1e-8):
+               raise ValueError("There is not enough amount of {} in {} to match the moisture requeriments".format(chem, Solvent.ID))
+        
+    @property
+    def kW_per_m3(self):
+        """
+        """
+        if self._kW_per_m3 is None:
+            self._kW_per_m3 = ((0.79*1000*(1.417**3)*(0.373**5))/90)/1  # kW/m3         using 1 m3 data --> http://dx.doi.org/10.1016/j.jclepro.2016.06.164
+        return self._kW_per_m3
+    
+    @kW_per_m3.setter
+    def kW_per_m3(self, value):
+        """
+        """
+        self._kW_per_m3 = value
+
+    @property
+    def kWh_per_kg(self):
+        """
+        """
+        if self._kWh_per_kg is None:
+            self._kWh_per_kg = 0.01 # kW/kg         kWh/ton = 10 --> http://dx.doi.org/10.1016/j.jclepro.2016.06.164 
+        return self._kWh_per_kg
+
+    @kWh_per_kg.setter
+    def kWh_per_kg(self, value):
+        """
+        """
+        self._kWh_per_kg = value
+
+    @property
+    def V_wf(self):
+        """
+        """
+        if self._V_wf is None:
+            self._V_wf = 0.80
+        return self._V_wf
+    
+    @V_wf.setter
+    def V_wf(self,value):
+        """
+        """
+        self._V_wf = value
+
+    @property
+    def V_max(self):            # This value is selected because the range of the cost correlation is 3 - 90 m3
+        """
+        """
+        if self._V_max is None:
+            self._V_max = 80    #m3  
+        return self._V_max
+    
+    @V_max.setter
+    def V_max(self,value):
+        """
+        """
+        self._V_max = value
 
     def _design(self):
         """
@@ -277,14 +325,13 @@ class SLECbySplit(bst.Unit):
         Ins1, Ins2 = self.ins
         Outs1, Outs1 = self.outs
         Load = bst.Stream(units = 'kg/hr')
-        Load.copy_like(Ins1)
         Load.mix_from([Ins1,Ins2], energy_balance = True)
 
         # Load the parameters
         V_wf = self.V_wf
 
         # Calculate the mixing tank volume
-        Inputs_F_Vol = (Ins1.F_vol + Ins2.F_vol)
+        Inputs_F_Vol = (Load.F_vol)
         V_0 = Inputs_F_Vol * self.tau
 
         # Add the reactor volume
@@ -294,7 +341,7 @@ class SLECbySplit(bst.Unit):
         Centrifuge_Flow_Rate = Load.F_vol
 
         # Calculate the number of centrifuges
-        Maximum_Flow_Rate = 2.2 * (60/100)
+        Maximum_Flow_Rate = 2.2 * (60/100)                  #Change it based on the new centrifuge
         if Centrifuge_Flow_Rate > Maximum_Flow_Rate:
             N = Centrifuge_Flow_Rate/Maximum_Flow_Rate
             Design['Centrifuge flow rate'] = Centrifuge_Flow_Rate/N
@@ -309,10 +356,116 @@ class SLECbySplit(bst.Unit):
         self.add_heat_utility(Duty, T_in = Ti, T_out = Tf)
 
         # Add power utility: Reactor agitation and centrifuge operation
-        Power_Stirring = self.kW_per_m3 * Design['Mixing tank volume'] + self.kW_per_kg * Load.F_mass
+        Power_Stirring = self.kW_per_m3 * Design['Mixing tank volume']
+        Power_Centrifuge = self.kWh_per_kg * Load.F_mass
         self.add_power_utility(Power_Stirring)
+        self.add_power_utility(Power_Centrifuge)
 
-        
+    @property
+    def Base_Cost_Tank(self):
+        """
+        """
+        if self._Base_Cost_Tank is None:
+            self._Base_Cost_Tank = 75000     # USD
+        return self._Base_Cost_Tank   
+
+    @Base_Cost_Tank.setter
+    def Base_Cost_Tank(self, value):
+        """
+        """
+        self._Base_Cost_Tank = value
+
+    @property
+    def Base_Volume_Tank(self):
+        """
+        """
+        if self._Base_Volume_Tank is None:
+            self._Base_Volume_Tank = 3.0    # m3
+        return self._Base_Volume_Tank
+    
+    @Base_Volume_Tank.setter
+    def Base_Volume_Tank(self, value):
+        """
+        """
+        self._Base_Volume_Tank = value
+
+    @property
+    def Base_n_Cost_Tank(self):
+        """
+        """
+        if self._Base_n_Cost_Tank is None:
+            self._Base_n_Cost_Tank = 0.53
+        return self._Base_n_Cost_Tank
+    
+    @Base_n_Cost_Tank.setter
+    def Base_n_Cost_Tank(self, value):
+        """
+        """
+        self._Base_n_Cost_Tank = value
+    
+    @property
+    def CE_Base_Tank(self):
+        """
+        """
+        if self._CE_Base_Tank is None:
+            self._CE_Base_Tank = 1000.0
+        return self._CE_Base_Tank
+    
+    @CE_Base_Tank.setter
+    def CE_Base_Tank(self, value):
+        """
+        """
+        self._CE_Base_Tank = value
+
+    @property
+    def Base_Cost_Centrifuge(self):
+        """
+        """
+        if self._Base_Cost_Centrifuge is None:
+            self._Base_Cost_Centrifuge = 0     #TODO add it
+        return self._Base_Cost_Centrifuge   
+
+    @Base_Cost_Centrifuge.setter
+    def Base_Cost_Centrifuge(self, value):
+        """
+        """
+        self._Base_Cost_Centrifuge = value
+
+    @property
+    def Base_Diameter_Centrifuge(self):
+        """
+        """
+        if self._Base_Diameter_Centrifuge is None:
+            self._Base_Diameter_Centrifuge = 0    #TODO add it
+        return self._Base_Diameter_Centrifuge
+    
+    @Base_Diameter_Centrifuge.setter
+    def Base_Diameter_Centrifuge(self, value):
+        """
+        """
+        self._Base_Diameter_Centrifuge = value
+
+    @property
+    def Base_n_Cost_Centrifuge(self):
+        """
+        """
+        if self._Base_n_Cost_Centrifuge is None:
+            self._Base_n_Cost_Centrifuge = 0    #TODO add it
+        return self._Base_n_Cost_Centrifuge
+    
+    @Base_n_Cost_Centrifuge.setter
+    def Base_n_Cost_Centrifuge(self, value):
+        """
+        """
+        self._Base_n_Cost_Centrifuge = value
+    
+    @property
+    def CE_Base_Centrifuge(self):
+        """
+        """
+        if self._CE_Base_Centrifuge is None:
+            self._CE_Base_Centrifuge = 0       #TODO add it
+        return self._CE_Base_Centrifuge    
 
     def _cost(self):
         """
@@ -341,8 +494,8 @@ class SLECbySplit(bst.Unit):
         ## The base cost accounts for a centrifuge used in continuous extraction including flexible connections,
         ## explosion-proof motor, variable speed drive, ammeter and tachometer.
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Flow_Centrifuge_L_s = Flow_Centrifuge * (1000/60)
-        Centrifuge_Purchase_Cost = 220000 * (Flow_Centrifuge_L_s/2.2)**0.25
+        Flow_Centrifuge_L_s = Flow_Centrifuge * (1000/60)                       #TODO change it
+        Centrifuge_Purchase_Cost = 220000 * (Flow_Centrifuge_L_s/2.2)**0.25     #TODO change it for Basket centrifuge
         self.baseline_purchase_costs['Centrifuge'] = Centrifuge_Purchase_Cost
 
         ## The material, pressure and temperature factors are assumed to be 1
