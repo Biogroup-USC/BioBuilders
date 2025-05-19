@@ -12,15 +12,16 @@ def calculate_centrifuge_diameter(
         rho_l,      # Liquid density    [kg/m3]
         mu,         # Liquid viscosity  [Pa*s]
         rpm,        # Rotational speed  [rpm]
-        tau,        # Residence time    [s]
+        Q,          # Volumetric flow   [m3/s]
+        H           # Height            [m]
 ):
     """
 
-    Calculate the minimun centrifuge diameter required for separating a particle.
+    Calculate the minimum centrifuge diameter required for separating a particle
+    in a basket centrifuge based on a sigma value approach.
 
-    This function calculates the minimum diameter of the centrifuge within a given 
-    residence time, based on the law of Stokes adapted to use the centrifugal aceleration
-    instead of the gravity.
+    This function uses Stokes' law for sedimentation and relates it to the sigma
+    factor of a basket centrifuge to compute the required diameter.
 
     Parameters
     ----------
@@ -39,30 +40,38 @@ def calculate_centrifuge_diameter(
     rpm : float
         Rotational speed of the centrifuge [rpm].
     
-    tau : float
-        Residence time of the particle in the centrifuge
+    Q : float
+        Volumetric flow [m3/h].
+    
+    H : float
+        Height of the basket [m].
     
     Notes
     -----
-    Based on the differential equations:
-        dr/dt = k * r => r(t) = r0 * exp(k * t)
-    with:
-        k = (dp^2) * (rho_p - rho_l) * (omega^2) / (18*mu)
-    and:
-        D  = 2 * r(tau)
-        
+    The sigma is calculated using the following equation:
+        Sigma = Q / (2 * Vg)
+    where:
+        Vg = (rho_p - rho_l) * (dp**2) * 9.81/(18 * mu)
+    
+    The diameter of the basket centrifuge is calculated using
+    the next correlation:
+        Sigma = (omega**2) * H * D**2 / (8 * g)
+    where:
+        omega = angular speed [rad/s].
+        D = centrifuge diameter [m].
+
     """
-    # Calculate k
-    omega = 2 * np.pi * rpm / 60                # rad/s
-    k = (dp**2 * (rho_p - rho_l) * omega**2) / (18 * mu)
+    # Calculate the sedimentation velocity
+    Vg =  ((rho_p - rho_l) * (dp ** 2) * 9.81)/(18 * mu)
 
-    # initial radio (close to the axis)
-    r0 = 1e-8
+    # Calculate the required sigma for this separation
+    Q_s = Q/3600    # convert from m3/h to m3/s
+    Sigma = Q_s / (2*Vg)
 
-    # Radial positio at t = tau
-    r_final = r0 * np.exp(k * tau)
+    # Angular velocity
+    omega = 2 * np.pi * rpm/60
 
-    # Diameter
-    D = r_final * 2
+    # Solve the diameter
+    Diameter = np.sqrt((Sigma * 8 * 9.81)/(H * omega**2))
 
-    return D
+    return Diameter, Sigma
