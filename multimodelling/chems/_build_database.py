@@ -89,9 +89,9 @@ DB.insert_data_into_db(
     description = "Phenolic_Compounds embedded into the Tomato Peel using Lycopene as reference",
     Phase = 's',
     V = 536.9*(1/0.899),    # m3/mol
-    Rho = 0.899,            # https://doi.org/10.1155/2024/6252426 from lycopene
+    Rho = 899,              # https://doi.org/10.1155/2024/6252426 from lycopene
     Cp = 2.1,               # Similar to cutin
-    Hf = -285830        # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
+    Hf = -285830            # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
 
 # Cutin
@@ -101,7 +101,7 @@ DB.insert_data_into_db(
     CAS = "54990-88-4",
     Phase = 's',
     Cp = 2.1,           #J/(g*K)    https://doi.org/10.1016/S0005-2736(01)00285-1
-    Rho = 1.364,        # kJ(kg*K) same as cellulose https://link.springer.com/article/10.1007/s10853-013-7815-6
+    Rho = 1364,         # kJ(kg*K) same as cellulose https://link.springer.com/article/10.1007/s10853-013-7815-6
     V = 1*(1/1364),     # m3/mol 
     )
 
@@ -110,7 +110,7 @@ DB.insert_data_into_db(
     ID = 'Cholinium_Hexanoate',
     formula = 'C11H25NO3',              # The sum of Choline    https://pubchem.ncbi.nlm.nih.gov/compound/choline#section=SMILES and Hexanoate https://pubchem.ncbi.nlm.nih.gov/compound/hexanoate
     MW = 104.17 + 115.15,               # The sum of both
-    Rho = 1.010,                        #kg/m3       https://www.oepm.es/pdf/ES/0000/000/02/90/83/ES-2908345_T3.pdf
+    Rho = 1010,                         #kg/m3       https://www.oepm.es/pdf/ES/0000/000/02/90/83/ES-2908345_T3.pdf
     Phase = 'l',
     Cp = 2.05,                          # J/(g*K)    https://doi.org/10.1016/j.jct.2022.106999 --> ethanediol + L-carnitine 3:1
     V = (104.17 + 115.15) * (1/1010)    # m3/mol
@@ -124,6 +124,6 @@ DB.insert_data_into_db(
     MW = 139.62,            # g/mol 
     Phase = 'l',
     Cp = 249/139.62,        # J/(g*K) calculated using the hypothetical heat capacity of the liquid (ChCl) obtained in https://doi.org/10.1039/D2CP00377E.
-    Rho = 1.205,            # kg/m3 from https://www.chemsrc.com/en/cas/67-48-1_829430.html
+    Rho = 1205,             # kg/m3 from https://www.chemsrc.com/en/cas/67-48-1_829430.html
     V = 139.62*(1/1205),    # m3/mol
 )
