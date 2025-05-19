@@ -1,8 +1,10 @@
 """
 """
 import biosteam as bst
-from typing import Optional
+from ..mathtools.unitsdiameter import calculate_centrifuge_diameter
 import numpy as np
+import math
+from typing import Optional
 
 __all__ = (
     "SLEPFbySplit",
@@ -185,7 +187,31 @@ class SLECbySplit(bst.Unit):
     
     V_max : float
         The maximum volume (m3) represents the limit of the tank dimension. Default to 80 m3. 
-            
+
+    base_cost_tank : float
+        Base cost of a jacketed mixing tank.
+    
+    base_volume_tank : float
+        The volume of the jacketed mixing tank whose cost is the base cost.
+    
+    base_n_cost_tank : float
+        Parameter n for the jacketed mixing tank used in the formula to scale costs.
+    
+    CE_base_tank : float
+        CEPCI of the base cost.
+    
+    base_cost_centrifuge : float
+        Base cost of a basket centrifuge.
+    
+    base_diameter_centrifuge : float
+        The diameter of a basket centrifuge whose cost is the base cost.
+    
+    base_n_cost_centrifuge : float
+        Parameter n for the basket centrifuge used in the formula to scale costs.
+    
+    CE_base_centrifuge : float
+        CEPCI of the base cost.
+             
     """
     # Inlets
     _N_ins = 2
@@ -196,18 +222,23 @@ class SLECbySplit(bst.Unit):
     def _init(self,
               sfi: dict = None,
               moisture_content: float = 0.40,
+              solids : list = None,
               tau: float = None,
               operating_T: float = 298.15,
               operating_P: float = 101325,
               kW_per_m3_reactor: float = None,
               kWh_per_kg_centrifuge: float = None,
               V_wf: float = None,
-              V_max: float = None
+              V_max: float = None,
+              max_diameter: float = None,
+              particle_diameter = None,
+              centrifuge_rpm = None
               ):
         """
         """
         self.sfi = sfi
         self.moisture = moisture_content
+        self.solids = solids
         self.tau = tau
         self.operating_T = operating_T
         self.operating_P = operating_P
@@ -215,14 +246,17 @@ class SLECbySplit(bst.Unit):
         self._kWh_per_kg = kWh_per_kg_centrifuge
         self._V_wf = V_wf
         self._V_max = V_max
-        self._Base_Cost_Tank = None
-        self._Base_Cost_Centrifuge = None
-        self._Base_Volume_Tank = None
-        self._Base_Diameter_Centrifuge = None
-        self._Base_n_Cost_Tank = None
-        self._Base_n_Cost_Centrifuge = None
-        self._CE_Base_Tank = None
-        self._CE_Base_Centrifuge = None
+        self._max_diameter = max_diameter
+        self._particle_diameter = particle_diameter
+        self._centrifuge_rpm = centrifuge_rpm
+        self._base_cost_tank = None
+        self._base_cost_centrifuge = None
+        self._base_volume_tank = None
+        self._base_diameter_centrifuge = None
+        self._base_n_cost_tank = None
+        self._base_n_cost_centrifuge = None
+        self._CE_base_tank = None
+        self._CE_base_centrifuge = None
 
     def _run(self):
         """
@@ -315,6 +349,48 @@ class SLECbySplit(bst.Unit):
         """
         self._V_max = value
 
+    @property
+    def particle_diameter(self):
+        """
+        """
+        if self._particle_diameter is None:
+            self._particle_diameter = 5e-4
+        return self._particle_diameter
+
+    @particle_diameter.setter
+    def particle_diameter(self, value):
+        """
+        """
+        self._particle_diameter = value
+
+    @property
+    def centrifuge_rpm(self):
+        """
+        """
+        if self._centrifuge_rpm is None:
+            self._centrifuge_rpm = 3000     # rpm
+        return self._centrifuge_rpm
+    
+    @centrifuge_rpm.setter
+    def centrifuge_rpm(self, value):
+        """
+        """
+        self._centrifuge_rpm = value
+    
+    @property
+    def max_diameter(self):
+        """
+        """
+        if self._max_diameter is None:
+            self._max_diameter = 1.25       # m
+        return self._max_diameter
+
+    @max_diameter.setter
+    def max_diameter(self, value):
+        """
+        """
+        self._max_diameter = value
+
     def _design(self):
         """
         """
@@ -323,7 +399,7 @@ class SLECbySplit(bst.Unit):
 
         # Load the streams of the unit and mix them
         Ins1, Ins2 = self.ins
-        Outs1, Outs1 = self.outs
+        Outs1, Outs2 = self.outs
         Load = bst.Stream(units = 'kg/hr')
         Load.mix_from([Ins1,Ins2], energy_balance = True)
 
@@ -337,18 +413,44 @@ class SLECbySplit(bst.Unit):
         # Add the reactor volume
         Design['Mixing tank volume'] = V_0/V_wf
 
-        # Calculate the flow rate and the number of centrifuges
-        Centrifuge_Flow_Rate = Load.F_vol
+        # Calculate the diameter of the centrifuge              #TODO the problem now is with density values and mu values from BioSTEAM
+        ## Calculate the density of the solids
+        Rho_Solids = 0
+        Outs2_Chemicals = Outs2.available_chemicals
+        for solid in self.solids:
+            for chem in Outs2_Chemicals:
+                if chem.ID == solid:
+                    rho = chem.rho(Outs2.T)
+                    Rho_Solids += rho
+                else:
+                    continue
+        Rho_Solids = Rho_Solids/len(self.solids)
 
+        ## Estimate the diameter
+        Centrifuge_Diameter, Centrifuge_Sigma = calculate_centrifuge_diameter(
+            dp = self.particle_diameter,
+            rho_p = Rho_Solids,
+            rho_l = Outs1.rho,
+            mu = 0.04,
+            rpm = self.centrifuge_rpm,
+            Q = Load.F_vol,
+            H = 1
+        )
+
+        
         # Calculate the number of centrifuges
-        Maximum_Flow_Rate = 2.2 * (60/100)                  #Change it based on the new centrifuge
-        if Centrifuge_Flow_Rate > Maximum_Flow_Rate:
-            N = Centrifuge_Flow_Rate/Maximum_Flow_Rate
-            Design['Centrifuge flow rate'] = Centrifuge_Flow_Rate/N
-            self.parallel['Centrifuge'] = N
+        N_Centrifuge = Centrifuge_Diameter / self.max_diameter
+        if N_Centrifuge <= 1:
+            N_Centrifuge = 1
         else:
-            Design['Centrifuge flow rate'] = Centrifuge_Flow_Rate
+            N_Centrifuge = math.trunc(N_Centrifuge) + 1
+            Centrifuge_Diameter = Centrifuge_Diameter/N_Centrifuge
 
+        # Add the centrifige design parameters
+        Design['Centrifuge diameter'] = Centrifuge_Diameter     
+        Design['Centrifuge sigma'] = Centrifuge_Sigma
+        self.parallel['Centrifuge'] = N_Centrifuge * 2  # Duplicate the centrifuge because they must be cleaned
+        
         # Add the heat utility
         Tf = self.operating_T                   # K
         Ti = Load.T                             # K 
@@ -362,122 +464,122 @@ class SLECbySplit(bst.Unit):
         self.add_power_utility(Power_Centrifuge)
 
     @property
-    def Base_Cost_Tank(self):
+    def base_cost_tank(self):
         """
         """
-        if self._Base_Cost_Tank is None:
-            self._Base_Cost_Tank = 75000     # USD
-        return self._Base_Cost_Tank   
+        if self._base_cost_tank is None:
+            self._base_cost_tank = 75000     # USD
+        return self._base_cost_tank   
 
-    @Base_Cost_Tank.setter
+    @base_cost_tank.setter
     def Base_Cost_Tank(self, value):
         """
         """
-        self._Base_Cost_Tank = value
+        self._base_cost_tank = value
 
     @property
-    def Base_Volume_Tank(self):
+    def base_volume_tank(self):
         """
         """
-        if self._Base_Volume_Tank is None:
-            self._Base_Volume_Tank = 3.0    # m3
-        return self._Base_Volume_Tank
+        if self._base_volume_tank is None:
+            self._base_volume_tank = 3.0    # m3
+        return self._base_volume_tank
     
-    @Base_Volume_Tank.setter
-    def Base_Volume_Tank(self, value):
+    @base_volume_tank.setter
+    def base_volume_tank(self, value):
         """
         """
-        self._Base_Volume_Tank = value
+        self._base_volume_tank = value
 
     @property
-    def Base_n_Cost_Tank(self):
+    def base_n_cost_tank(self):
         """
         """
-        if self._Base_n_Cost_Tank is None:
-            self._Base_n_Cost_Tank = 0.53
-        return self._Base_n_Cost_Tank
+        if self._base_n_cost_tank is None:
+            self._base_n_cost_tank = 0.53
+        return self._base_n_cost_tank
     
-    @Base_n_Cost_Tank.setter
-    def Base_n_Cost_Tank(self, value):
+    @base_n_cost_tank.setter
+    def base_n_cost_tank(self, value):
         """
         """
-        self._Base_n_Cost_Tank = value
+        self._base_n_cost_tank = value
     
     @property
-    def CE_Base_Tank(self):
+    def CE_base_tank(self):
         """
         """
-        if self._CE_Base_Tank is None:
-            self._CE_Base_Tank = 1000.0
-        return self._CE_Base_Tank
+        if self._CE_base_tank is None:
+            self._CE_base_tank = 1000.0
+        return self._CE_base_tank
     
-    @CE_Base_Tank.setter
-    def CE_Base_Tank(self, value):
+    @CE_base_tank.setter
+    def CE_base_tank(self, value):
         """
         """
-        self._CE_Base_Tank = value
+        self._CE_base_tank = value
 
     @property
-    def Base_Cost_Centrifuge(self):
+    def base_cost_centrifuge(self):
         """
         """
-        if self._Base_Cost_Centrifuge is None:
-            self._Base_Cost_Centrifuge = 0     #TODO add it
-        return self._Base_Cost_Centrifuge   
+        if self._base_cost_centrifuge is None:
+            self._base_cost_centrifuge = 60000
+        return self._base_cost_centrifuge   
 
-    @Base_Cost_Centrifuge.setter
-    def Base_Cost_Centrifuge(self, value):
+    @base_cost_centrifuge.setter
+    def base_cost_centrifuge(self, value):
         """
         """
-        self._Base_Cost_Centrifuge = value
-
-    @property
-    def Base_Diameter_Centrifuge(self):
-        """
-        """
-        if self._Base_Diameter_Centrifuge is None:
-            self._Base_Diameter_Centrifuge = 0    #TODO add it
-        return self._Base_Diameter_Centrifuge
-    
-    @Base_Diameter_Centrifuge.setter
-    def Base_Diameter_Centrifuge(self, value):
-        """
-        """
-        self._Base_Diameter_Centrifuge = value
+        self._base_cost_centrifuge = value
 
     @property
-    def Base_n_Cost_Centrifuge(self):
+    def base_diameter_centrifuge(self):
         """
         """
-        if self._Base_n_Cost_Centrifuge is None:
-            self._Base_n_Cost_Centrifuge = 0    #TODO add it
-        return self._Base_n_Cost_Centrifuge
+        if self._base_diameter_centrifuge is None:
+            self._base_diameter_centrifuge = 0.060
+        return self._base_diameter_centrifuge
     
-    @Base_n_Cost_Centrifuge.setter
-    def Base_n_Cost_Centrifuge(self, value):
+    @base_diameter_centrifuge.setter
+    def base_diameter_centrifuge(self, value):
         """
         """
-        self._Base_n_Cost_Centrifuge = value
+        self._base_diameter_centrifuge = value
+
+    @property
+    def base_n_cost_centrifuge(self):
+        """
+        """
+        if self._base_n_cost_centrifuge is None:
+            self._base_n_cost_centrifuge = 1.04
+        return self._base_n_cost_centrifuge
+    
+    @base_n_cost_centrifuge.setter
+    def base_n_cost_centrifuge(self, value):
+        """
+        """
+        self._base_n_cost_centrifuge = value
     
     @property
-    def CE_Base_Centrifuge(self):
+    def CE_base_centrifuge(self):
         """
         """
-        if self._CE_Base_Centrifuge is None:
-            self._CE_Base_Centrifuge = 0       #TODO add it
-        return self._CE_Base_Centrifuge    
+        if self._CE_base_centrifuge is None:
+            self._CE_base_centrifuge = 1000
+        return self._CE_base_centrifuge    
 
     def _cost(self):
         """
         """
         # Load all the design parameters needed to calculate the costs
         V_Tank = self.design_results['Mixing tank volume']
-        Flow_Centrifuge = self.design_results['Centrifuge flow rate']
+        Centrifuge_Diameter = self.design_results['Centrifuge diameter']
 
         # Calculate the baseline purchase cost for the mixing tank
         ## The base cost accounts for jacketed agitated vessel.
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Mixing_Tank_Purchase_Cost = 75000 * (V_Tank/3)**0.53
+        Mixing_Tank_Purchase_Cost = self.base_cost_tank * (V_Tank/self.base_volume_tank)**self.base_n_cost_tank
         self.baseline_purchase_costs['Mixing Tank'] = Mixing_Tank_Purchase_Cost
 
         ## The material, pressure and temperature factors are assumed to be 1
@@ -487,16 +589,14 @@ class SLECbySplit(bst.Unit):
         self.F_BM['Mixing Tank'] = 1
 
         ## Scale the costs using CEPCI
-        CE_Base = 1000
-        self.baseline_purchase_costs['Mixing Tank'] *= bst.CE/CE_Base
+        self.baseline_purchase_costs['Mixing Tank'] *= bst.CE/self.CE_base_tank
 
         # Calculate the baseline purchase costs for the centrifuge
-        ## The base cost accounts for a centrifuge used in continuous extraction including flexible connections,
-        ## explosion-proof motor, variable speed drive, ammeter and tachometer.
+        ## The base cost accounts for a vertical basket centrifuge with batch top discharge. Note that
+        ## motor and drive are excluded from this correlation.
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Flow_Centrifuge_L_s = Flow_Centrifuge * (1000/60)                       #TODO change it
-        Centrifuge_Purchase_Cost = 220000 * (Flow_Centrifuge_L_s/2.2)**0.25     #TODO change it for Basket centrifuge
-        self.baseline_purchase_costs['Centrifuge'] = Centrifuge_Purchase_Cost
+        Centrifuge_Purchase_Cost = self.base_cost_centrifuge * (Centrifuge_Diameter/self.base_diameter_centrifuge)**self.base_n_cost_centrifuge
+        self.baseline_purchase_costs['Centrifuge'] = Centrifuge_Purchase_Cost * self.parallel['Centrifuge']
 
         ## The material, pressure and temperature factors are assumed to be 1
         self.F_D['Centrifuge'] = self.F_M['Centrifuge'] = self.F_P['Centrifuge'] = 1
