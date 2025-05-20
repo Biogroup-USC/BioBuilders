@@ -188,6 +188,18 @@ class SLECbySplit(bst.Unit):
     V_max : float
         The maximum volume (m3) represents the limit of the tank dimension. Default to 80 m3. 
 
+    max_diameter : float
+        The maximum diameter of the centrifuge based on the cost correlations. Default to 1.25 m.
+    
+    particle_diameter : float
+        Diameter of the solids. Default to 5e-4 m.
+    
+    centrifuge_rpm : float
+        Rotational speed of the centrifuge. Default to 3000 rpm.
+
+    centrifuge_height : float
+        Height of the centrifuge' basket. Defaulto to 1 m.
+        
     base_cost_tank : float
         Base cost of a jacketed mixing tank.
     
@@ -232,7 +244,8 @@ class SLECbySplit(bst.Unit):
               V_max: float = None,
               max_diameter: float = None,
               particle_diameter = None,
-              centrifuge_rpm = None
+              centrifuge_rpm = None,
+              centrifuge_height = None,
               ):
         """
         """
@@ -249,6 +262,7 @@ class SLECbySplit(bst.Unit):
         self._max_diameter = max_diameter
         self._particle_diameter = particle_diameter
         self._centrifuge_rpm = centrifuge_rpm
+        self._centrifuge_height = centrifuge_height
         self._base_cost_tank = None
         self._base_cost_centrifuge = None
         self._base_volume_tank = None
@@ -391,6 +405,20 @@ class SLECbySplit(bst.Unit):
         """
         self._max_diameter = value
 
+    @property
+    def centrifuge_height(self):
+        """
+        """
+        if self._centrifuge_height is None:
+            self._centrifuge_height = 1      # m
+        return self._centrifuge_height
+
+    @centrifuge_height.setter
+    def centrifuge_height(self, value):
+        """
+        """
+        self._centrifuge_height = value
+
     def _design(self):
         """
         """
@@ -413,7 +441,7 @@ class SLECbySplit(bst.Unit):
         # Add the reactor volume
         Design['Mixing tank volume'] = V_0/V_wf
 
-        # Calculate the diameter of the centrifuge              #TODO the problem now is with density values and mu values from BioSTEAM
+        # Calculate the diameter of the centrifuge              
         ## Calculate the density of the solids
         Rho_Solids = 0
         Outs2_Chemicals = Outs2.available_chemicals
@@ -431,13 +459,12 @@ class SLECbySplit(bst.Unit):
             dp = self.particle_diameter,
             rho_p = Rho_Solids,
             rho_l = Outs1.rho,
-            mu = 0.04,
+            mu = Outs1.mu,
             rpm = self.centrifuge_rpm,
             Q = Load.F_vol,
-            H = 1
+            H = self.centrifuge_height
         )
 
-        
         # Calculate the number of centrifuges
         N_Centrifuge = Centrifuge_Diameter / self.max_diameter
         if N_Centrifuge <= 1:
@@ -585,8 +612,17 @@ class SLECbySplit(bst.Unit):
         ## The material, pressure and temperature factors are assumed to be 1
         self.F_D['Mixing Tank'] = self.F_M['Mixing Tank'] = self.F_P['Mixing Tank'] = 1
 
-        ## The installation costs are assumed to be 0
-        self.F_BM['Mixing Tank'] = 1
+        ## The Bare module factor which account for installation costs is calculated as the sum of delivery, installation,
+        ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
+        ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
+        ### Factors
+        Delivery = 0.10
+        Installation = 0.60             # Metal tanks
+        Instrumentation_Control = 0.50
+        Piping = 0.31                   # Solid-Fluid   
+        ### Calculate the bare module
+        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
+        self.F_BM['Mixing Tank'] = Bare_Module
 
         ## Scale the costs using CEPCI
         self.baseline_purchase_costs['Mixing Tank'] *= bst.CE/self.CE_base_tank
@@ -601,8 +637,17 @@ class SLECbySplit(bst.Unit):
         ## The material, pressure and temperature factors are assumed to be 1
         self.F_D['Centrifuge'] = self.F_M['Centrifuge'] = self.F_P['Centrifuge'] = 1
 
-        ## The installation costs are assumed to be 0
-        self.F_BM['Centrifuge'] = 1
+        ## The Bare module factor which account for installation costs is calculated as the sum of delivery, installation,
+        ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
+        ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
+        ### Factors
+        Delivery = 0.10
+        Installation = 0.40             # Centrifugal separators
+        Instrumentation_Control = 0.25  # Assumed from the range 0.08 - 0.50 mentioned on the book
+        Piping = 0.31                   # Solid-Fluid   
+        ### Calculate the bare module
+        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
+        self.F_BM['Centrifuge'] = Bare_Module
 
         ## Scale the costs using CEPCI
         CE_Base = 1000
