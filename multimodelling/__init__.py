@@ -4,6 +4,7 @@ from .parameters import get_parameters_from_CSV, get_parameters_from_excel, get_
 from .results import Display_Mass_Results, Display_Units_Results, TEA_Results
 from .tea import Load_Process_Settings, TEA
 from .mathtools import log_mean, discounting_to_present_value, updating_to_future_value, calculate_centrifuge_diameter
+from .diagrams import Uncertainty_Plotter
 
 __all__ = (
     'ShellHeatExchanger', 'SLECbySplit', 'SLEPFbySplit', 'BatchEnzymaticTreatment', 'Mill',
@@ -11,5 +12,6 @@ __all__ = (
     'get_parameters_from_CSV', 'get_parameters_from_excel', 'get_price_streams_from_CSV','get_unit_costs_from_CSV',
     'Display_Mass_Results', 'Display_Units_Results', 'TEA_Results',
     'Load_Process_Settings', 'TEA',
-    'log_mean','discounting_to_present_value','updating_to_future_value','calculate_centrifuge_diameter'
+    'log_mean','discounting_to_present_value','updating_to_future_value','calculate_centrifuge_diameter',
+    'Uncertainty_Plotter'
 )
