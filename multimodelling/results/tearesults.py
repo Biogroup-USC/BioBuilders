@@ -7,10 +7,10 @@ import matplotlib.pyplot as plt
 from ..mathtools.economy import updating_to_future_value
 
 __all__ = (
-    "TEA_Results"
+    "TEAresults"
 )
 
-class TEA_Results:
+class TEAresults:
     """
     """
     def __init__(self, cashflow: pd.DataFrame = None, TEAobject: bst.TEA | TEA = None):

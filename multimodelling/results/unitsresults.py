@@ -4,10 +4,10 @@ import pandas as pd
 import biosteam as bst
 
 __all__ = (
-    "Display_Units_Results",
+    "DisplayUnitsResults",
 )
 
-class Display_Units_Results:
+class DisplayUnitsResults:
     """
     """
     def __init__(self, units: list = None):

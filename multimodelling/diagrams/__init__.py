@@ -1,5 +1,5 @@
-from .uncertainty import Uncertainty_Plotter
+from .uncertainty import UncertaintyPlotter
 
 __all__ = (
-    "Uncertainty_Plotter",
+    "UncertaintyPlotter",
 )

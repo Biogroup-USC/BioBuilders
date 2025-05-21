@@ -2,7 +2,11 @@
 """
 import pandas as pd
 
-class Display_Mass_Results:
+__all__ = (
+    "DisplayMassResults"
+)
+
+class DisplayMassResults:
     """
 
     Create an object for displaying the mass balance of the whole process.

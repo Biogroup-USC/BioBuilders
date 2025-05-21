@@ -7,10 +7,10 @@ import seaborn as sns
 from .diagramtools import simplify_labels
 
 __all__ = (
-    "Uncertainty_Plotter",
+    "UncertaintyPlotter",
 )
 
-class Uncertainty_Plotter:
+class UncertaintyPlotter:
     """
     """
     def __init__(self, uncertainty_df : pd.DataFrame = None, simplified_index : list = None):
