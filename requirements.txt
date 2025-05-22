@@ -1,6 +1,8 @@
-biosteam => 2.51.4
-pandas => 2.2.2
-thermosteam => 0.51.5
-pytz => 2024.1
-appdirs => 1.4.4
-openpyxl => 3.1.5
+biosteam >= 2.51.4
+pandas >= 2.2.2
+thermosteam >= 0.51.5
+pytz >= 2024.1
+appdirs >= 1.4.4
+openpyxl >= 3.1.5
+matplotlib >= 3.10.3
+seaborn >= 0.13.0

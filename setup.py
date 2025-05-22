@@ -11,5 +11,6 @@ setup(
     long_description_content_type= "text/markdown",
     url = "https://github.com/Biogroup-USC/multiscale-modelling-biorefinery-code.git", 
     packages = find_packages(),
-    include_package_data = True  
+    include_package_data = True,
+    python_requires = '>=3.8, <3.13'  
 )

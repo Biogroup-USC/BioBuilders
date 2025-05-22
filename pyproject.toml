@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multimodelling"
+version = "0.10.7"
+description = "Library for biorefinery modelling following the multiescale approach."
+authors = [
+    { name = "Isaac", email = "isaacleis.garrote@usc.es" }
+]
+readme = "README.md"
+requires-python = ">=3.8, <3.13"
+license = { text = "MIT"}
+urls = { "Homepage" = "https://github.com/Biogroup-USC/multiscale-modelling-biorefinery-code.git" }
+dependencies = [
+  "biosteam>=2.51.4",
+  "pandas>=2.2.2",
+  "thermosteam>=0.51.5",
+  "pytz>=2024.1",
+  "appdirs>=1.4.4",
+  "openpyxl>=3.1.5",
+  "matplotlib>=3.10.3",
+  "seaborn>=0.13.0"
+]
