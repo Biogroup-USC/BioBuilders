@@ -173,6 +173,14 @@ class SLECbySplit(bst.Unit):
     operating_P : float
         Operating pressure of this unit. Default to 101325 Pa.
     
+    solids_rho : float
+        Density of the solids [kg/m3] to calculate the centrifuge diameter. This parameter allows to give a density for
+        the solids that enters the solid-liquid extraction manually instead of calculating it using the BioSTEAM features.
+    
+    solvent_rho : float
+        Density of the solvent [kg/m3] to calculate the centrifuge diameter. This parameter allows to give a density for
+        the solids that enters the solid-liquid extraction manually instead of calculating it using the BioSTEAM features.
+    
     Attributes
     ----------    
     kW_per_m3_reactor : float 
@@ -243,15 +251,19 @@ class SLECbySplit(bst.Unit):
               V_wf: float = None,
               V_max: float = None,
               max_diameter: float = None,
-              particle_diameter = None,
-              centrifuge_rpm = None,
-              centrifuge_height = None,
+              particle_diameter: float = None,
+              centrifuge_rpm: float = None,
+              centrifuge_height: float = None,
+              solids_rho: float = None,
+              solvent_rho: float = None
               ):
         """
         """
         self.sfi = sfi
         self.moisture = moisture_content
         self.solids = solids
+        self.solids_rho = solids_rho
+        self.solvent_rho = solvent_rho
         self.tau = tau
         self.operating_T = operating_T
         self.operating_P = operating_P
@@ -382,7 +394,7 @@ class SLECbySplit(bst.Unit):
         """
         """
         if self._centrifuge_rpm is None:
-            self._centrifuge_rpm = 3000     # rpm
+            self._centrifuge_rpm = 1500     # rpm
         return self._centrifuge_rpm
     
     @centrifuge_rpm.setter
@@ -443,23 +455,32 @@ class SLECbySplit(bst.Unit):
 
         # Calculate the diameter of the centrifuge              
         ## Calculate the density of the solids
-        Rho_Solids = 0
-        Outs2_Chemicals = Outs2.available_chemicals
-        for solid in self.solids:
-            for chem in Outs2_Chemicals:
-                if chem.ID == solid:
-                    rho = chem.rho(Outs2.T)
-                    Rho_Solids += rho
-                else:
-                    continue
-        Rho_Solids = Rho_Solids/len(self.solids)
+        if self.solids_rho is not None:
+            Rho_Solids = self.solids_rho
+        else:    
+            Rho_Solids = 0
+            Outs2_Chemicals = Outs2.available_chemicals
+            for solid in self.solids:
+                for chem in Outs2_Chemicals:
+                    if chem.ID == solid:
+                        rho = chem.rho(Outs2.T)
+                        Rho_Solids += rho
+                    else:
+                         continue
+            Rho_Solids = Rho_Solids/len(self.solids)
+
+        # Calculate the density of the solvent
+        if self.solvent_rho is not None:
+            Rho_Liquid = self.solvent_rho
+        else:
+            Rho_Liquid = Ins2.rho
 
         ## Estimate the diameter
         Centrifuge_Diameter, Centrifuge_Sigma = calculate_centrifuge_diameter(
             dp = self.particle_diameter,
             rho_p = Rho_Solids,
-            rho_l = Outs1.rho,
-            mu = Outs1.mu,
+            rho_l = Rho_Liquid,
+            mu = Ins2.mu,
             rpm = self.centrifuge_rpm,
             Q = Load.F_vol,
             H = self.centrifuge_height
