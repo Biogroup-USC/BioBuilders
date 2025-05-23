@@ -61,17 +61,27 @@ def calculate_centrifuge_diameter(
         D = centrifuge diameter [m].
 
     """
-    # Calculate the sedimentation velocity
+    # Gravitational acceleration
+    g = 9.81    # m/s^2
+
+    # Convert Q to m^3/s
+    Q_s = Q/3600
+
+    # Check to avoid division by zero
+    if mu <= 0 or dp <= 0 or rho_p <= rho_l:
+        raise ValueError("Invalid physical parameters for sedimentation")
+
+    # Settling velocity from Stokes' law
     Vg =  ((rho_p - rho_l) * (dp ** 2) * 9.81)/(18 * mu)
 
     # Calculate the required sigma for this separation
-    Q_s = Q/3600    # convert from m3/h to m3/s
     Sigma = Q_s / (2*Vg)
 
-    # Angular velocity
+    # Angular velocity [rad/s]
     omega = 2 * np.pi * rpm/60
 
-    # Solve the diameter
+    # Solve the diameter using sigma expression:
+    # Sigma = (omega**2 * H * D**2) / (8 * g) => D = sqrt((8 * g * Sigma) / (H * omega**2))
     Diameter = np.sqrt((Sigma * 8 * 9.81)/(H * omega**2))
 
     return Diameter, Sigma
