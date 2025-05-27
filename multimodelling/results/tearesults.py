@@ -135,6 +135,7 @@ class TEAresults:
     def plot_NPV(self):
         """
         """
+        # Get the data
         Net_Present_Values = self.cashflow['Cumulative NPV [MM$]'].tolist()
         Years = self.cashflow.index.tolist()
 
@@ -149,5 +150,6 @@ class TEAresults:
         plt.title('Cumulative NPV over Years')
 
         # Show
+        plt.tight_layout()
         plt.grid(True)
         plt.show()
