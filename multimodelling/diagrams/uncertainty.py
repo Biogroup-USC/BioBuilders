@@ -72,7 +72,7 @@ class UncertaintyPlotter:
         ncols = 2
         nrows = (n + 1) // ncols
 
-        fig, axes = plt.subplots(nrows = nrows, ncols = ncols, figsize = (10, 4 * nrows))
+        fig, axes = plt.subplots(nrows = nrows, ncols = ncols, figsize = (6,5))
         axes = axes.flatten()
 
         # Get the stats of each indicator
@@ -82,9 +82,10 @@ class UncertaintyPlotter:
             # Create the KDE plot
             sns.kdeplot(data = Data, fill = True, ax = axes[i])
             axes[i].set_title("Distribution: {}".format(ind), fontsize = 8)
-            axes[i].set_xlabel(ind)
-            axes[i].set_ylabel("Density")
-            axes[i].grid(True)
+            axes[i].set_xlabel(ind, fontsize = 6)
+            axes[i].set_ylabel("Density", fontsize = 6)
+            axes[i].tick_params(axis='both', which='major', labelsize=6)
+            axes[i].grid(True, linestyle='--', alpha=0.5)
 
             # calculate the stats
             Stats[ind] = {
@@ -96,8 +97,9 @@ class UncertaintyPlotter:
         # Eliminate empty subplots
         for j in range(i + 1, len(axes)):
             fig.delaxes(axes[j])
-        
-        plt.tight_layout()
+
+        # Adjust layout
+        plt.tight_layout(h_pad = 0.6, w_pad = 0.8)
 
         # Save the figure
         if save_path:
