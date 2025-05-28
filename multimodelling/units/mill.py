@@ -44,6 +44,10 @@ class Mill(bst.Unit):
         
         # Initialize the properties
         self._power_consumption = None
+        self._Base_Cost = None
+        self._Base_Power = None
+        self._Base_n_Cost = None
+        self._CE_Base = None
 
     def _run(self):
         """
@@ -91,6 +95,62 @@ class Mill(bst.Unit):
 
         # Add the power utility
         self.add_power_utility(Power)
+
+    @property
+    def Base_Cost(self):
+        """
+        """
+        if self._Base_Cost is None:
+            self._Base_Cost = 30000.0   # USD
+        return self._Base_Cost
+    
+    @Base_Cost.setter
+    def Base_Cost(self,value):
+        """
+        """
+        self._Base_Cost = value
+    
+    @property
+    def Base_Power(self):
+        """
+        """
+        if self._Base_Power is None:
+            self._Base_Power = 23.0    # Power
+        return self._Base_Power
+
+    @Base_Power.setter
+    def Base_Power(self,value):
+        """
+        """
+        self._Base_Power = value
+    
+    @property
+    def Base_n_Cost(self):
+        """
+        """
+        if self._Base_n_Cost is None:
+            self._Base_n_Cost = 0.63
+        return self._Base_n_Cost
+
+    @Base_n_Cost.setter
+    def Base_n_Cost(self, value):
+        """
+        """
+        self._Base_n_Cost = value
+    
+    @property
+    def CE_Base(self):
+        """
+        """
+        if self._CE_Base is None:
+            self._CE_Base = 1000.0
+        return self._CE_Base
+    
+    @CE_Base.setter
+    def CE_Base(self, value):
+        """
+        """
+        self._CE_Base = value
 
     def _cost(self):
         """
