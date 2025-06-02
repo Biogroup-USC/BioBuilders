@@ -3,6 +3,7 @@ from .mill import Mill
 from .heatexchanger import ShellHeatExchanger
 from .extraction import *
 from .dryer import SprayDryer
+from .centrifuge import Solids_Centrifuge
 
 __all__ = (
     "BatchEnzymaticTreatment",
@@ -10,5 +11,6 @@ __all__ = (
     "ShellHeatExchanger",
     "SLEPFbySplit",
     "SLECbySplit",
-    "SprayDryer"
+    "SprayDryer",
+    "Solids_Centrifuge",
 )
