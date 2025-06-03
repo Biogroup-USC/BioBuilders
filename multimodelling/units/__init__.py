@@ -2,8 +2,8 @@ from .enzymatic_BSTR import BatchEnzymaticTreatment
 from .mill import Mill
 from .heatexchanger import ShellHeatExchanger
 from .extraction import *
-from .dryer import SprayDryer
-from .centrifuge import Solids_Centrifuge
+from .dryer import SprayDryer, DrumDryer
+from .centrifuge import SolidsCentrifuge
 
 __all__ = (
     "BatchEnzymaticTreatment",
@@ -12,5 +12,6 @@ __all__ = (
     "SLEPFbySplit",
     "SLECbySplit",
     "SprayDryer",
-    "Solids_Centrifuge",
+    "SolidsCentrifuge",
+    "DrumDryer"
 )

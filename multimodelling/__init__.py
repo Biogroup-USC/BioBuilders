@@ -1,4 +1,4 @@
-from .units import ShellHeatExchanger, SLECbySplit, SLEPFbySplit, BatchEnzymaticTreatment, Mill, Solids_Centrifuge
+from .units import ShellHeatExchanger, SLECbySplit, SLEPFbySplit, BatchEnzymaticTreatment, Mill, SolidsCentrifuge, DrumDryer
 from .chems import ChemDataBase, ChemManager
 from .parameters import get_parameters_from_CSV, get_parameters_from_excel, get_price_streams_from_CSV, get_unit_costs_from_CSV
 from .results import DisplayMassResults, DisplayUnitsResults, TEAresults
@@ -7,7 +7,7 @@ from .mathtools import log_mean, discounting_to_present_value, updating_to_futur
 from .diagrams import UncertaintyPlotter, plot_spearman_1d
 
 __all__ = (
-    'ShellHeatExchanger', 'SLECbySplit', 'SLEPFbySplit', 'BatchEnzymaticTreatment', 'Mill', 'Solids_Centrifuge',
+    'ShellHeatExchanger', 'SLECbySplit', 'SLEPFbySplit', 'BatchEnzymaticTreatment', 'Mill', 'SolidsCentrifuge','DrumDryer'
     'ChemDataBase', 'ChemManager',
     'get_parameters_from_CSV', 'get_parameters_from_excel', 'get_price_streams_from_CSV','get_unit_costs_from_CSV',
     'DisplayMassResults', 'DisplayUnitsResults', 'TEAresults',
