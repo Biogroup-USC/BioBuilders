@@ -5,12 +5,12 @@ from math import ceil, exp, log
 from biosteam.exceptions import lb_warning, InfeasibleRegion
 
 __all__ = (
-    "Solids_Centrifuge",
+    "SolidsCentrifuge",
 )
 
-# Code based on BioSTEAM (https://biosteam.readthedocs.io/), under MIT license
+# Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
 # Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
-class Solids_Centrifuge(bst.SolidsCentrifuge):
+class SolidsCentrifuge(bst.SolidsCentrifuge):
     """
 
     Create the same solid centrifuge from BioSTEAM, besides the cost calculation
