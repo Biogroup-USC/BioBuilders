@@ -65,7 +65,7 @@ def plot_spearman_1d(
         Ax.set_title(f"Spearman Sensitivity for '{ind}'", fontsize = 8)
         Ax.tick_params(axis = 'y', labelsize = 6)
         Ax.tick_params(axis = 'x', labelsize = 6)
-        plt.tight_layout(pad = 1.20, h_pad = 0.6, w_pad = 0.8)
+        plt.subplots_adjust(bottom = 0.10, top = 0.95, left = 0.25, right = 0.95)
         plt.show()
 
     # Handle list of indicators

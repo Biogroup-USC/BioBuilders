@@ -42,16 +42,19 @@ class UncertaintyPlotter:
         Correlation = self.uncertainty_df.corr(method = method)
 
         # Create the plot
-        plt.figure(figsize = (8, 6))
+        N_Vars = self.uncertainty_df.shape[1]
+        Fig, Ax = plt.subplots(figsize = (N_Vars * 0.55, N_Vars * 0.55))
 
         # Create a heat map
-        sns.heatmap(Correlation, annot = True, cmap = 'coolwarm', fmt = ".2f")
+        sns.heatmap(
+            Correlation, annot = True, cmap = 'coolwarm', fmt = ".2f", annot_kws = {"size": 6},
+        )
         
         # Plot settings
-        plt.title("Correlation Matrix ({})".format(method))
-        plt.tight_layout()
-        plt.xticks(fontsize = 4, rotation = 45)
-        plt.yticks(fontsize = 4, rotation = 0)
+        Ax.set_title("Correlation Matrix ({})".format(method), fontsize = 8)
+        Ax.tick_params(axis = 'x',labelsize = 4, rotation = 55)
+        Ax.tick_params(axis = 'y',labelsize = 4, rotation = 0)
+        plt.subplots_adjust(top = 0.95, bottom = 0.25, left = 0.20, right = 1.0)
 
         # Show the plot
         plt.show()
@@ -99,7 +102,7 @@ class UncertaintyPlotter:
             fig.delaxes(axes[j])
 
         # Adjust layout
-        plt.tight_layout(h_pad = 0.6, w_pad = 0.8)
+        plt.tight_layout(pad = 1.20, h_pad = 0.6, w_pad = 0.8)
 
         # Save the figure
         if save_path:
