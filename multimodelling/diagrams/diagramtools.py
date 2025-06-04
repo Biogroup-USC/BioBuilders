@@ -7,6 +7,10 @@ __all__ = (
 def simplify_labels(full_labels: list = None, keywords: list | dict = None):
     """
     """
+    # if keywords are not provided, give back the original labels
+    if keywords is None:
+        return list(full_labels)
+    
     Simplified_Labels = []
     for label in full_labels:
         # Avoid error with upper/lower letters

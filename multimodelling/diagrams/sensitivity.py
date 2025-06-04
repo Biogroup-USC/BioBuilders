@@ -2,12 +2,16 @@
 """
 import matplotlib.pyplot as plt
 import pandas as pd
+from .diagramtools import simplify_labels
 
 __all__ = (
     "plot_spearman_1d",
 )
 
-def plot_spearman_1d(spearman_dataframe: pd.DataFrame = None, indicator: list | str = None, figsize_scale: tuple = (0.75, 0.5)):
+def plot_spearman_1d(
+        spearman_dataframe: pd.DataFrame = None, indicator: list | str = None, height_per_var: float = 0.5, fig_width: float = 6,
+        simplified_index: dict = None
+    ):
     """
     Plot Spearman correlation coefficients as horizontal bar charts.
 
@@ -19,8 +23,10 @@ def plot_spearman_1d(spearman_dataframe: pd.DataFrame = None, indicator: list | 
     indicator : str or list of str
         Name(s) of the indicator(s) (column) to plot. If a list is provided,
         a separate plot is generated for each indicator.
-    figsize_scale : float
-        scaling factor for figure size. Default is 0.5.
+    height_per_var : float
+        Height (in inches) per variable. Default is 0.5.
+    fig_width : float
+        Width (in inches) of the figure. Default is 6.
 
     """
     # Copy to avoid modifying caller's DataFrame
@@ -33,6 +39,9 @@ def plot_spearman_1d(spearman_dataframe: pd.DataFrame = None, indicator: list | 
     # Flatten MultiIndex index
     if isinstance(Df.index, pd.MultiIndex):
         Df.index = Df.index.get_level_values(-1)
+    
+    # Change the index for the simplified index
+    Df.index = simplify_labels(Df.index, keywords = simplified_index)
     
     # Helper function to plot a single indicator
     def _plot_single(ind):
@@ -47,14 +56,16 @@ def plot_spearman_1d(spearman_dataframe: pd.DataFrame = None, indicator: list | 
 
         # Plot settings
         N_Vars = Df[ind].shape[0]
-        Fig, Ax = plt.subplots(figsize=(N_Vars * figsize_scale[0], N_Vars * figsize_scale[1]))
+        Fig, Ax = plt.subplots(figsize=(fig_width,N_Vars * height_per_var))
         Ax.barh(Coeffs.index, Coeffs.values, color='skyblue', edgecolor='k')
         Ax.invert_yaxis()
         Ax.axvline(0, color='red', linewidth=0.8)
-        Ax.set_xlabel("Spearman Correlation Coefficient")
-        Ax.set_ylabel("Parameter")
-        Ax.set_title(f"Spearman Sensitivity for '{ind}'")
-        plt.tight_layout()
+        Ax.set_xlabel("Spearman Correlation Coefficient", fontsize = 7)
+        Ax.set_ylabel("Parameter", fontsize = 7)
+        Ax.set_title(f"Spearman Sensitivity for '{ind}'", fontsize = 8)
+        Ax.tick_params(axis = 'y', labelsize = 6)
+        Ax.tick_params(axis = 'x', labelsize = 6)
+        plt.tight_layout(pad = 1.20, h_pad = 0.6, w_pad = 0.8)
         plt.show()
 
     # Handle list of indicators
