@@ -4,6 +4,7 @@ from .heatexchanger import ShellHeatExchanger
 from .extraction import *
 from .dryer import SprayDryer, DrumDryer
 from .centrifuge import SolidsCentrifuge
+from .evaporator import MultiEffectEvaporator
 
 __all__ = (
     "BatchEnzymaticTreatment",
@@ -13,5 +14,6 @@ __all__ = (
     "SLECbySplit",
     "SprayDryer",
     "SolidsCentrifuge",
-    "DrumDryer"
+    "DrumDryer",
+    "MultiEffectEvaporator"
 )
