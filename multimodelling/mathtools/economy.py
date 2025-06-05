@@ -6,6 +6,7 @@ __all__ = (
     "updating_to_future_value"
 )
 
+# Inflation
 def discounting_to_present_value(value: float = None, discount_rate: float = None, years: int = None):
     """
     
@@ -59,3 +60,39 @@ def updating_to_future_value(value: float = None, growth_rate: float = None, yea
 
     # Return the future value
     return Future_Value
+
+# Labor calculation
+## Labor/Equipment correlation
+## Reference: Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
+## Chapter 6, page 264
+Labor_per_Equip = {
+    "Blowers": 0.2,                     # Workers/unit/shift                                      
+    "Compressors": 0.2,                 # Workers/unit/shift
+    "Centrifugal separators": 0.50,     # Workers/unit/shift            
+    "Crystallizer": 0.16,               # Workers/unit/shift
+    "Rotatory dryer": 0.5,              # Workers/unit/shift
+    "Spray dryer": 1.0,                 # Workers/unit/shift
+    "Tray dryer": 0.5,                  # Workers/unit/shift
+    "Evaporator": 0.25,                 # Workers/unit/shift
+    "Vacuum filter": 0.25,              # Workers/unit/shift    
+    "Plate & Frame filter": 1.0,        # Workers/unit/shift    
+    "Rotatory & Belt filter": 0.1,      # Workers/unit/shift    
+    "Heat Exchanger": 0.1,              # Workers/unit/shift
+    "Process vessel": 0.5,              # Workers/unit/shift
+    "Batch reactor": 1.0,               # Workers/unit/shift
+    "Continuous reactor": 0.5,          # Workers/unit/shift
+}
+
+def calculate_labor_requirements(equipment_type_N: dict = None): #TODO Peters page 264 table
+    """
+    """
+    # Dictionary to save the total labor per equipment given the number of each equipment
+    Labor_per_N_Equip = {}
+    
+    # Calculate the total labor per equipment of the process
+    for equip in equipment_type_N.keys():
+        Labor = equipment_type_N[equip] * Labor_per_Equip[equip]
+        Labor_per_N_Equip[equip] = Labor
+    
+    # Calculate the global labor of the process
+    
