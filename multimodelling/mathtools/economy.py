@@ -3,7 +3,8 @@
 
 __all__ = (
     "discounting_to_present_value",
-    "updating_to_future_value"
+    "updating_to_future_value",
+    "calculate_labor_requirements"
 )
 
 # Inflation
@@ -86,13 +87,23 @@ Labor_per_Equip = {
 def calculate_labor_requirements(equipment_type_N: dict = None): #TODO Peters page 264 table
     """
     """
+    # Check if the dictionary of equipment is provided
+    if equipment_type_N is None:
+        raise ValueError("A dictionary of equipment counts must be provided")
+
     # Dictionary to save the total labor per equipment given the number of each equipment
     Labor_per_N_Equip = {}
     
+    # Total labor variable
+    Total_Labor = 0.0
+
     # Calculate the total labor per equipment of the process
     for equip in equipment_type_N.keys():
+        if equip not in Labor_per_Equip:
+            raise KeyError("{} not found in Labor_per_Equip table: \ {}".format(equip,Labor_per_Equip))
         Labor = equipment_type_N[equip] * Labor_per_Equip[equip]
         Labor_per_N_Equip[equip] = Labor
-    
-    # Calculate the global labor of the process
-    
+        Total_Labor += Labor
+
+    # Return the total labor and the total labor per equipment
+    return Total_Labor, Labor_per_N_Equip
