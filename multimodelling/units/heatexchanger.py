@@ -12,20 +12,52 @@ class ShellHeatExchanger(bst.Unit):
     temperature of the inlet stream. The energy consumed to cool down the stream or to heat it up 
     is calculated as kWh or kWh/kg using the hydraulic residence time which is 10 min by default.
 
-    ARGUMENTS:
+    Parameters
+    ----------
+    ID : str
+        This refers to the name of the unit.
 
-    - ID (str): This refers to the name of the unit.
+    ins : list
+        List of input streams. In this case, there is only 1 input.
 
-    - ins (list): List of input streams. In this case, there is only 1 input.
-
-    - outs (list): List of output streams. In this case, there is 1 output.
+    outs : list 
+        List of output streams. In this case, there is 1 output.
     
-    - Tout (float): This parameter is the temperature of the cold fluid in the output of the heat exchanger.
-    Thet temperature must be K.
+    Tout : float
+        This parameter is the temperature of the cold fluid in the output of the heat exchanger.
     
-    - Cp (float): The Calorific Power is used when BioSTEAM cannot get the Cp from the Chemicals of each stream.
-    This is important because sometimes, there is no data for certain compounds. The units must be
-    kJ/(kg*K).
+    Cp : float
+        The Calorific Power is used when BioSTEAM cannot get the Cp from the Chemicals of each stream.
+        This is important because sometimes, there is no data for certain compounds. [kJ/(kg*K)]
+
+    Attributes
+    ----------
+    energy_balance_type : str
+        Calculate how the energy consumption is calculated:
+            - 'kWh/kg'
+            - 'kWh'
+
+    tau : float
+        Time of residence inside the heat exchanger.
+    
+    heat_consumption : float
+        Heating consumption. The units are either kWh or kWh/kg.
+    
+    cool_consumption : float
+        Cooling consumption. The units are either kWh or kWh/kg.
+    
+    base_cost : float
+        The cost (USD) of a reactor which volume corresponds to the base volume.
+
+    base_n_cost : float
+        The parameter n in the expression: base_cost * (area/base_area)**n.
+
+    base_area : float
+        The area (m2) of a heat exchanger whose cost is the base_cost.
+
+    CE_base : float
+        The CEPCI which corresponds with the base_cost
+    
 
     """                            
     _N_ins = 1
@@ -44,6 +76,10 @@ class ShellHeatExchanger(bst.Unit):
         self._tau = None
         self._heat_consumption = None
         self._cool_consumption = None
+        self._base_cost = None
+        self._base_n_cost = None
+        self._CE_base = None
+        self._base_area = None
                                            
     @property
     def energy_balance_type(self):
@@ -69,7 +105,7 @@ class ShellHeatExchanger(bst.Unit):
     @property
     def tau(self):
         if self._tau is None:
-            self._tau = 10/60   # h --> 2 times the time defined by UNIBO data
+            self._tau = 10/60   # h (2 times the defined by UNIBO)
         return self._tau
     
     @tau.setter
@@ -195,6 +231,62 @@ class ShellHeatExchanger(bst.Unit):
         # Add the Area to the results dictionary
         Design['Area'] = Area                                                      #TODO Create another heat exchanger for area < 20 m2 
 
+    @property
+    def base_cost(self):
+        """
+        """
+        if self._base_cost is None:
+            self._base_cost = 70000     # USD
+        return self._base_cost
+
+    @base_cost.setter
+    def base_cost(self, value):
+        """
+        """
+        self._base_Cost = value
+
+    @property
+    def base_area(self):
+        """
+        """
+        if self._base_area is None:
+            self._base_area = 100       # m2
+        return self._base_area
+
+    @base_area.setter
+    def base_area(self, value):
+        """
+        """
+        self._base_area = value
+
+    @property
+    def base_n_cost(self):
+        """
+        """
+        if self._base_n_cost is None:
+            self._base_n_cost = 0.71
+        return self._base_n_cost
+    
+    @base_n_cost.setter
+    def base_n_cost(self, value):
+        """
+        """
+        self._base_n_cost = value
+    
+    @property
+    def CE_base(self):
+        """
+        """
+        if self._CE_base is None:
+            self._CE_base = 1000
+        return self._CE_base
+    
+    @CE_base.setter
+    def CE_base(self, value):
+        """
+        """
+        self._CE_base = value
+
     def _cost(self):
         """
         """
@@ -204,15 +296,24 @@ class ShellHeatExchanger(bst.Unit):
         # Calculate the baseline purchase cost
         ## The base cost accounts for floating head, shell and bare tube
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Exchanger_Purchase_Cost = 70000 * (Area/100)**0.71
+        Exchanger_Purchase_Cost = self.base_cost * (Area/self.base_area)**self.base_n_cost
         self.baseline_purchase_costs['Heat Exchanger'] = Exchanger_Purchase_Cost
 
         ## Material, pressure and temperature factors are assumed to be 1
         self.F_D['Heat Exchanger'] = self.F_M['Heat Exchanger'] = self.F_P['Heat Exchanger'] = 1
 
-        ## The installation costs are assumed to be 0, so the bare module factor is 1
-        self.F_BM['Heat Exchanger'] = 1
+        ## The Bare module factor which account for installation costs is calculated as the sum of delivery, installation,
+        ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
+        ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
+        ### Factors
+        Delivery = 0.10
+        Installation = 0.60             # Heat Exchangers
+        Instrumentation_Control = 0.50
+        Piping = 0.68                   # Fluid   
+        ### Calculate the bare module
+        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
+        self.F_BM['Heat Exchanger'] = Bare_Module
 
         ## Scale the costs using the CEPCI
-        CE_Base = 1000
+        CE_Base = self.CE_base
         self.baseline_purchase_costs['Heat Exchanger'] *= bst.CE/CE_Base
