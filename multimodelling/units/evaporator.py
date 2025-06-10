@@ -13,7 +13,7 @@ __all__ = (
 # Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
 ## Evaporator cost
 ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-Evap_Costs = {
+Evap_Costs = {                  #TODO find evaporator costs which do not take into account the vacuum system and condenser
     'Natural circulation':      # External short tube, vertical exchanger, natural circulation
         {
             'Cost': 80000,      # USD
@@ -315,6 +315,10 @@ class MultiEffectEvaporator(bst.Unit):                                      #TOD
                 A = bst.design_tools.compute_heat_transfer_area(LMTD, self.Evap_U, Q, 1.)
                 As.append(A)
 
+        # Condenser requirements
+        condenser = self.condenser
+        condenser.simulate(run = False)
+
         self._As = As
         Design['Area'] = A = sum(As)
         total_volume = 0
@@ -327,6 +331,14 @@ class MultiEffectEvaporator(bst.Unit):                                      #TOD
             R = D / 2.
             total_volume += 0.0283168466 * np.pi * L * R * R # m3
         Design['Volume'] = total_volume
+
+        # Compute the heat utility requirements
+        self.add_heat_utility(duty, T_in = Tci, T_out = Tco)
+
+        # Compute the power utility requirements
+        self.vacuum_system = bst.VacuumSystem(
+            self, self.vacuum_system_preference, vessel_volume = total_volume, P_suction = self.outs[0].P,
+        )
     
     @property
     def Base_Cost(self):
