@@ -29,6 +29,9 @@ class ShellHeatExchanger(bst.Unit):
     Cp : float
         The Calorific Power is used when BioSTEAM cannot get the Cp from the Chemicals of each stream.
         This is important because sometimes, there is no data for certain compounds. [kJ/(kg*K)]
+    
+    U : float
+        Overall heat-transfer coefficient. The value is 1500 by default. [W/(m2*ºC)]    # https://doi.org/10.1016/B978-0-08-102599-4.00012-6
 
     Attributes
     ----------
@@ -66,7 +69,7 @@ class ShellHeatExchanger(bst.Unit):
         'Area': 'm2'
     }
 
-    def _init(self, Tout: float = None, Cp: float = None, U: float = None):      
+    def _init(self, Tout: float = None, Cp: float = None, U: float = None): #TODO document U parameter    
         if Tout is None:
             raise ValueError("A Tout must be provided")        
         self.Cp = Cp
