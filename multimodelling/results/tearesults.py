@@ -5,6 +5,7 @@ import biosteam as bst
 from ..tea import TEA
 import matplotlib.pyplot as plt
 from ..mathtools.economy import updating_to_future_value
+import os
 
 __all__ = (
     "TEAresults"
@@ -132,7 +133,7 @@ class TEAresults:
         # Return the production costs
         return Production_Costs        
     
-    def plot_NPV(self):
+    def plot_NPV(self, path: str, show_plot: bool = False):
         """
         """
         # Get the data
@@ -140,16 +141,22 @@ class TEAresults:
         Years = self.cashflow.index.tolist()
 
         # Create the plot
-        plt.plot(Years, Net_Present_Values, marker = 'o', linestyle = '-', linewidth = 2)
+        fig, ax = plt.subplots(figsize = (8,6))
+        ax.plot(Years, Net_Present_Values, marker = 'o', linestyle = '-', linewidth = 2)
 
         # Axis names
-        plt.xlabel('Year')
-        plt.ylabel('Net Present Value (NPV) [MM$]')
-
+        ax.set_xlabel('Year')
+        ax.set_ylabel('Net Present Value (NPV) [MM$]')
+        
         # Title
-        plt.title('Cumulative NPV over Years')
+        ax.set_title('Cumulative NPV over Years')
 
-        # Show
-        plt.tight_layout()
-        plt.grid(True)
-        plt.show()
+        # show
+        if show_plot is True:
+            plt.show()
+        
+        # Save the figure
+        if path is not None:
+            file_path = os.path.join(path, 'NPV_over_Year.png')
+            fig.savefig(file_path)
+            plt.close(fig)
