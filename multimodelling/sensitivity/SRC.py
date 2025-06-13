@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+from ..diagrams import simplify_labels, keep_multiindex_last_level, get_dataframe_positions, sanitize_filename
 
 __all__ = (
     "SRC",
@@ -14,7 +15,7 @@ class SRC:
 
     """
 
-    def __init__(self, df: pd.DataFrame, parameter_cols: list[str], indicators_cols: list[str]):
+    def __init__(self, df: pd.DataFrame, parameter_cols: list[str], indicator_cols: list[str], simplified_labels: dict | list = None):
         """
 
         Initialize SRC analysis with data and column names.
@@ -29,9 +30,24 @@ class SRC:
             List of column names for output indicators.
         
         """
-        self.df = df
-        self.parameters = parameter_cols
-        self.indicators = indicators_cols
+        # Get the last level if Multiindex
+        df_flatten = keep_multiindex_last_level(df = df)
+
+        # Compute positions based on original last-level labels
+        parameter_positions = get_dataframe_positions(df = df, labels = parameter_cols, axis = 1)
+        indicator_positions = get_dataframe_positions(df = df, labels = indicator_cols, axis = 1)
+
+        if simplified_labels:
+            df_simple = df_flatten.copy()
+            df_simple.columns = simplify_labels(full_labels = df_simple.columns.tolist(), keywords = simplified_labels)
+            self.df = df_simple
+    
+        else:    
+            self.df = df_flatten
+        
+        # Store parameter and indicator column names (flattened)
+        self.parameters = [self.df.columns[i] for i in parameter_positions]
+        self.indicators = [self.df.columns[i] for i in indicator_positions]
 
     def calculate_src(self) -> pd.DataFrame:
         """
@@ -100,17 +116,28 @@ class SRC:
 
         for indicator in self.indicators:
             fig, ax = plt.subplots()
+
+            # Sort by absolute value descending
+            coeffs = src[indicator].dropna()
+            coeffs = coeffs.reindex(coeffs.abs().sort_values(ascending = True).index)
+
             # Plot a bar chart for this indicator
-            src[indicator].plot(kind = 'bar')
-            ax.set_ylabel('Standardized Regression Coefficients')
-            ax.set_title('SRC Sensitivity Analysis: {}'.format(indicator))
+            ax.barh(coeffs.index, coeffs.values, color = 'skyblue', edgecolor = 'k')
+            ax.set_title('SRC Sensitivity Analysis: {}'.format(indicator), fontsize = 8)
+            ax.set_xlabel("Standardized Regression Coefficients", fontsize = 7)
+            ax.axvline(0, color = 'red', linewidth = 0.8)
+            ax.tick_params(axis = 'y', labelsize = 6)
+            ax.tick_params(axis = 'x', labelsize = 6)
             plt.xticks(rotation = 45, ha = 'right')
-            plt.tight_layout()
+            plt.subplots_adjust(bottom = 0.10, top = 0.95, left = 0.25, right = 0.95)
             plt.show()
 
             # Save the figure
-            file_path = os.path.join(path, 'src_{}.png'.format(indicator))
+            safe_ind = sanitize_filename(indicator)
+            file_path = os.path.join(path, 'src_{}.png'.format(safe_ind))
             fig.savefig(file_path)
             plt.close(fig)
         
+        print("")
         print("Plots saved to {}".format(path))
+        print("")
