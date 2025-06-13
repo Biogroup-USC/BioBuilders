@@ -5,6 +5,7 @@ from .results import DisplayMassResults, DisplayUnitsResults, TEAresults
 from .tea import Load_Process_Settings, TEA
 from .mathtools import log_mean, discounting_to_present_value, updating_to_future_value, calculate_centrifuge_diameter, solve_operating_pressures_multieffectevaporator, calculate_labor_requirements
 from .diagrams import UncertaintyPlotter, plot_spearman_1d
+from .sensitivity import SRC
 
 __all__ = (
     'ShellHeatExchanger', 'SLECbySplit', 'SLEPFbySplit', 'BatchEnzymaticTreatment', 'Mill', 'SolidsCentrifuge','DrumDryer', 'MultiEffectEvaporator',
@@ -13,5 +14,6 @@ __all__ = (
     'DisplayMassResults', 'DisplayUnitsResults', 'TEAresults',
     'Load_Process_Settings', 'TEA',
     'log_mean','discounting_to_present_value','updating_to_future_value','calculate_centrifuge_diameter','solve_operating_pressures_multieffectevaporator', 'calculate_labor_requirements'
-    'UncertaintyPlotter','plot_spearman_1d'
+    'UncertaintyPlotter','plot_spearman_1d',
+    'SRC',
 )

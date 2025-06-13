@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import os
 
 __all__ = (
-    "calculate_src",
+    "SRC",
 )
 
 class SRC:
