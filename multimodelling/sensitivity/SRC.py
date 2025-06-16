@@ -97,7 +97,7 @@ class SRC:
         src_df = pd.DataFrame(results, index = self.parameters)
         return src_df
     
-    def plot_src(self, src: pd.DataFrame, path : str) -> None:
+    def plot_src(self, src: pd.DataFrame, path : str = None) -> None:
         """
 
         Plot a separate bar chart of SRC for each output indicator.
@@ -133,11 +133,12 @@ class SRC:
             plt.show()
 
             # Save the figure
-            safe_ind = sanitize_filename(indicator)
-            file_path = os.path.join(path, 'src_{}.png'.format(safe_ind))
-            fig.savefig(file_path)
-            plt.close(fig)
-        
-        print("")
-        print("Plots saved to {}".format(path))
-        print("")
+            if path:
+                safe_ind = sanitize_filename(indicator)
+                file_path = os.path.join(path, 'src_{}.png'.format(safe_ind))
+                fig.savefig(file_path)
+                print("")
+                print("Plot {} saved to {}".format(safe_ind,path))
+                print("")
+                plt.close(fig)
+            

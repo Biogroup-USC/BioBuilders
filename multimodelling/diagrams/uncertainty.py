@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from .diagramtools import simplify_labels
+import os
 
 __all__ = (
     "UncertaintyPlotter",
@@ -35,7 +36,7 @@ class UncertaintyPlotter:
         self.index = simplified_index
         self._stats = None
     
-    def plot_correlation_matix(self, method = 'kendall'):
+    def plot_correlation_matix(self, method = 'kendall', path: str = None):
         """
         """
         # Compute the pairwise correlation using the method = method
@@ -43,7 +44,7 @@ class UncertaintyPlotter:
 
         # Create the plot
         N_Vars = self.uncertainty_df.shape[1]
-        Fig, Ax = plt.subplots(figsize = (N_Vars * 0.55, N_Vars * 0.55))
+        fig, ax = plt.subplots(figsize = (N_Vars * 0.55, N_Vars * 0.55))
 
         # Create a heat map
         sns.heatmap(
@@ -51,13 +52,21 @@ class UncertaintyPlotter:
         )
         
         # Plot settings
-        Ax.set_title("Correlation Matrix ({})".format(method), fontsize = 8)
-        Ax.tick_params(axis = 'x',labelsize = 4, rotation = 55)
-        Ax.tick_params(axis = 'y',labelsize = 4, rotation = 0)
+        ax.set_title("Correlation Matrix ({})".format(method), fontsize = 8)
+        ax.tick_params(axis = 'x',labelsize = 4, rotation = 55)
+        ax.tick_params(axis = 'y',labelsize = 4, rotation = 0)
         plt.subplots_adjust(top = 0.95, bottom = 0.25, left = 0.20, right = 1.0)
 
         # Show the plot
         plt.show()
+
+        # Save the figure
+        if path:
+            file_path = os.path.join(path, '{}.png'.format(method))
+            fig.savefig(file_path)
+            print("")
+
+        plt.close(fig)
 
     def plot_distribution_and_stats(self, indicators: list, save_path: str = None):
         """

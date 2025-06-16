@@ -5,6 +5,7 @@ from .extraction import *
 from .dryer import SprayDryer, DrumDryer
 from .centrifuge import SolidsCentrifuge
 from .evaporator import MultiEffectEvaporator
+from .mixing import MixTank
 
 __all__ = (
     "BatchEnzymaticTreatment",
@@ -15,5 +16,6 @@ __all__ = (
     "SprayDryer",
     "SolidsCentrifuge",
     "DrumDryer",
-    "MultiEffectEvaporator"
+    "MultiEffectEvaporator",
+    "MixTank",
 )
