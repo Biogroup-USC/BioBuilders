@@ -520,7 +520,7 @@ class SLECbySplit(bst.Unit):
         return self._base_cost_tank   
 
     @base_cost_tank.setter
-    def Base_Cost_Tank(self, value):
+    def base_cost_tank(self, value):
         """
         """
         self._base_cost_tank = value
