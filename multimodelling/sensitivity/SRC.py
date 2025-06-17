@@ -97,7 +97,7 @@ class SRC:
         src_df = pd.DataFrame(results, index = self.parameters)
         return src_df
     
-    def plot_src(self, src: pd.DataFrame, path : str = None) -> None:
+    def plot_src(self, src: pd.DataFrame, path : str = None, show_plot: bool = False) -> None:
         """
 
         Plot a separate bar chart of SRC for each output indicator.
@@ -109,18 +109,22 @@ class SRC:
             and indicators as columns.
         path : str
             Path to the folder where plot images will be saved
+        show_plot : bool
+            True for displaying the plot. False for not.
             
         """
         # Ensure output directory exists
         os.makedirs(path, exist_ok = True)
 
         for indicator in self.indicators:
-            fig, ax = plt.subplots()
-
             # Sort by absolute value descending
             coeffs = src[indicator].dropna()
             coeffs = coeffs.reindex(coeffs.abs().sort_values(ascending = True).index)
-
+            
+            # Plot
+            N_var = src[indicator].shape[0]
+            fig, ax = plt.subplots(figsize = (6, N_var * 0.5))
+            
             # Plot a bar chart for this indicator
             ax.barh(coeffs.index, coeffs.values, color = 'skyblue', edgecolor = 'k')
             ax.set_title('SRC Sensitivity Analysis: {}'.format(indicator), fontsize = 8)
@@ -129,8 +133,9 @@ class SRC:
             ax.tick_params(axis = 'y', labelsize = 6)
             ax.tick_params(axis = 'x', labelsize = 6)
             plt.xticks(rotation = 45, ha = 'right')
-            plt.subplots_adjust(bottom = 0.10, top = 0.95, left = 0.25, right = 0.95)
-            plt.show()
+            plt.subplots_adjust(bottom = 0.10, top = 0.90, left = 0.25, right = 0.95)
+            if show_plot is True:
+                plt.show()
 
             # Save the figure
             if path:
@@ -141,4 +146,3 @@ class SRC:
                 print("Plot {} saved to {}".format(safe_ind,path))
                 print("")
                 plt.close(fig)
-            
