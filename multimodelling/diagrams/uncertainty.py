@@ -4,7 +4,7 @@ import biosteam as bst
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from .diagramtools import simplify_labels
+from .diagramtools import simplify_labels, sanitize_filename
 import os
 
 __all__ = (
@@ -36,39 +36,48 @@ class UncertaintyPlotter:
         self.index = simplified_index
         self._stats = None
     
-    def plot_correlation_matix(self, method = 'kendall', path: str = None):
+    def plot_correlation_matix(self, method = 'kendall', path: str = None, show_plot: bool = False, indicators: list[str] = None):
         """
         """
         # Compute the pairwise correlation using the method = method
-        Correlation = self.uncertainty_df.corr(method = method)
+        correlation = self.uncertainty_df.corr(method = method)
+
+        # Subset matrix if only indicators should be shown
+        if indicators:
+            non_indicator_cols = [col for col in correlation.columns if col not in indicators]
+            correlation = correlation.loc[indicators, non_indicator_cols]
 
         # Create the plot
         N_Vars = self.uncertainty_df.shape[1]
-        fig, ax = plt.subplots(figsize = (N_Vars * 0.55, N_Vars * 0.55))
+        if indicators:
+            fig, ax = plt.subplots(figsize = (N_Vars * 0.55, len(indicators) * 0.90))
+            plt.subplots_adjust(top = 0.90, bottom = 0.35, left = 0.20, right = 1.0)
+        else:
+            fig, ax = plt.subplots(figsize = (N_Vars * 0.55, N_Vars * 0.55))
+            plt.subplots_adjust(top = 0.90, bottom = 0.25, left = 0.20, right = 1.0)
 
         # Create a heat map
         sns.heatmap(
-            Correlation, annot = True, cmap = 'coolwarm', fmt = ".2f", annot_kws = {"size": 6},
+            correlation, annot = True, cmap = 'coolwarm', fmt = ".2f", annot_kws = {"size": 6},
         )
         
         # Plot settings
         ax.set_title("Correlation Matrix ({})".format(method), fontsize = 8)
         ax.tick_params(axis = 'x',labelsize = 4, rotation = 55)
         ax.tick_params(axis = 'y',labelsize = 4, rotation = 0)
-        plt.subplots_adjust(top = 0.95, bottom = 0.25, left = 0.20, right = 1.0)
 
         # Show the plot
-        plt.show()
+        if show_plot:
+            plt.show()
 
         # Save the figure
         if path:
             file_path = os.path.join(path, '{}.png'.format(method))
             fig.savefig(file_path)
-            print("")
 
         plt.close(fig)
 
-    def plot_distribution_and_stats(self, indicators: list, save_path: str = None):
+    def plot_distribution_and_stats(self, indicators: list, save_path: str = None, show_plot = False):
         """
         """
         # Check if all indicators given are in the dataframe
@@ -79,46 +88,52 @@ class UncertaintyPlotter:
         # Dict to store all the stats
         Stats = {}
 
-        # Calculate the number os subplots
-        n = len(indicators)
-        ncols = 2
-        nrows = (n + 1) // ncols
-
-        fig, axes = plt.subplots(nrows = nrows, ncols = ncols, figsize = (6,5))
-        axes = axes.flatten()
-
-        # Get the stats of each indicator
-        for i,ind in enumerate(indicators):
+        # Get the stats of each indicator and plot the distribution
+        for ind in indicators:
             Data = self.uncertainty_df[ind]
-            
+            # Create the subplot
+            fig, ax = plt.subplots(figsize = (6,5)) 
+
             # Create the KDE plot
-            sns.kdeplot(data = Data, fill = True, ax = axes[i])
-            axes[i].set_title("Distribution: {}".format(ind), fontsize = 8)
-            axes[i].set_xlabel(ind, fontsize = 6)
-            axes[i].set_ylabel("Density", fontsize = 6)
-            axes[i].tick_params(axis='both', which='major', labelsize=6)
-            axes[i].grid(True, linestyle='--', alpha=0.5)
+            sns.kdeplot(data = Data, fill = True, ax = ax)
+            ax.set_title("Distribution: {}".format(ind), fontsize = 8)
+            ax.set_xlabel(ind, fontsize = 6)
+            ax.set_ylabel("Density", fontsize = 6)
+            ax.tick_params(axis='both', which='major', labelsize=6)
+            ax.grid(True, linestyle='--', alpha=0.5)
 
             # calculate the stats
+            mean_val = Data.mean()
+            median_val = Data.median()
+            std_val = Data.std()
             Stats[ind] = {
-                "mean": Data.mean(),
-                "median": Data.median(),
-                "std": Data.std(),
+                "mean": mean_val,
+                "median": median_val,
+                "std": std_val,
             }
-        
-        # Eliminate empty subplots
-        for j in range(i + 1, len(axes)):
-            fig.delaxes(axes[j])
+            
+            # Statistic lines
+            ax.axvline(mean_val, color = 'red', linestyle = '--', linewidth = 1, label = f"Mean = {mean_val:.2f}")
+            ax.axvline(median_val, color = 'green', linestyle = ':', linewidth = 1, label = f"Median = {median_val:.2f}")
+            ax.axvline(mean_val + std_val, color = 'blue', linestyle = '--', linewidth = 0.8, label = f"+1$\sigma$ = {mean_val + std_val:.2f}")
+            ax.axvline(mean_val - std_val, color = 'blue', linestyle = '--', linewidth = 0.8, label = f"-1$\sigma$ = {mean_val - std_val:.2f}")
 
-        # Adjust layout
-        plt.tight_layout(pad = 1.20, h_pad = 0.6, w_pad = 0.8)
+            # Legend
+            ax.legend(fontsize = 6, loc = 'upper right')
 
-        # Save the figure
-        if save_path:
-            plt.savefig(save_path, dpi = 300)
-        
-        # Show
-        plt.show()
+            # Adjust subplots
+            plt.subplots_adjust(bottom = 0.10, top = 0.95, left = 0.10, right = 0.95)
+
+            # Show
+            if show_plot is True:
+                plt.show()
+
+            # Save the figure
+            if save_path:
+                safe_ind = sanitize_filename(ind)
+                file_path = os.path.join(save_path,'distribution_{}.png'.format(safe_ind))
+                fig.savefig(file_path)
+                plt.close(fig)
 
         # Return the stats
         return pd.DataFrame(Stats).T
