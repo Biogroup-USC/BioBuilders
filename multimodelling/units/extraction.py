@@ -4,7 +4,6 @@ import biosteam as bst
 from ..mathtools.unitsdiameter import calculate_centrifuge_diameter
 import numpy as np
 import math
-from typing import Optional
 
 __all__ = (
     "SLEPFbySplit",
@@ -14,32 +13,35 @@ __all__ = (
 class SLEPFbySplit(bst.Unit):
     """
 
-    Create a Solid-Liquid extraction modelled as a CSTR for mixing the solid with the solvent and a 
-    pressure filter that separates the two phases. The extraction is modelled based on the split
-    factor which represents the mass of certain compound extracted per its input mass. Moreover, 
-    it is important to remark that the amount of washing stream used in the filtration, which is 
-    retained by te solid, is calculated using the moisture parameter.           
+    Create a Solid-Liquid extraction modelled as a CSTR with a pressure filter.
+
+    The extraction is modelled based on the split factor which represents the mass of certain 
+    compound extracted per its input mass. Moreover, it is important to remark that the amount 
+    of washing stream used in the filtration, which is retained by te solid, is calculated using 
+    the moisture parameter.           
 
     Parameters
     ----------
-    ID : (str)
+    ID : str
         Name of the unit.
-    ins : (list)
+    ins : list
         List of input streams (BioSTEAM object). This unit has 3 inputs.[Feed, Solvent, Filter_Washing]
-    outs : (list)
+    outs : list
         List of output streams (BioSTEAM object). This unit has 2 outputs. [Extract, Raffinate]
-    sfi : (dict)
+    sfi : dict
         Dictionary with the following structure: {"A": 0.5, "B": 0.9}. This means that 50% of A and 90% of B will be 
         extracted by the solvent.
-    moisture_content : (float)
+    moisture_content : float
         percentage of washing stream retained in the solids. Default to 0.40 kg of washing stream per kg of dry solids.
-    washing_chem : (dict)
+    washing_chem : dict
         Dictionary with the following structure:  {"C": 2, "D": 4}. This means that the steam used to wash the solids 
         during the filtration will have a flow of C and D which is 2 and 4 times the flow of Feed, respectively.
-    tau : (float) 
+    tau : float 
         Residence time in h.
-    operating_T : (float)
+    operating_T : float
         The operating temperature is set to 298.15 K by default.
+    operating_P : float
+        The operating pressure is set to 101325 bar by default.
     
     Attributes
     ----------
@@ -62,34 +64,32 @@ class SLEPFbySplit(bst.Unit):
     # Outlets
     _N_outs = 2
 
-    # Set the default moisture content (kg washing stream / kg dry solids)
-    moisture_content_default: float = 0.40
-
     # Set the default washing chem and its kg / kg solids 
-    wash_chem_default = {'Ethanol': 80}                                   #TODO ITBQ is probably not using pure ethanol --> get more info about it for setting the default
-
-    # Default operating temperature (k)
-    T_default: float = 273.15 + 25
-
-    # Default residence time (h)
-    tau_default: float = 0.5
+    wash_chem_default = {
+        'Ethanol': 64,
+        'Water': 16
+    }
 
     def _init(self,
               sfi: dict = None,
-              moisture_content: float = None,
+              moisture_content: float = 0.40,
               washing_chem: dict = None,
-              tau: float = None,
-              operating_T: float = None,
+              tau: float = 0.5,
+              operating_T: float = 298.15,
+              operating_P: float = 101325,
               kW_per_m3: float = None,
               ):
         """
         """
         self.sfi = sfi
-        self.moisture = moisture_content if moisture_content is not None else self.moisture_content_default
+        self.moisture = moisture_content
         self.wash_chem = washing_chem if washing_chem is not None else self.wash_chem_default
-        self.tau = tau if tau is not None else self.tau_default
-        self.operating_T = operating_T if operating_T is not None else self.T_default
+        self.tau = tau
+        self.operating_T = operating_T
+        self.operating_P = operating_P
         self._kW_per_m3 = kW_per_m3
+        self._V_wf = None
+        self._V_max = None
         self._base_cost_tank = None
         self._base_volume_tank = None
         self._base_n_cost_tank = None
@@ -115,9 +115,12 @@ class SLEPFbySplit(bst.Unit):
         # The mix is simulated here copying the Feed and Solvent streams as Raffinate and Extract
         Extract.copy_flow(Solvent)
         Extract.T = self.operating_T
+        Extract.P = self.operating_P
+        Extract.phase = 'l'
         Raffinate.copy_flow(Feed)
-        Raffinate.phase = Feed.phase
+        Raffinate.phase = 's'
         Raffinate.T = self.operating_T
+        Raffinate.P = self.operating_P
 
         # Simulate the separation using a pressure filter
         for chem in self.sfi.keys():
@@ -191,6 +194,17 @@ class SLEPFbySplit(bst.Unit):
         Load.mix_from([Ins1,Ins2], energy_balance = True)
 
         # Load the parameters
+        V_wf = self.V_wf
+
+        # Calculate the mixing tank volume
+        Inputs_F_Vol = (Load.F_vol)
+        V_0 = Inputs_F_Vol * self.tau
+
+        # Add the reactor volume
+        design['Mixing tank volume'] = V_0/V_wf
+
+        # Calculate the filter area
+        
     
     @property
     def base_cost_tank(self):
@@ -249,7 +263,61 @@ class SLEPFbySplit(bst.Unit):
         self._CE_base_tank = value
 
     def _cost(self):
-        pass
+        """
+        """
+        # Load all the design parameters needed to calculate the costs
+        V_Tank = self.design_results['Mixing tank volume']
+        Centrifuge_Diameter = self.design_results['Centrifuge diameter']
+
+        # Calculate the baseline purchase cost for the mixing tank
+        ## The base cost accounts for jacketed agitated vessel.
+        ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
+        Mixing_Tank_Purchase_Cost = self.base_cost_tank * (V_Tank/self.base_volume_tank)**self.base_n_cost_tank
+        self.baseline_purchase_costs['Mixing Tank'] = Mixing_Tank_Purchase_Cost
+
+        ## The material, pressure and temperature factors are assumed to be 1
+        self.F_D['Mixing Tank'] = self.F_M['Mixing Tank'] = self.F_P['Mixing Tank'] = 1
+
+        ## The Bare module factor which account for installation costs is calculated as the sum of delivery, installation,
+        ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
+        ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
+        ### Factors
+        Delivery = 0.10
+        Installation = 0.60             # Metal tanks
+        Instrumentation_Control = 0.50
+        Piping = 0.31                   # Solid-Fluid   
+        ### Calculate the bare module
+        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
+        self.F_BM['Mixing Tank'] = Bare_Module
+
+        ## Scale the costs using CEPCI
+        self.baseline_purchase_costs['Mixing Tank'] *= bst.CE/self.CE_base_tank
+
+        # Calculate the baseline purchase costs for the centrifuge
+        ## The base cost accounts for a vertical basket centrifuge with batch top discharge. Note that
+        ## motor and drive are excluded from this correlation.
+        ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
+        Centrifuge_Purchase_Cost = self.base_cost_centrifuge * (Centrifuge_Diameter/self.base_diameter_centrifuge)**self.base_n_cost_centrifuge
+        self.baseline_purchase_costs['Centrifuge'] = Centrifuge_Purchase_Cost * self.parallel['Centrifuge']
+
+        ## The material, pressure and temperature factors are assumed to be 1
+        self.F_D['Centrifuge'] = self.F_M['Centrifuge'] = self.F_P['Centrifuge'] = 1
+
+        ## The Bare module factor which account for installation costs is calculated as the sum of delivery, installation,
+        ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
+        ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
+        ### Factors
+        Delivery = 0.10
+        Installation = 0.40             # Centrifugal separators
+        Instrumentation_Control = 0.25  # Assumed from the range 0.08 - 0.50 mentioned on the book
+        Piping = 0.31                   # Solid-Fluid   
+        ### Calculate the bare module
+        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
+        self.F_BM['Centrifuge'] = Bare_Module
+
+        ## Scale the costs using CEPCI
+        CE_Base = 1000
+        self.baseline_purchase_costs['Centrifuge'] *= bst.CE/CE_Base
 
 class SLECbySplit(bst.Unit):                                                
     """ 
