@@ -28,8 +28,8 @@ class ContinuousStirredTankReactor(bst.Unit):
         Clean-in-place time. Set to 1 h by default.
 
     reaction : bst.Reaction | bst.ReactionSystem
-         
-
+        Reaction taking place inside the CSTR.     
+    
     operting_P : float 
         Pressure inside the reactor. Default to 101325 Pa.
 
