@@ -23,6 +23,12 @@ Filtration_Data = {                         # Reference: Rules of the Thumb in E
     }
 }
 
+Filtration_Media_Resistence = {
+    "PI&PPS": 4e8,                          # https://doi.org/10.1016/j.powtec.2012.05.003            
+    "PI": 4.5e8,                            # https://doi.org/10.1016/j.powtec.2012.05.003
+    "PTFE": 2.3e8,                          # https://doi.org/10.1016/j.powtec.2012.05.003
+}
+
 def cakeweight_cakethickness_correlation(
         cakeweight: float,
         cakethickness: float
@@ -30,8 +36,8 @@ def cakeweight_cakethickness_correlation(
     """
     """
     # Slope and intercept of the correlation
-    m = (20-10)/(1.50-0.75)     # Reference: Perry's Chemical Engineering Handbook 9th Edition 18-89
-    intercept = 0               # Reference: Perry's Chemical Engineering Handbook 9th Edition 18-89
+    m = (20-10)/(1.50-0.75)                 # Reference: Perry's Chemical Engineering Handbook 9th Edition 18-89
+    intercept = 0                           # Reference: Perry's Chemical Engineering Handbook 9th Edition 18-89
 
     if cakeweight:
         cake_thickness = cakeweight/m
@@ -49,8 +55,8 @@ def cakeweight_formtime_correlation(
     """
     """
     # Slope and intercept of the correlation
-    m = 0.50        # Perry's Chemical Engineering Handbook 9th Edition 18-90
-    intercept = 6   # Perry's Chemical Engineering Handbook 9th Edition 18-90
+    m = 0.50                                # Perry's Chemical Engineering Handbook 9th Edition 18-90
+    intercept = 6                           # Perry's Chemical Engineering Handbook 9th Edition 18-90
 
     if cakeweight:
         cake_form_time = (cakeweight - intercept)/m
@@ -90,24 +96,26 @@ def calculate_theta_from_rate(
     return calculate_theta_from_thickness(L,epsilon,rho_s,Cs)
 
 def calculate_rdvf_area(
-        Q: float,
+        mf_fil: float,
+        rho_fil: float,
         delta_P: float,
         mu: float,
         alpha: float,
         Cs: float,
         theta: float,
-        Rm: float,
+        Rm: float|str,
         submergence: float = 0.35,
              
 ):
     """
 
     Calculate the filtration area required for a rotatory drum vacuum
-    filter given the filtrate rate (Q), pressure difference (delta_P),
-    viscosidad (mu), Filtrate volume per m2 (theta), medium resistence (Rm) 
-    and cake resistence (alpha). The equation used is the following:
+    filter given the filtrate rate (Q), pressure difference 
+    (delta_P), viscosidad (mu), Filtrate volume per m2 (theta), medium 
+    resistence (Rm) and cake resistence (alpha). The equation used is 
+    the following:
 
-    Q = delta_P/(mu*(Rm + alpha * Cs * theta))
+    Q/area = delta_P/(mu*(Rm + alpha * Cs * theta))
 
     Parameters
     ----------
@@ -123,16 +131,27 @@ def calculate_rdvf_area(
 
     theta : float
 
-    Rm : float
+    Rm : float|str
     
     submergence : float
 
     """
-    denominator = mu * (alpha*Cs*theta + Rm)
+    if isinstance(Rm, str) and Rm in Filtration_Media_Resistence:
+        Rm_val = Filtration_Media_Resistence[Rm]
+    elif isinstance(Rm, (int, float)):
+        Rm_val = Rm
+    else:
+        raise ValueError("Rm must be either a float or one of the following str: {}".format(Filtration_Media_Resistence.keys()))
 
+    # Conversion from mass flow (kg/h) to volumetric flow (m3/s)
+    if rho_fil <= 0:
+        raise ValueError("La densidad del filtrado (rho_f) debe ser mayor que 0.")
+    Q = mf_fil / rho_fil / 3600
+
+    denominator = mu * (alpha * Cs * theta + Rm_val)
     if denominator <= 0:
         raise ValueError("Invalid denominator. Check the following parameters: mu, Rm and theta")
-    
+
     A_effective = Q * denominator/delta_P
 
     if submergence <= 0:
@@ -141,3 +160,5 @@ def calculate_rdvf_area(
     A_total = A_effective/submergence
 
     return A_total
+
+print(calculate_rdvf_area(631.4,1000,50000,0.001,8e10,100,calculate_theta_from_rate(0.001,2.67,0.4,1000,100),"PI"))
