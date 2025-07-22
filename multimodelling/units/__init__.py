@@ -7,6 +7,9 @@ from .centrifuge import SolidsCentrifuge
 from .evaporator import MultiEffectEvaporator
 from .mixing import MixTank
 from .reactors import ContinuousStirredTankReactor
+from .extraction import SLECbySplit,SLEPFbySplit,LLEbySplit
+from .filtration import RotaryVacuumFilter
+from .flash import Flash
 
 __all__ = (
     "BatchEnzymaticTreatment",
@@ -14,10 +17,13 @@ __all__ = (
     "ShellHeatExchanger",
     "SLEPFbySplit",
     "SLECbySplit",
+    "LLEbySplit",
     "SprayDryer",
     "SolidsCentrifuge",
     "DrumDryer",
     "MultiEffectEvaporator",
     "MixTank",
     "ContinuousStirredTankReactor",
+    "RotaryVacuumFilter",
+    "Flash"
 )
