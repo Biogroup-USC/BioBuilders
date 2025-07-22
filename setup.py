@@ -12,5 +12,8 @@ setup(
     url = "https://github.com/Biogroup-USC/multiscale-modelling-biorefinery-code.git", 
     packages = find_packages(),
     include_package_data = True,
+    package_data={
+        "multimodelling.chems": ["database/Multimodelling_Chem.db"]
+    },
     python_requires = '>=3.8, <3.13'  
 )
