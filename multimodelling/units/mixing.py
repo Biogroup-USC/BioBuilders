@@ -2,6 +2,10 @@
 """
 import biosteam as bst
 
+__all__ = (
+    "MixTank",
+)
+
 # Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
 # Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
 class Tank(bst.Unit, isabstract=True):
