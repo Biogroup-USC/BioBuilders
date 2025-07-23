@@ -14,51 +14,74 @@ __all__ = (
 
 class SLEPFbySplit(bst.Unit):
     """
+    Solid-liquid extraction unit modeled as a CSTR followed by a pressure filter.
 
-    Create a Solid-Liquid extraction modelled as a CSTR with a pressure filter.
+    This unit performs a solid-liquid extraction based on user-defined split factors and 
+    a post-extraction filtration step where solvent retention is defined through a moisture 
+    parameter. It is especially suited for modeling batch or semicontinuous extraction systems 
+    with solvent recovery by pressure filtration.
 
-    The extraction is modelled based on the split factor which represents the mass of certain 
-    compound extracted per its input mass. Moreover, it is important to remark that the amount 
-    of washing stream used in the filtration, which is retained by te solid, is calculated using 
-    the moisture parameter.           
+    The extraction step is modeled by applying split fractions to specified solutes from the 
+    solid feed into the solvent stream. The filtration step includes the addition of a washing 
+    stream, which is partially retained by the solid phase according to a moisture content 
+    parameter. The retained amount is automatically balanced between extract and raffinate.
+
+    Design calculations include estimation of mixing tank volume and filter area based on 
+    fluid properties, residence time, solid concentration, and filtration characteristics. 
+    Capital cost estimations are also included for both mixing tank and filter.
 
     Parameters
     ----------
     ID : str
-        Name of the unit.
+        Unit ID.
     ins : list
-        List of input streams (BioSTEAM object). This unit has 3 inputs.[Feed, Solvent, Filter_Washing]
+        List of inlet streams [Feed, Solvent, Filter_Washing].
     outs : list
-        List of output streams (BioSTEAM object). This unit has 2 outputs. [Extract, Raffinate]
+        List of outlet streams [Extract, Raffinate].
     sfi : dict
-        Dictionary with the following structure: {"A": 0.5, "B": 0.9}. This means that 50% of A and 90% of B will be 
-        extracted by the solvent.
-    moisture_content : float
-        percentage of washing stream retained in the solids. Default to 0.40 kg of washing stream per kg of dry solids.
-    washing_chem : dict
-        Dictionary with the following structure:  {"C": 2, "D": 4}. This means that the steam used to wash the solids 
-        during the filtration will have a flow of C and D which is 2 and 4 times the flow of Feed, respectively.
-    tau : float 
-        Residence time in h.
-    operating_T : float
-        The operating temperature is set to 298.15 K by default.
-    operating_P : float
-        The operating pressure is set to 101325 bar by default.
-    
+        Dictionary of split fractions by component, e.g., {"A": 0.5, "B": 0.9}.
+    moisture_content : float, optional
+        Fraction of solvent retained in the solids (default is 0.40 kg solvent/kg dry solid).
+    washing_chem : dict, optional
+        Components and their washing ratios relative to the feed mass, 
+        e.g., {"Water": 2, "Ethanol": 4}.
+    tau : float, optional
+        Residence time in hours (default is 0.5 h).
+    submergence : float, optional
+        Submergence ratio of the filter area (default is 0.35).
+    operating_T : float, optional
+        Operating temperature in K (default is 298.15 K).
+    operating_P : float, optional
+        Operating pressure in Pa (default is 101325 Pa).
+    mu : float, optional
+        Dynamic viscosity of the fluid [Pa·s]. If not provided, it is taken from the mixed stream.
+    rho : float, optional
+        Density of the fluid [kg/m3]. If not provided, it is taken from the mixed stream.
+    solids : list[str], optional
+        List of solid-phase component IDs to determine solid concentration.
+    kW_per_m3 : float, optional
+        Stirring power requirement [kW/m3]. Default is estimated based on literature correlations.
+
     Attributes
     ----------
-    kW_per_m3 : (float)
-        The power consumption due to stirring. The default is set to 0.1803 kW/m3 using the Piccino calculation for 1 m3 
-        reactor: http://dx.doi.org/10.1016/j.jclepro.2016.06.164.
+    kW_per_m3 : float
+        Power consumption per m3 of reactor volume.
     base_cost_tank : float
-        Base cost of a jacketed mixing tank.
+        Base cost of the mixing tank in USD.
     base_volume_tank : float
-        The volume of the jacketed mixing tank whose cost is the base cost.
+        Base volume [m3] for scaling tank cost.
     base_n_cost_tank : float
-        Parameter n for the jacketed mixing tank used in the formula to scale costs.
+        Scaling exponent for tank cost.
     CE_base_tank : float
-        CEPCI of the base cost.
-        
+        Base CEPCI used for the tank cost reference.
+    base_cost_filter : float
+        Base cost of the pressure filter in USD.
+    base_area_filter : float
+        Base filter area [m2] for cost scaling.
+    base_n_cost_filter : float
+        Scaling exponent for filter cost.
+    CE_base_filter : float
+        Base CEPCI used for the filter cost reference.
     """
     # Inlets
     _N_ins = 3
@@ -66,16 +89,10 @@ class SLEPFbySplit(bst.Unit):
     # Outlets
     _N_outs = 2
 
-    # Set the default washing chem and its kg / kg solids 
-    wash_chem_default = {
-        'Ethanol': 64,
-        'Water': 16
-    }
-
     def _init(self,
               sfi: dict = None,
               moisture_content: float = 0.40,
-              washing_chem: dict = None,
+              washing_chem: list = None,
               tau: float = 0.5,
               submergence = 0.35,
               operating_T: float = 298.15,
@@ -89,7 +106,7 @@ class SLEPFbySplit(bst.Unit):
         """
         self.sfi = sfi
         self.moisture = moisture_content
-        self.wash_chem = washing_chem if washing_chem is not None else self.wash_chem_default
+        self.wash_chem = washing_chem
         self.tau = tau
         self.submergence = submergence
         self.operating_T = operating_T
@@ -119,10 +136,6 @@ class SLEPFbySplit(bst.Unit):
         Solvent = self.ins[1]
         Filter_Washing = self.ins[2]
         
-        # Define the washing chemical
-        for key in self.wash_chem.keys():
-            Filter_Washing.imass[key] = self.wash_chem[key] * Feed.get_total_flow('kg/hr')
-
         # Define the outlet streams
         Extract = self.outs[0]
         Raffinate = self.outs[1]
@@ -133,6 +146,7 @@ class SLEPFbySplit(bst.Unit):
         Extract.T = self.operating_T
         Extract.P = self.operating_P
         Extract.phase = 'l'
+
         Raffinate.copy_flow(Feed)
         Raffinate.phase = 's'
         Raffinate.T = self.operating_T
@@ -140,20 +154,24 @@ class SLEPFbySplit(bst.Unit):
 
         # Simulate the separation using a pressure filter
         for chem in self.sfi.keys():
-            Extract.imass[chem] = self.sfi[chem] * Feed.imass[chem] + Solvent.imass[chem]   # It takes into account if there is any chemical in both Solvent and Feed
-            Raffinate.imass[chem] = (1-self.sfi[chem])* Feed.imass[chem]                    # assuming all the solvent and solutes are washed during the filtration 
+            Extract.imass[chem] += self.sfi[chem] * Feed.imass[chem]        # It takes into account if there is any chemical in both Solvent and Feed
+            Raffinate.imass[chem] = (1-self.sfi[chem])* Feed.imass[chem]    # assuming all the solvent and solutes are washed during the filtration 
         
-        # Calculate the amount of solvent retained
-        solvent_retained = self.moisture * Raffinate.F_mass
-        solvent_retained_ratio = solvent_retained/Solvent.F_mass
-        for chemobj in Solvent.available_chemicals:
-            chem = chemobj.ID
-            Extract.imass[chem] = (1-solvent_retained_ratio) * Solvent.imass[chem]
-            Raffinate.imass[chem] = solvent_retained_ratio * Solvent.imass[chem]
-            # Check if there is enough solvent to match the moisture content
-            solvent_extract_plus_raffinate = (Extract.imass[chem] + Raffinate.imass[chem])
-            if not np.isclose(solvent_extract_plus_raffinate, Solvent.imass[chem], rtol = 1e-5, atol = 1e-8):
-               raise ValueError("There is not enough amount of {} in {} to match the moisture requeriments".format(chem, Solvent.ID))
+        # The original solvent is completely washed out, The washing chemical
+        # is the only that remains in the raffinate as moisture
+        wash_retained = self.moisture * Raffinate.F_mass
+        wash_total = Filter_Washing.F_mass
+        if wash_total == 0:
+            raise ValueError(f"[{self.ID}] No filter washing flow provided.")
+        retention_ratio = wash_retained / wash_total
+
+        for chem in self.wash_chem:
+            Extract.imass[chem] = retention_ratio * Filter_Washing.imass[chem]
+            Raffinate.imass[chem] = (1-retention_ratio) * Filter_Washing.imass[chem]
+
+            total = Extract.imass[chem] + Raffinate.imass[chem]
+            if not np.isclose(total, Filter_Washing.imass[chem], rtol = 1e-5, atol = 1e-8):
+                raise ValueError("Not enough {} to achieve moisture objectibe".format(chem))
 
     @property
     def kW_per_m3(self):
