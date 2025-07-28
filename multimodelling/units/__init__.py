@@ -8,7 +8,7 @@ from .evaporator import MultiEffectEvaporator
 from .mixing import MixTank
 from .reactors import ContinuousStirredTankReactor
 from .extraction import ExtractionReactor,SLECbySplit,LLEbySplit
-from .filtration import RotaryVacuumFilter
+from .filtration import RotaryVacuumFilter, RotatoryVacuumDrumFilter
 from .flash import Flash
 
 __all__ = (
@@ -24,6 +24,7 @@ __all__ = (
     "MultiEffectEvaporator",
     "MixTank",
     "ContinuousStirredTankReactor",
+    "RotatoryVacuumDrumFilter",
     "RotaryVacuumFilter",
     "Flash"
 )
