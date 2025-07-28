@@ -3,9 +3,11 @@
 
 import biosteam as bst
 import numpy as np
+from ..mathtools.unitsarea import calculate_rdvf_area
 
 __all__ = (
     'RotaryVacuumFilter',
+    'RotatoryVacuumDrumFilter',
 )
 
 # Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
@@ -189,3 +191,326 @@ class RotaryVacuumFilter(SolidsSeparator):
     def _calc_Area(flow, filter_rate):
         """Return area in ft^2 given flow in kg/hr and filter rate in lb/day-ft^2."""
         return flow * 52.91 / filter_rate
+
+class RotatoryVacuumDrumFilter(bst.Unit):
+    """
+    Vacuum drum filtration unit.
+
+    This unit models a rotary vacuum drum filter used to separate solids from a liquid stream, 
+    optionally including a washing stream to displace part of the liquid and/or impurities. The 
+    model accounts for solvent retention in the solid cake by targeting a specified moisture content. 
+    Washing solvent is partially retained by the solid phase according to a moisture specification, 
+    and the rest is recovered in the filtrate.
+
+    Design calculations include estimation of the required filtration area based on the slurry 
+    flowrate, fluid properties, cake solids concentration, pressure drop, and filtration rate. 
+    The area is used to estimate equipment purchase and installation costs.
+
+    Parameters
+    ----------
+    ID : str
+        Unit operation identifier.
+    ins : list of [Stream, Stream]
+        Inlet streams [Feed, Washing]. The feed contains the solids and retained solvent. 
+        The washing stream contains additional solvent to displace retained liquid.
+    outs : list of [Stream, Stream]
+        Outlet streams [Filtrate, Retentate]. The filtrate contains displaced and unretained liquid; 
+        the retentate contains the solid cake and retained liquid.
+    moisture_content : float, optional
+        Target moisture content in the solid cake (kg retained liquid/kg dry solids). Default is 0.40.
+    washing_chem : list[str], optional
+        List of washing components to consider for retention and displacement (e.g., ["Water", "Ethanol"]).
+    submergence : float, optional
+        Submergence ratio of the filter drum (default = 0.35).
+    operating_T : float, optional
+        Operating temperature in Kelvin (default = 298.15 K).
+    operating_P : float, optional
+        Operating pressure in Pascal (default = 101325 Pa).
+    mu : float, optional
+        Liquid viscosity [Pa·s]. If not provided, it is estimated from the mixed feed and washing streams.
+    rho : float, optional
+        Liquid density [kg/m3]. If not provided, it is estimated from the mixed feed and washing streams.
+    solids : list[str], optional
+        List of solid-phase component IDs used to determine solid concentration in the slurry.
+
+    Attributes
+    ----------
+    delta_P : float
+        Pressure drop across the filter [Pa]. Default is 80000 Pa.
+    filtration_type : str
+        Filtration rate class: "Fast", "Medium", or "Slow". Affects area estimation. Default is "Medium".
+    base_cost_filter : float
+        Reference filter equipment cost at base size and CEPCI. Default is 280,000 USD.
+    base_area_filter : float
+        Reference filter area [m2] used for scaling. Default is 22.0 m2.
+    base_n_cost_filter : float
+        Cost scaling exponent. Default is 0.65.
+    CE_base_filter : float
+        Base CEPCI value for cost reference. Default is 1000.0.
+
+    Notes
+    -----
+    - Assumes uniform retention of solvent and uniform displacement during washing.
+    - If no washing stream is supplied, the model will retain solvent directly from the feed identifying it as the main chemical of this stream.
+    - Filtration area is estimated using empirical expressions based on Darcy’s law.
+    - Equipment costs are scaled from reference values using BioSTEAM conventions.
+
+    See Also
+    --------
+    calculate_rdvf_area : Function used for filter area estimation based on fluid and cake properties.
+    """
+    # Inlets
+    _N_ins = 2
+
+    # Outlets
+    _N_outs = 2
+
+    def _init(self,
+              sfi: dict = None,
+              moisture_content: float = 0.40,
+              washing_chem: list = None,
+              tau: float = 0.5,
+              submergence = 0.35,
+              operating_T: float = 298.15,
+              operating_P: float = 101325,
+              mu: float = None,
+              rho: float = None,
+              solids: list = None,
+              ):
+        """
+        """
+        self.sfi = sfi
+        self.moisture = moisture_content
+        self.wash_chems = washing_chem
+        self.tau = tau
+        self.submergence = submergence
+        self.operating_T = operating_T
+        self.operating_P = operating_P
+        self.mu = mu
+        self.rho = rho
+        self.solids = solids
+        self._delta_P = None
+        self._filtration_type = None
+        self._base_cost_filter = None
+        self._base_area_filter = None
+        self._base_n_cost_filter = None
+        self._CE_base_filter = None
+
+    def _run(self):
+        """
+        """
+        # Define the inlet streams
+        Feed, Washing = self.ins
+
+        # Define the outlet streams
+        Filtrate, Retentate = self.outs
+
+        Filtrate.copy_flow(Washing)
+        Filtrate.T = self.operating_T
+        Filtrate.P = self.operating_P
+        Filtrate.phase = 'l'
+
+        Retentate.copy_flow(Feed)
+        Retentate.phase = 's'
+        Retentate.T = self.operating_T
+        Retentate.P = self.operating_P
+
+        # Simulate the separation
+        for chem in self.sfi.keys():
+            Filtrate.imass[chem] = self.sfi[chem] * Feed.imass[chem]
+            Retentate.imass[chem] = (1-self.sfi[chem]) * Feed.imass[chem]
+
+        # Calculate the moisture
+        if self.wash_chems:
+            total_washing = sum((Feed.imass[chem] + Washing.imass[chem]) for chem in self.wash_chems)
+            if total_washing == 0:
+                raise ValueError(f"[{self.ID}] No filter washing flow provided.")
+            retained = self.moisture * Retentate.F_mass
+            retention_ratio = retained / total_washing
+            for chem in self.wash_chems:
+                Retentate.imass[chem] = retention_ratio * Washing.imass[chem]
+                Filtrate.imass[chem] = (1-retention_ratio) * Washing.imass[chem]
+                total_out = Filtrate.imass[chem] + Retentate.imass[chem]
+                total_in = Washing.imass[chem] + Feed.imass[chem]
+                if not np.isclose(total_out, total_in, rtol = 1e-5, atol = 1e-8):
+                    raise ValueError("Not enough {} to achieve moisture objective".format(chem))
+        else:
+            if Washing.F_mass != 0:
+                raise ValueError("If the washing chems are not defined, the washing stream must remain empty")
+            fluid = Feed.main_chemical
+            total_washing = sum(Feed.imass[fluid])
+            retained = self.moisture * Retentate.F_mass
+            retention_ratio = retained / total_washing
+            Retentate.imass[fluid] = retention_ratio * Feed.imass[fluid]
+            Filtrate.imass[fluid] = (1-retention_ratio) * Feed.imass[fluid]
+       
+    @property
+    def delta_P(self):
+        """
+        """
+        if self._delta_P is None:
+            self._delta_P = 80000   # Pa 
+        return self._delta_P
+    
+    @delta_P.setter
+    def delta_P(self,value):
+        """
+        """
+        self._delta_P = value
+
+    @property
+    def filtration_type(self):
+        """
+        """
+        if self._filtration_type is None:
+            self._filtration_type = "Medium"
+        return self._filtration_type
+    
+    @filtration_type.setter
+    def filtration_type(self,value):
+        """
+        """
+        self._filtration_type = value
+
+    def _design(self):
+        """
+        """
+        # Load the dictionary of results
+        design = self.design_results
+
+        # Load the input streams
+        Feed, Washing = self.ins
+
+        # Load output streams
+        Filtrate = self.outs
+
+        # Mix the streams
+        Load = bst.Stream(units='kg/hr')
+        Load.mix_from(Feed,Washing)
+
+        # Add the filter total area
+        design['Filter total area'] = self._calculate_filter_area(Load,Filtrate)
+
+    def _calculate_filter_area(self, load, filtrate):
+        # Obtain the viscosity
+        if self.mu is not None:
+            mu = self.mu
+        else:
+            mu = load.mu
+        
+        # Obtain the density
+        if self.rho is not None:
+            rho = self.rho
+        else:
+            rho = load.rho
+
+        # Obtain solid concentration
+        if self.solids is None or not isinstance(self.solids, list) or not all(isinstance(s, str) for s in self.solids):
+            raise ValueError("The solids name must be provided as a list")
+        try:
+            solids_mass = [load.imass[s] for s in self.solids]
+        except KeyError as e:
+            raise ValueError("Solid '{}' not found in the stream.".format(e.args[0])) from None
+        Cs = sum(solids_mass)/load.F_vol
+
+        # Calculate the filter area
+        if filtrate.F_mass == 0:
+            raise ValueError("[{}] Filtrate flow is zero. Cannot calculate filter area".format(self.ID))
+        A_filter = calculate_rdvf_area(
+            filtrate.F_mass,            # kg/h
+            rho,                        # kg/m3
+            self.delta_P,               # Pa
+            mu,                         # Pa*s
+            self.filtration_type,       # Fast/Medium/Slow
+            Cs,                         # kg/m3
+            self.submergence            # fraction
+        )
+        return A_filter
+
+    @property
+    def base_cost_filter(self):
+        """
+        """
+        if self._base_cost_filter is None:
+            self._base_cost_filter = 280000     # USD
+        return self._base_cost_filter   
+
+    @base_cost_filter.setter
+    def base_cost_filter(self, value):
+        """
+        """
+        self._base_cost_filter = value
+
+    @property
+    def base_area_filter(self):
+        """
+        """
+        if self._base_area_filter is None:
+            self._base_area_filter = 22.0       # m3
+        return self._base_area_filter
+    
+    @base_area_filter.setter
+    def base_area_filter(self, value):
+        """
+        """
+        self._base_area_filter = value
+
+    @property
+    def base_n_cost_filter(self):
+        """
+        """
+        if self._base_n_cost_filter is None:
+            self._base_n_cost_filter = 0.65
+        return self._base_n_cost_filter
+    
+    @base_n_cost_filter.setter
+    def base_n_cost_filter(self, value):
+        """
+        """
+        self._base_n_cost_filter = value
+    
+    @property
+    def CE_base_filter(self):
+        """
+        """
+        if self._CE_base_filter is None:
+            self._CE_base_filter = 1000.0
+        return self._CE_base_filter
+    
+    @CE_base_filter.setter
+    def CE_base_filter(self, value):
+        """
+        """
+        self._CE_base_filter = value
+
+    def _cost(self):
+        """
+        """
+        # Load parameters
+        A_Filter = self.design_results['Filter total area']
+
+        # Calculate the baseline purchase costs for the Rotatory Vacuum Drum Filter
+        ## The base cost accounts for a rotatory drum filter, vacuum with discharger,
+        ## filtrate pumps, vacuum system, motor and drive.
+        ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
+        Filter_Purchase_Cost = self.base_cost_filter * (A_Filter/self.base_area_filter)**self.base_n_cost_filter
+        self.baseline_purchase_costs['Rotatory Vacuum Drum Filter'] = Filter_Purchase_Cost
+
+        ## The material, pressure and temperature factors are assumed to be 1
+        self.F_D['Rotatory Vacuum Drum Filter'] = self.F_M['Rotatory Vacuum Drum Filter'] = self.F_P['Rotatory Vacuum Drum Filter'] = 1
+
+        ## The Bare module factor which account for installation costs is calculated as the sum of delivery, installation,
+        ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
+        ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
+        ### Factors
+        Delivery = 0.10
+        Installation = 0.80             # Filters
+        Instrumentation_Control = 0.25  # Assumed from the range 0.08 - 0.50 mentioned on the book
+        Piping = 0.31                   # Solid-Fluid   
+        ### Calculate the bare module
+        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
+        self.F_BM['Rotatory Vacuum Drum Filter'] = Bare_Module
+
+        ## Scale the costs using CEPCI
+        CE_Base = self.CE_base_filter
+        self.baseline_purchase_costs['Rotatory Vacuum Drum Filter'] *= bst.CE/CE_Base
