@@ -1,4 +1,4 @@
-from .units import Flash,RotaryVacuumFilter, LLEbySplit, ShellHeatExchanger, SLECbySplit, SLEPFbySplit, BatchEnzymaticTreatment, Mill, SolidsCentrifuge, DrumDryer, MultiEffectEvaporator, MixTank, ContinuousStirredTankReactor
+from .units import Flash,RotaryVacuumFilter, LLEbySplit, ShellHeatExchanger, SLECbySplit, ExtractionReactor, BatchEnzymaticTreatment, Mill, SolidsCentrifuge, DrumDryer, MultiEffectEvaporator, MixTank, ContinuousStirredTankReactor
 from .chems import ChemDataBase, ChemManager
 from .parameters import get_parameters_from_CSV, get_parameters_from_excel, get_price_streams_from_CSV, get_unit_costs_from_CSV
 from .results import DisplayMassResults, DisplayUnitsResults, TEAresults
@@ -8,7 +8,7 @@ from .diagrams import UncertaintyPlotter, plot_spearman_1d
 from .sensitivity import SRC
 
 __all__ = (
-    'Flash', 'RotaryVacuumFilter', 'LLEbySplit' ,'ShellHeatExchanger', 'SLECbySplit', 'SLEPFbySplit', 'BatchEnzymaticTreatment', 'Mill', 'SolidsCentrifuge','DrumDryer', 'MultiEffectEvaporator', 'MixTank', "ContinuousStirredTankReactor",
+    'Flash', 'RotaryVacuumFilter', 'LLEbySplit' ,'ShellHeatExchanger', 'SLECbySplit', 'ExtractionReactor', 'BatchEnzymaticTreatment', 'Mill', 'SolidsCentrifuge','DrumDryer', 'MultiEffectEvaporator', 'MixTank', "ContinuousStirredTankReactor",
     'ChemDataBase', 'ChemManager',
     'get_parameters_from_CSV', 'get_parameters_from_excel', 'get_price_streams_from_CSV','get_unit_costs_from_CSV',
     'DisplayMassResults', 'DisplayUnitsResults', 'TEAresults',

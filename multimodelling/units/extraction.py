@@ -2,177 +2,62 @@
 """
 import biosteam as bst
 from ..mathtools.unitsdiameter import calculate_centrifuge_diameter
-from ..mathtools.unitsarea import calculate_rdvf_area
 import numpy as np
 import math
 
 __all__ = (
-    "SLEPFbySplit",
+    "ExtractionReactor",
     "SLECbySplit",
     "LLEbySplit"
 )
 
-class SLEPFbySplit(bst.Unit):
+class ExtractionReactor(bst.Unit):
     """
-    Solid-liquid extraction unit modeled as a CSTR followed by a pressure filter.
-
-    This unit performs a solid-liquid extraction based on user-defined split factors and 
-    a post-extraction filtration step where solvent retention is defined through a moisture 
-    parameter. It is especially suited for modeling batch or semicontinuous extraction systems 
-    with solvent recovery by pressure filtration.
-
-    The extraction step is modeled by applying split fractions to specified solutes from the 
-    solid feed into the solvent stream. The filtration step includes the addition of a washing 
-    stream, which is partially retained by the solid phase according to a moisture content 
-    parameter. The retained amount is automatically balanced between extract and raffinate.
-
-    Design calculations include estimation of mixing tank volume and filter area based on 
-    fluid properties, residence time, solid concentration, and filtration characteristics. 
-    Capital cost estimations are also included for both mixing tank and filter.
-
-    Parameters
-    ----------
-    ID : str
-        Unit ID.
-    ins : list
-        List of inlet streams [Feed, Solvent, Filter_Washing].
-    outs : list
-        List of outlet streams [Extract, Raffinate].
-    sfi : dict
-        Dictionary of split fractions by component, e.g., {"A": 0.5, "B": 0.9}.
-    moisture_content : float, optional
-        Fraction of solvent retained in the solids (default is 0.40 kg solvent/kg dry solid).
-    washing_chem : dict, optional
-        Components and their washing ratios relative to the feed mass, 
-        e.g., {"Water": 2, "Ethanol": 4}.
-    tau : float, optional
-        Residence time in hours (default is 0.5 h).
-    submergence : float, optional
-        Submergence ratio of the filter area (default is 0.35).
-    operating_T : float, optional
-        Operating temperature in K (default is 298.15 K).
-    operating_P : float, optional
-        Operating pressure in Pa (default is 101325 Pa).
-    mu : float, optional
-        Dynamic viscosity of the fluid [Pa·s]. If not provided, it is taken from the mixed stream.
-    rho : float, optional
-        Density of the fluid [kg/m3]. If not provided, it is taken from the mixed stream.
-    solids : list[str], optional
-        List of solid-phase component IDs to determine solid concentration.
-    kW_per_m3 : float, optional
-        Stirring power requirement [kW/m3]. Default is estimated based on literature correlations.
-
-    Attributes
-    ----------
-    kW_per_m3 : float
-        Power consumption per m3 of reactor volume.
-    base_cost_tank : float
-        Base cost of the mixing tank in USD.
-    base_volume_tank : float
-        Base volume [m3] for scaling tank cost.
-    base_n_cost_tank : float
-        Scaling exponent for tank cost.
-    CE_base_tank : float
-        Base CEPCI used for the tank cost reference.
-    base_cost_filter : float
-        Base cost of the pressure filter in USD.
-    base_area_filter : float
-        Base filter area [m2] for cost scaling.
-    base_n_cost_filter : float
-        Scaling exponent for filter cost.
-    CE_base_filter : float
-        Base CEPCI used for the filter cost reference.
     """
-    # Inlets
-    _N_ins = 3
+    # Number of inlet streams
+    _N_ins = 2
 
-    # Outlets
-    _N_outs = 2
+    # Number of outlet streams
+    _N_outs = 1
 
     def _init(self,
-              sfi: dict = None,
-              moisture_content: float = 0.40,
-              washing_chem: list = None,
-              tau: float = 0.5,
-              submergence = 0.35,
-              operating_T: float = 298.15,
-              operating_P: float = 101325,
-              mu: float = None,
-              rho: float = None,
-              solids: list = None,
-              kW_per_m3: float = None,
+              extract_reaction: bst.Reaction | bst.ReactionSystem = None,
+              tau: float = None,
+              operating_T: float = None,
+              operating_P: float = None,
+              kW_per_m3: float = None
               ):
         """
         """
-        self.sfi = sfi
-        self.moisture = moisture_content
-        self.wash_chem = washing_chem
+        self.extract_react = extract_reaction
         self.tau = tau
-        self.submergence = submergence
-        self.operating_T = operating_T
-        self.operating_P = operating_P
-        self.mu = mu
-        self.rho = rho
-        self.solids = solids
+        self.operating_T = operating_T if operating_T is not None else (273.15 + 25.0)
+        self.operating_P = operating_P if operating_P is not None else 101325
         self._kW_per_m3 = kW_per_m3
         self._V_wf = None
         self._V_max = None
-        self._delta_P = None
-        self._filtration_type = None
         self._base_cost_tank = None
-        self._base_cost_filter = None
         self._base_volume_tank = None
-        self._base_area_filter = None
         self._base_n_cost_tank = None
-        self._base_n_cost_filter = None
         self._CE_base_tank = None
-        self._CE_base_filter = None
-
+    
     def _run(self):
         """
         """
         # Define the inlet streams
-        Feed = self.ins[0]
-        Solvent = self.ins[1]
-        Filter_Washing = self.ins[2]
-        
+        Feed, Solvent = self.ins
+
         # Define the outlet streams
-        Extract = self.outs[0]
-        Raffinate = self.outs[1]
+        Slurry = self.outs
 
-        # The mixture of streams is simulated in the design section to perform the heat utilities.
-        # The mix is simulated here copying the Feed and Solvent streams as Raffinate and Extract
-        Extract.copy_flow(Solvent)
-        Extract.T = self.operating_T
-        Extract.P = self.operating_P
-        Extract.phase = 'l'
+        # Mix the streams
+        Slurry.mix_from([Feed, Solvent])
+        Slurry.P = self.operating_P
+        Slurry.T = self.operating_T
 
-        Raffinate.copy_flow(Feed)
-        Raffinate.phase = 's'
-        Raffinate.T = self.operating_T
-        Raffinate.P = self.operating_P
-
-        # Simulate the separation using a pressure filter
-        for chem in self.sfi.keys():
-            Extract.imass[chem] += self.sfi[chem] * Feed.imass[chem]        # It takes into account if there is any chemical in both Solvent and Feed
-            Raffinate.imass[chem] = (1-self.sfi[chem])* Feed.imass[chem]    # assuming all the solvent and solutes are washed during the filtration 
-        
-        # The original solvent is completely washed out, The washing chemical
-        # is the only that remains in the raffinate as moisture
-        wash_retained = self.moisture * Raffinate.F_mass
-        wash_total = Filter_Washing.F_mass
-        if wash_total == 0:
-            raise ValueError(f"[{self.ID}] No filter washing flow provided.")
-        retention_ratio = wash_retained / wash_total
-
-        for chem in self.wash_chem:
-            Extract.imass[chem] = retention_ratio * Filter_Washing.imass[chem]
-            Raffinate.imass[chem] = (1-retention_ratio) * Filter_Washing.imass[chem]
-
-            total = Extract.imass[chem] + Raffinate.imass[chem]
-            if not np.isclose(total, Filter_Washing.imass[chem], rtol = 1e-5, atol = 1e-8):
-                raise ValueError("Not enough {} to achieve moisture objectibe".format(chem))
-
+        # Perform the reaction
+        self.extract_react(Slurry)
+    
     @property
     def kW_per_m3(self):
         """
@@ -214,34 +99,6 @@ class SLEPFbySplit(bst.Unit):
         """
         """
         self._V_wf = value
-    
-    @property
-    def delta_P(self):
-        """
-        """
-        if self._delta_P is None:
-            self._delta_P = 80000   # Pa 
-        return self._delta_P
-    
-    @delta_P.setter
-    def delta_P(self,value):
-        """
-        """
-        self._delta_P = value
-
-    @property
-    def filtration_type(self):
-        """
-        """
-        if self._filtration_type is None:
-            self._filtration_type = "Medium"
-        return self._filtration_type
-    
-    @filtration_type.setter
-    def filtration_type(self,value):
-        """
-        """
-        self._filtration_type = value
 
     def _design(self):
         """
@@ -250,56 +107,18 @@ class SLEPFbySplit(bst.Unit):
         design = self.design_results
 
         # Load the input streams of the unit and mix them
-        Ins1 = self.ins[0]
-        Ins2 = self.ins[1]
-        Extract = self.outs[0]
-        Load = bst.Stream(units = 'kg/hr')
-        Load.mix_from([Ins1,Ins2], energy_balance = True)
+        Slurry = self.outs
 
         # Load the parameters
         V_wf = self.V_wf
+        tau = self.tau
 
         # Calculate the mixing tank volume
-        Inputs_F_Vol = (Load.F_vol)
-        V_0 = Inputs_F_Vol * self.tau
+        Inputs_F_Vol = (Slurry.F_vol)
+        V_0 = Inputs_F_Vol * tau
 
         # Add the reactor volume
         design['Mixing tank volume'] = V_0/V_wf
-
-        # Obtain the viscosity
-        if self.mu is not None:
-            mu = self.mu
-        else:
-            mu = Load.mu
-        
-        # Obtain the density
-        if self.rho is not None:
-            rho = self.rho
-        else:
-            rho = Load.rho
-
-        # Obtain solid concentration
-        if self.solids is None or not isinstance(self.solids, list) or not all(isinstance(s, str) for s in self.solids):
-            raise ValueError("The solids name must be provided as a list")
-        try:
-            solids_mass = [Load.imass[s] for s in self.solids]
-        except KeyError as e:
-            raise ValueError("Solid '{}' not found in the stream.".format(e.args[0])) from None
-        Cs = sum(solids_mass)/Load.F_vol
-
-        # Calculate the filter area
-        A_filter = calculate_rdvf_area(
-            Extract.F_mass,             # kg/h
-            rho,                        # kg/m3
-            self.delta_P,               # Pa
-            mu,                         # Pa*s
-            self.filtration_type,       # Fast/Medium/Slow
-            Cs,                         # kg/m3
-            self.submergence            # fraction
-        )
-
-        # Add the filter total area
-        design['Filter total area'] = A_filter
     
     @property
     def base_cost_tank(self):
@@ -356,69 +175,12 @@ class SLEPFbySplit(bst.Unit):
         """
         """
         self._CE_base_tank = value
-
-    @property
-    def base_cost_filter(self):
-        """
-        """
-        if self._base_cost_filter is None:
-            self._base_cost_filter = 280000     # USD
-        return self._base_cost_filter   
-
-    @base_cost_filter.setter
-    def base_cost_filter(self, value):
-        """
-        """
-        self._base_cost_filter = value
-
-    @property
-    def base_area_filter(self):
-        """
-        """
-        if self._base_area_filter is None:
-            self._base_area_filter = 22.0       # m3
-        return self._base_area_filter
     
-    @base_area_filter.setter
-    def base_area_filter(self, value):
-        """
-        """
-        self._base_area_filter = value
-
-    @property
-    def base_n_cost_filter(self):
-        """
-        """
-        if self._base_n_cost_filter is None:
-            self._base_n_cost_filter = 0.65
-        return self._base_n_cost_filter
-    
-    @base_n_cost_filter.setter
-    def base_n_cost_filter(self, value):
-        """
-        """
-        self._base_n_cost_filter = value
-    
-    @property
-    def CE_base_filter(self):
-        """
-        """
-        if self._CE_base_filter is None:
-            self._CE_base_filter = 1000.0
-        return self._CE_base_filter
-    
-    @CE_base_filter.setter
-    def CE_base_filter(self, value):
-        """
-        """
-        self._CE_base_filter = value
-
     def _cost(self):
         """
         """
         # Load all the design parameters needed to calculate the costs
         V_Tank = self.design_results['Mixing tank volume']
-        A_Filter = self.design_results['Filter total area']
 
         # Calculate the baseline purchase cost for the mixing tank
         ## The base cost accounts for jacketed agitated vessel.
@@ -443,32 +205,6 @@ class SLEPFbySplit(bst.Unit):
 
         ## Scale the costs using CEPCI
         self.baseline_purchase_costs['Mixing Tank'] *= bst.CE/self.CE_base_tank
-
-        # Calculate the baseline purchase costs for the Rotatory Vacuum Drum Filter
-        ## The base cost accounts for a rotatory drum filter, vacuum with discharger,
-        ## filtrate pumps, vacuum system, motor and drive.
-        ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Filter_Purchase_Cost = self.base_cost_filter * (A_Filter/self.base_area_filter)**self.base_n_cost_filter
-        self.baseline_purchase_costs['Rotatory Vacuum Drum Filter'] = Filter_Purchase_Cost
-
-        ## The material, pressure and temperature factors are assumed to be 1
-        self.F_D['Rotatory Vacuum Drum Filter'] = self.F_M['Rotatory Vacuum Drum Filter'] = self.F_P['Rotatory Vacuum Drum Filter'] = 1
-
-        ## The Bare module factor which account for installation costs is calculated as the sum of delivery, installation,
-        ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
-        ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
-        ### Factors
-        Delivery = 0.10
-        Installation = 0.80             # Filters
-        Instrumentation_Control = 0.25  # Assumed from the range 0.08 - 0.50 mentioned on the book
-        Piping = 0.31                   # Solid-Fluid   
-        ### Calculate the bare module
-        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
-        self.F_BM['Rotatory Vacuum Drum Filter'] = Bare_Module
-
-        ## Scale the costs using CEPCI
-        CE_Base = self.CE_base_filter
-        self.baseline_purchase_costs['Rotatory Vacuum Drum Filter'] *= bst.CE/CE_Base
 
 class SLECbySplit(bst.Unit):                                                
     """ 
