@@ -94,14 +94,56 @@ DB.insert_data_into_db(
     Hf = -285830            # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
 
+# n-hentriacontane
+DB.insert_data_into_db(
+    ID = "Hentriacontane",
+    CAS = "630-04-6",       #               https://webbook.nist.gov/cgi/cbook.cgi?ID=C630046&Mask=200
+    MW = 436.84,            # g/mol         https://webbook.nist.gov/cgi/cbook.cgi?ID=C630046&Mask=200
+    formula = "C31H64",     #               https://webbook.nist.gov/cgi/cbook.cgi?ID=C630046&Mask=200
+    Phase = 's',
+    Rho = 781.0,            # kg/m3
+    Cp = 2.088,             # kJ/(kg*k)     https://webbook.nist.gov/cgi/cbook.cgi?ID=C630046&Mask=2#Thermo-Condensed                                            
+    description = "Hentriacontane is used to represent all the n-alkanes present in the wax of the peel"
+)
+
+# Amyrin
+DB.insert_data_into_db(
+    ID = "Alpha-Amyrin",    #               https://webbook.nist.gov/cgi/cbook.cgi?ID=638-95-9
+    MW = 426.72,            # g/mol         https://webbook.nist.gov/cgi/cbook.cgi?ID=638-95-9
+    CAS = "638-95-9",       #               https://webbook.nist.gov/cgi/cbook.cgi?ID=638-95-9
+    Phase = 's',             
+    Cp = 2.088,             # kJ/(kg*k)     same as hentriacontane
+    Rho = 781.0,            # kg/m3         same as hentriacontane
+    description = "Alpha-amyrin is used to represent the diferent amyrins present in the wax of the peel"
+)
+
+# Pectin
+DB.insert_data_into_db(
+    ID = "Pectin",
+    MW = 1.0,               # g/mol
+    Phase = 's',             
+    Cp = 2.088,             # kJ/(kg*k)     same as cellulose
+    Rho = 1100.0,           # kg/m3         same as cellulose
+)
+
+# Lignin Fiber
+DB.insert_data_into_db(
+    ID = "Lignin",
+    MW = 1.0,               # g/mol
+    Phase = 's',             
+    Cp = 2.088,             # kJ/(kg*k)     same as cellulose
+    Rho = 1100.0,           # kg/m3         same as cellulose
+    description = "Alpha-amyrin is used to represent the diferent amyrins present in the wax of the peel"
+)
+
 # Cutin
 DB.insert_data_into_db(
     ID = "Cutin", 
     MW = 1, 
     CAS = "54990-88-4",
     Phase = 's',
-    Cp = 2.1,           #J/(g*K)    https://doi.org/10.1016/S0005-2736(01)00285-1
-    Rho = 1364,         # kJ(kg*K) same as cellulose https://link.springer.com/article/10.1007/s10853-013-7815-6
+    Cp = 2.1,           #kJ/(kg*K)          https://doi.org/10.1016/S0005-2736(01)00285-1
+    Rho = 1364,         # kg/m3             https://link.springer.com/article/10.1007/s10853-013-7815-6
     V = 1*(1/1364),     # m3/mol 
     )
 
