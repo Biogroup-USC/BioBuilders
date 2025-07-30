@@ -128,12 +128,11 @@ DB.insert_data_into_db(
 
 # Lignin Fiber
 DB.insert_data_into_db(
-    ID = "Lignin",
+    ID = "Lignin_Fiber",
     MW = 1.0,               # g/mol
     Phase = 's',             
     Cp = 2.088,             # kJ/(kg*k)     same as cellulose
     Rho = 1100.0,           # kg/m3         same as cellulose
-    description = "Alpha-amyrin is used to represent the diferent amyrins present in the wax of the peel"
 )
 
 # Cutin
