@@ -322,16 +322,21 @@ class RotatoryVacuumDrumFilter(bst.Unit):
 
         # Calculate the moisture
         if self.wash_chems:
-            total_washing = sum((Feed.imass[chem] + Washing.imass[chem]) for chem in self.wash_chems)
+            total_washing = sum(Feed.imass[chem] + Washing.imass[chem] for chem in self.wash_chems)
             if total_washing == 0:
                 raise ValueError(f"[{self.ID}] No filter washing flow provided.")
-            retained = self.moisture * Retentate.F_mass
-            retention_ratio = retained / total_washing
+            
+            # Estimate the dry mass
+            dry_mass = Retentate.F_mass - sum(Retentate.imass[chem] for chem in self.wash_chems)
+            retained_liquid_mass = self.moisture * dry_mass
+            if retained_liquid_mass > total_washing:
+                raise ValueError("[{}] Not enough wash/solvent to achieve moisture objective.")
+            retention_ratio = retained_liquid_mass / total_washing
             for chem in self.wash_chems:
-                Retentate.imass[chem] = retention_ratio * Washing.imass[chem]
-                Filtrate.imass[chem] = (1-retention_ratio) * Washing.imass[chem]
-                total_out = Filtrate.imass[chem] + Retentate.imass[chem]
                 total_in = Washing.imass[chem] + Feed.imass[chem]
+                Retentate.imass[chem] = retention_ratio * total_in
+                Filtrate.imass[chem] = (1-retention_ratio) * total_in
+                total_out = Filtrate.imass[chem] + Retentate.imass[chem]
                 if not np.isclose(total_out, total_in, rtol = 1e-5, atol = 1e-8):
                     raise ValueError("Not enough {} to achieve moisture objective".format(chem))
         else:
@@ -382,7 +387,7 @@ class RotatoryVacuumDrumFilter(bst.Unit):
         Feed, Washing = self.ins
 
         # Load output streams
-        Filtrate = self.outs
+        Filtrate, Retentate = self.outs
 
         # Mix the streams
         Load = bst.Stream(units='kg/hr')

@@ -156,9 +156,7 @@ class ContinuousStirredTankReactor(bst.Unit):
         # Load the dictionary of results
         Design = self.design_results
         Ins1, Ins2 = self.ins
-        Out = self.outs
         Load = bst.Stream(units = 'kg/hr')
-        Load.copy_like(Ins1)
         Load.mix_from([Ins1, Ins2], energy_balance = True)
 
         # Calculate the reactor volume
@@ -185,9 +183,14 @@ class ContinuousStirredTankReactor(bst.Unit):
         # Add the heat utility assuming that the process is adiabatic
         Tf = self.operating_T                   # K
         Ti = Load.T                             # K
-        Duty = Load.Cp * (Tf-Ti) * Load.F_mass  # kJ/h
-        self.add_heat_utility(Duty, T_in = Ti, T_out = Tf)
-    
+        if Load.F_mass > 0 and Load.MW > 0:
+            Cp = Load.Cp
+            Duty = Cp * (Tf-Ti) * Load.F_mass  # kJ/h
+            self.add_heat_utility(Duty, T_in = Ti, T_out = Tf)
+        else:
+            Warning("[{}] Empty or undefined stream: skipping heat duty".format(self.ID))
+            self.add_heat_utility(0.0, Ti, Tf)
+
     @property
     def Base_Cost(self):
         """

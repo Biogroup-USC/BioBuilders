@@ -48,7 +48,7 @@ class ExtractionReactor(bst.Unit):
         Feed, Solvent = self.ins
 
         # Define the outlet streams
-        Slurry = self.outs
+        Slurry, = self.outs
 
         # Mix the streams
         Slurry.mix_from([Feed, Solvent])
@@ -107,7 +107,7 @@ class ExtractionReactor(bst.Unit):
         design = self.design_results
 
         # Load the input streams of the unit and mix them
-        Slurry = self.outs
+        Slurry, = self.outs
 
         # Load the parameters
         V_wf = self.V_wf
