@@ -10,6 +10,7 @@ from .reactors import ContinuousStirredTankReactor
 from .extraction import ExtractionReactor,SLECbySplit,LLEbySplit
 from .filtration import RotaryVacuumFilter, RotatoryVacuumDrumFilter
 from .flash import Flash
+from .distillation import BinaryDistillation
 
 __all__ = (
     "BatchEnzymaticTreatment",
@@ -26,5 +27,6 @@ __all__ = (
     "ContinuousStirredTankReactor",
     "RotatoryVacuumDrumFilter",
     "RotaryVacuumFilter",
-    "Flash"
+    "Flash",
+    "BinaryDistillation",
 )
