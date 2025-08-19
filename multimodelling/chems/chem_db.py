@@ -104,47 +104,50 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         return self._connection
     
     @classmethod
-    def copy_multimodelling_db(cls):
+    def copy_multimodelling_db(cls, dest_path: str = None):
         """
 
-        This method is used to download the Multimodelling database
-        and change the cursor of the current database directory to 
-        the directory of Multimodelling. Note that it should be inside
-        %AppData%.
+        This method is used to copy the Multimodelling database from the package
+        installation to a destination folder.
+
+        Parameters
+        ----------
+        dest_path : str, optional
+            Custom path where the database should be copied. If not provided, it will be
+            copied to the user data directory (%AppData%).
+
+        Returns
+        -------
+        ChemDataBase
+            Instance of ChemDataBase connected to the destination database.
 
         """
-        # Name of the SQL file
         DB_Filename = "Multimodelling_Chem.db"
-        
-        # Name of the folder in AppData/Local
         Appname = "Multimodelling_Database"
-
-        # Get the data directory of the user
-        User_Dir = user_data_dir(Appname, appauthor = False)
-        os.makedirs(User_Dir,exist_ok = True)
-
-        # Build the whole path
-        User_DB_Path = os.path.join(User_Dir,DB_Filename)
-
-        # Check if the database already exists in this directory
-        if not os.path.exists(User_DB_Path):
-            # Copy the database from the package
-            Current_Directory = os.path.dirname(__file__)
-            Internal_DB_Path = os.path.join(Current_Directory,"database",DB_Filename)
-
-            # Check if the database exists in the installed package
-            if not os.path.exists(Internal_DB_Path):
-                raise FileNotFoundError("The internal database could not be found in: {}".format(Internal_DB_Path))
-            
-            # Copy the package database to the AppData/Local folder
-            shutil.copy(Internal_DB_Path,User_DB_Path)
-            print("Database copied to: {}".format(User_DB_Path))
-        else:
-            # If the database exists, give the user the path
-            print("The database was found in: {}".format(User_DB_Path))
+    
+        # Source DB path from installed package
+        Current_Directory = os.path.dirname(__file__)
+        Internal_DB_Path = os.path.join(Current_Directory, "database", DB_Filename)
+        if not os.path.exists(Internal_DB_Path):
+            raise FileNotFoundError(f"The internal database could not be found in: {Internal_DB_Path}")
         
-        # Return the ChemDataBase connected to the database
-        return cls(User_DB_Path)
+        # Determine destination path
+        if dest_path is None:
+            User_Dir = user_data_dir(Appname, appauthor=False)
+            os.makedirs(User_Dir, exist_ok=True)
+            Final_Destination = os.path.join(User_Dir, DB_Filename)
+        else:
+            Final_Destination = os.path.abspath(dest_path)
+            os.makedirs(os.path.dirname(Final_Destination), exist_ok=True)
+    
+        # Copy if not exists
+        if not os.path.exists(Final_Destination):
+            shutil.copy(Internal_DB_Path, Final_Destination)
+            print(f"Database copied to: {Final_Destination}")
+        else:
+            print(f"Database already exists at: {Final_Destination}")
+    
+        return cls(Final_Destination)
 
     @classmethod
     def delete_multimodelling_db(cls):
