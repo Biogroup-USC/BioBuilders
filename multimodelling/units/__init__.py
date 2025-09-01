@@ -29,4 +29,6 @@ __all__ = (
     "RotaryVacuumFilter",
     "Flash",
     "BinaryDistillation",
+    "LLESettler",
+    "LiquidsSettler",
 )

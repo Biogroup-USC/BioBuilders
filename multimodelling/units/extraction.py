@@ -1,12 +1,15 @@
 """
 """
 import biosteam as bst
+from biosteam.units.design_tools import PressureVessel
 from ..mathtools.unitsdiameter import calculate_centrifuge_diameter
 import numpy as np
 import math
 
 __all__ = (
     "ExtractionReactor",
+    "LLESettler",
+    "LiquidsSettler",
     "SLECbySplit",
     "LLEbySplit"
 )
@@ -205,6 +208,205 @@ class ExtractionReactor(bst.Unit):
 
         ## Scale the costs using CEPCI
         self.baseline_purchase_costs['Mixing Tank'] *= bst.CE/self.CE_base_tank
+
+# Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
+# Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
+class LiquidsSettler(bst.Unit, PressureVessel, isabstract=True):
+    """
+    Abstract Settler class for liquid-liquid extraction.
+    
+    Parameters
+    ----------
+    ins : 
+        Inlet fluid with two liquid phases.
+    outs : 
+        * [0] Low density fluid.
+        * [1] Heavy fluid.
+    vessel_material='Carbon steel' : str, optional
+        Vessel construction material.
+    vessel_type='Horizontal': 'Horizontal' or 'Vertical', optional
+        Vessel type.
+    length_to_diameter=4 : float
+        Length to diameter ratio.
+    area_to_feed=0.1 : float
+        Diameter * length per gpm of feed [ft2/gpm].
+        
+    """
+    _N_ins = 1
+    _N_outs = 2
+    
+    def _init(self, area_to_feed=0.1, 
+              length_to_diameter=4,
+              vessel_material='Carbon steel',
+              vessel_type='Horizontal'):
+        self.vessel_material = vessel_material
+        self.vessel_type = vessel_type
+        self.length_to_diameter = length_to_diameter #: Length to diameter ratio
+        self.area_to_feed = area_to_feed #: [ft2/gpm] Diameter * length per gpm of feed
+
+        # New properties for cost calculations
+        self._base_cost = None
+        self._base_n_cost = None
+        self._base_flow = None
+        self._CE_base = None
+    
+    @staticmethod
+    def _default_vessel_type():
+        return 'Horizontal'
+    
+    def _design(self):
+        feed = self.ins[0]
+        F_vol_gpm = feed.get_total_flow('gpm')
+        area = self.area_to_feed * F_vol_gpm
+        length_to_diameter = self.length_to_diameter
+        P = feed.get_property('P', 'psi')
+        D = (area / length_to_diameter) ** 0.5
+        L = length_to_diameter * D
+        self.design_results.update(self._vessel_design(P, D, L))
+        self.design_results["Weight"]*= 0.454           # from lb to kg
+        self.design_results["Length"]*= 0.3048          # from ft to m
+        self.design_results["Diameter"]*= 0.3048        # from ft to m
+        self.design_results["Wall thickness"]*= 0.0254  # from in to m
+        self.design_results["Feed flow"] = feed.F_vol   # m3/h
+
+    @property
+    def base_cost(self):
+        """
+        """
+        if self._base_cost is None:
+            self._base_cost = 190000            # USD
+        return self._base_cost
+
+    @base_cost.setter
+    def base_cost(self, value):
+        """
+        """
+        self._base_cost = value
+
+    @property
+    def base_flow(self):
+        """
+        """
+        if self._base_flow is None:
+            self._base_flow = 12 * 3600 / 1000  # m3/h
+        return self._base_flow
+
+    @base_flow.setter
+    def base_flow(self, value):
+        """
+        """
+        self._base_flow = value
+
+    @property
+    def base_n_cost(self):
+        """
+        """
+        if self._base_n_cost is None:
+            self._base_n_cost = 0.84
+        return self._base_n_cost
+    
+    @base_n_cost.setter
+    def base_n_cost(self, value):
+        """
+        """
+        self._base_n_cost = value
+    
+    @property
+    def CE_base(self):
+        """
+        """
+        if self._CE_base is None:
+            self._CE_base = 1000
+        return self._CE_base
+    
+    @CE_base.setter
+    def CE_base(self, value):
+        """
+        """
+        self._CE_base = value
+
+    def _cost(self):
+        # Load the design parameters
+        Flow = self.design_results['Feed flow']
+
+        # Calculate the baseline purchase cost for the decanter
+        ## The cost account for am API Oil-water "skimmer" separator
+        ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
+        LLE_Settler_Purchase_Cost = self.base_cost * (Flow/self.base_flow) ** self.base_n_cost
+        self.baseline_purchase_costs['Settler'] = LLE_Settler_Purchase_Cost
+
+        ## The material, pressure and temperature factor are assumed to be 1
+        self.F_D['Settler'] = self.F_M['Settler'] = self.F_P['Settler'] = 1
+
+        ## The Bare module factor which account for installation costs is calculated as the sum of delivery, installation,
+        ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
+        ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
+        ### Factors
+        Delivery = 0.10
+        Installation = 0.60             # Metal tanks
+        Instrumentation_Control = 0.50
+        Piping = 0.68                   # Fluid   
+        ### Calculate the bare module
+        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
+        self.F_BM['Settler'] = Bare_Module
+
+        ## Scale the costs using CEPCI
+        CE_Base = self.CE_base
+        self.baseline_purchase_costs['Settler'] *= bst.CE/CE_Base
+
+# Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
+# Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
+class LLESettler(bst.LLEUnit, LiquidsSettler):
+    """
+    Create a LLESettler object that rigorously simulates liquid-liquid extraction.
+    
+    Parameters
+    ----------
+    ins : 
+        Inlet fluid with two liquid phases.
+    outs : 
+        * [0] Low density fluid.
+        * [1] Heavy fluid.
+    vessel_material='Carbon steel' : str, optional
+        Vessel construction material.
+    vessel_type='Horizontal': 'Horizontal' or 'Vertical', optional
+        Vessel type.
+    length_to_diameter=4 : float, optional
+        Length to diameter ratio.
+    area_to_feed=0.1 : float, optional
+        Diameter * length per gpm of feed [ft2/gpm].
+    top_chemical=None : str, optional
+        Identifier of chemical that will be favored in the low density phase.
+    efficiency=1.0 : float
+        Fraction of feed in liquid-liquid equilibrium
+    cache_tolerance=1e-6 : float, optional
+        Molar tolerance of cached partition coefficients.
+    
+    """
+    line = 'Settler'
+    _units = {
+        "Feed flow": "m3/h",
+        "Weight": "kg",
+        "Length": "m",
+        "Wall thickness": "m",
+        "Diameter": "m"
+    }
+    def _init(self, 
+            area_to_feed=0.1, 
+            length_to_diameter=4,
+            vessel_material='Carbon steel',
+            vessel_type='Horizontal',
+            top_chemical=None,
+            efficiency=1.0,
+            cache_tolerance=1e-6,
+        ):
+        bst.LLEUnit._init(self, top_chemical, efficiency)
+        LiquidsSettler._init(self,area_to_feed=area_to_feed,length_to_diameter=length_to_diameter,vessel_material=vessel_material,vessel_type=vessel_type,)
+        self.vessel_material = vessel_material
+        self.vessel_type = vessel_type
+        self.length_to_diameter = length_to_diameter
+        self.area_to_feed = area_to_feed
+        self.cache_tolerance = cache_tolerance
 
 class SLECbySplit(bst.Unit):                                                
     """ 
