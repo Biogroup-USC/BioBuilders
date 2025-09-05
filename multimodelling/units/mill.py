@@ -160,7 +160,7 @@ class Mill(bst.Unit):
 
         # Calculate the baseline purchase cost for the attrition mill
         ## The base cost accounts for the attrition mill. Rule of the Thumb: DOI: 10.1002/9783527611119. Appendix D
-        Mill_baseline_Cost = 30000 * (Power/23)**0.63   # Mill costs includes auxiliar equipment and drive but motor
+        Mill_baseline_Cost = self.base_cost * (Power/self.base_power)**self.base_n_cost # Mill costs includes auxiliar equipment and drive but motor
         self.baseline_purchase_costs['Mill equipment'] = Mill_baseline_Cost
         Motor_baseline_Cost = 0
 
@@ -180,5 +180,5 @@ class Mill(bst.Unit):
         self.F_BM['Mill equipment'] = Bare_Module
 
         ## Scale the costs using CEPCI
-        CE_base = 1000
+        CE_base = self.CE_base
         self.baseline_purchase_costs['Mill equipment'] *= bst.CE/CE_base

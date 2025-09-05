@@ -57,17 +57,17 @@ class BatchEnzymaticTreatment(bst.Unit):
     kW_per_m3 : float
         Power consumption due to stirring. Default to 0.180 kW/m3.
     
-    Base_Cost : float
+    base_cost : float
         The cost (USD) of a reactor which volume corresponds to the base volume.
 
-    Base_n_Cost : float
-        The parameter n in the expression: Base_Cost * (Volume/Base_Volume)**n.
+    base_n_cost : float
+        The parameter n in the expression: base_cost * (Volume/Base_Volume)**n.
 
-    Base_Volume : float
-        The volume (m3) of a BSTR whose cost is the Base_Cost.
+    base_volume : float
+        The volume (m3) of a BSTR whose cost is the base_cost.
 
-    CE_Base : float
-        The CEPCI which corresponds with the Base_Cost
+    CE_base : float
+        The CEPCI which corresponds with the base_cost
     
     Default Reactions
     -----------------
@@ -81,7 +81,7 @@ class BatchEnzymaticTreatment(bst.Unit):
             >>> basis = 'wt'
 
             >>> "Prot_Hydrolysis_Trypsin"
-            >>> Protein -> Peptides; Yield = 1
+            >>> Protein -> Peptides; Yield = 1;
             >>> basis = 'wt'
 
 
@@ -144,10 +144,10 @@ class BatchEnzymaticTreatment(bst.Unit):
         self._kW_per_m3 = None
         self._V_wf = None
         self._V_max = None
-        self._Base_Cost = None
-        self._Base_Volume = None
-        self._Base_n_Cost = None
-        self._CE_Base = None
+        self._base_cost = None
+        self._base_volume = None
+        self._base_n_cost = None
+        self._CE_base = None
 
     def _run(self):
         """
@@ -266,60 +266,60 @@ class BatchEnzymaticTreatment(bst.Unit):
         self.add_heat_utility(Duty, T_in = Ti, T_out = Tf)
     
     @property
-    def Base_Cost(self):
+    def base_cost(self):
         """
         """
-        if self._Base_Cost is None:
-            self._Base_Cost = 75000.0   # USD
-        return self._Base_Cost
+        if self._base_cost is None:
+            self._base_cost = 75000.0   # USD
+        return self._base_cost
     
-    @Base_Cost.setter
-    def Base_Cost(self,value):
+    @base_cost.setter
+    def base_cost(self,value):
         """
         """
-        self._Base_Cost = value
+        self._base_cost = value
     
     @property
-    def Base_Volume(self):
+    def base_volume(self):
         """
         """
-        if self._Base_Volume is None:
-            self._Base_Volume = 3.0     # m3
-        return self._Base_Volume
+        if self._base_volume is None:
+            self._base_volume = 3.0     # m3
+        return self._base_volume
 
-    @Base_Volume.setter
-    def Base_Volume(self,value):
+    @base_volume.setter
+    def base_volume(self,value):
         """
         """
-        self._Base_Volume = value
+        self._base_volume = value
     
     @property
-    def Base_n_Cost(self):
+    def base_n_cost(self):
         """
         """
-        if self._Base_n_Cost is None:
-            self._Base_n_Cost = 0.53
-        return self._Base_n_Cost
+        if self._base_n_cost is None:
+            self._base_n_cost = 0.53
+        return self._base_n_cost
 
-    @Base_n_Cost.setter
-    def Base_n_Cost(self, value):
+    @base_n_cost.setter
+    def base_n_cost(self, value):
         """
         """
-        self._Base_n_Cost = value
+        self._base_n_cost = value
     
     @property
-    def CE_Base(self):
+    def CE_base(self):
         """
         """
-        if self._CE_Base is None:
-            self._CE_Base = 1000.0
-        return self._CE_Base
+        if self._CE_base is None:
+            self._CE_base = 1000.0
+        return self._CE_base
     
-    @CE_Base.setter
-    def CE_Base(self, value):
+    @CE_base.setter
+    def CE_base(self, value):
         """
         """
-        self._CE_Base = value
+        self._CE_base = value
     
     def _cost(self):
         """
@@ -330,7 +330,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         # Calculate the baseline purchase cost for each reactor
         ## The base cost accounts for jacketed agitated vessel. 
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Reactor_Purchase_Cost = self.Base_Cost * (V_reactor/self.Base_Volume)**self.Base_n_Cost        
+        Reactor_Purchase_Cost = self.base_Cost * (V_reactor/self.base_volume)**self.base_n_cost        
         self.baseline_purchase_costs['Reactor'] = Reactor_Purchase_Cost
         
         ## The material, pressure and temperature factor are assumed to be 1
@@ -349,5 +349,5 @@ class BatchEnzymaticTreatment(bst.Unit):
         self.F_BM['Reactor'] = Bare_Module
 
         ## Scale the costs using CEPCI
-        CE_Base = self.CE_Base
+        CE_Base = self.CE_base
         self.baseline_purchase_costs['Reactor'] *= bst.CE/CE_Base
