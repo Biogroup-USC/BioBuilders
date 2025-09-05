@@ -44,10 +44,10 @@ class Mill(bst.Unit):
         
         # Initialize the properties
         self._power_consumption = None
-        self._Base_Cost = None
-        self._Base_Power = None
-        self._Base_n_Cost = None
-        self._CE_Base = None
+        self._base_cost = None
+        self._base_power = None
+        self._base_n_cost = None
+        self._CE_base = None
 
     def _run(self):
         """
@@ -97,60 +97,60 @@ class Mill(bst.Unit):
         self.add_power_utility(Power)
 
     @property
-    def Base_Cost(self):
+    def base_cost(self):
         """
         """
-        if self._Base_Cost is None:
-            self._Base_Cost = 30000.0   # USD
-        return self._Base_Cost
+        if self._base_cost is None:
+            self._base_cost = 30000.0   # USD
+        return self._base_cost
     
-    @Base_Cost.setter
+    @base_cost.setter
     def Base_Cost(self,value):
         """
         """
-        self._Base_Cost = value
+        self._base_cost = value
     
     @property
-    def Base_Power(self):
+    def base_power(self):
         """
         """
-        if self._Base_Power is None:
-            self._Base_Power = 23.0    # Power
-        return self._Base_Power
+        if self._base_power is None:
+            self._base_power = 23.0    # Power
+        return self._base_power
 
-    @Base_Power.setter
-    def Base_Power(self,value):
+    @base_power.setter
+    def base_power(self,value):
         """
         """
-        self._Base_Power = value
+        self._base_power = value
     
     @property
-    def Base_n_Cost(self):
+    def base_n_cost(self):
         """
         """
-        if self._Base_n_Cost is None:
-            self._Base_n_Cost = 0.63
-        return self._Base_n_Cost
+        if self._base_n_cost is None:
+            self._base_n_cost = 0.63
+        return self._base_n_cost
 
-    @Base_n_Cost.setter
-    def Base_n_Cost(self, value):
+    @base_n_cost.setter
+    def base_n_cost(self, value):
         """
         """
-        self._Base_n_Cost = value
+        self._base_n_cost = value
     
     @property
-    def CE_Base(self):
+    def CE_base(self):
         """
         """
-        if self._CE_Base is None:
-            self._CE_Base = 1000.0
-        return self._CE_Base
+        if self._CE_base is None:
+            self._CE_base = 1000.0
+        return self._CE_base
     
-    @CE_Base.setter
-    def CE_Base(self, value):
+    @CE_base.setter
+    def CE_base(self, value):
         """
         """
-        self._CE_Base = value
+        self._CE_base = value
 
     def _cost(self):
         """
