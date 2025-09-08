@@ -84,10 +84,10 @@ class ContinuousStirredTankReactor(bst.Unit):
         self._kW_per_m3 = None
         self._V_wf = None
         self._V_max = None
-        self._Base_Cost = None
-        self._Base_Volume = None
-        self._Base_n_Cost = None
-        self._CE_Base = None
+        self._base_cost = None
+        self._base_volume = None
+        self._base_n_cost = None
+        self._CE_base = None
 
     def _run(self):
         """
@@ -164,17 +164,17 @@ class ContinuousStirredTankReactor(bst.Unit):
         Input_Flow = Inputs_F_Vol
         
         # Calculate the number of batches needed to operate in semi-continuous
-        Tau = self.tau                      # h
+        tau = self.tau                      # h
         V_wf = self.V_wf            
         V_max = self.V_max                  # m3
-        V_0 = Input_Flow * Tau              # Working volume of the reactor
+        V_0 = Input_Flow * tau              # Working volume of the reactor
         if V_0 > V_max:
             Unit = self.ID
             Warning('The cost correlation parameters for tank volume have a maximum volume of {} m3. The current volume of {} is {} m3'.format(V_max, Unit, V_0))
 
         # Add the reactor volume, the number of reactors, batch time and loading+cleaning time
         Design['Reactor volume (total)'] = (V_0/V_wf)       # m3
-        Design['Residence time'] = Tau                      # h
+        Design['Residence time'] = tau                      # h
         
         # Add the power utility
         Power_Stirring = self.kW_per_m3 * Design["Reactor volume (total)"]
@@ -185,67 +185,67 @@ class ContinuousStirredTankReactor(bst.Unit):
         Ti = Load.T                             # K
         if Load.F_mass > 0 and Load.MW > 0:
             Cp = Load.Cp
-            Duty = Cp * (Tf-Ti) * Load.F_mass  # kJ/h
-            self.add_heat_utility(Duty, T_in = Ti, T_out = Tf)
+            duty = Cp * (Tf-Ti) * Load.F_mass  # kJ/h
+            self.add_heat_utility(duty, T_in = Ti, T_out = Tf)
         else:
             Warning("[{}] Empty or undefined stream: skipping heat duty".format(self.ID))
             self.add_heat_utility(0.0, Ti, Tf)
 
     @property
-    def Base_Cost(self):
+    def base_cost(self):
         """
         """
-        if self._Base_Cost is None:
-            self._Base_Cost = 75000.0   # USD
-        return self._Base_Cost
+        if self._base_cost is None:
+            self._base_cost = 75000.0   # USD
+        return self._base_cost
     
-    @Base_Cost.setter
-    def Base_Cost(self,value):
+    @base_cost.setter
+    def base_cost(self,value):
         """
         """
-        self._Base_Cost = value
+        self._base_cost = value
     
     @property
-    def Base_Volume(self):
+    def base_volume(self):
         """
         """
-        if self._Base_Volume is None:
-            self._Base_Volume = 3.0     # m3
-        return self._Base_Volume
+        if self._base_volume is None:
+            self._base_volume = 3.0     # m3
+        return self._base_volume
 
-    @Base_Volume.setter
-    def Base_Volume(self,value):
+    @base_volume.setter
+    def base_volume(self,value):
         """
         """
-        self._Base_Volume = value
+        self._base_volume = value
     
     @property
-    def Base_n_Cost(self):
+    def base_n_cost(self):
         """
         """
-        if self._Base_n_Cost is None:
-            self._Base_n_Cost = 0.53
-        return self._Base_n_Cost
+        if self._base_n_cost is None:
+            self._base_n_cost = 0.53
+        return self._base_n_cost
 
-    @Base_n_Cost.setter
-    def Base_n_Cost(self, value):
+    @base_n_cost.setter
+    def base_n_cost(self, value):
         """
         """
-        self._Base_n_Cost = value
+        self._base_n_cost = value
     
     @property
-    def CE_Base(self):
+    def CE_base(self):
         """
         """
-        if self._CE_Base is None:
-            self._CE_Base = 1000.0
-        return self._CE_Base
+        if self._CE_base is None:
+            self._CE_base = 1000.0
+        return self._CE_base
     
-    @CE_Base.setter
-    def CE_Base(self, value):
+    @CE_base.setter
+    def CE_base(self, value):
         """
         """
-        self._CE_Base = value
+        self._CE_base = value
     
     def _cost(self):
         """
@@ -256,7 +256,7 @@ class ContinuousStirredTankReactor(bst.Unit):
         # Calculate the baseline purchase cost for each reactor
         ## The base cost accounts for jacketed agitated vessel. 
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Reactor_Purchase_Cost = self.Base_Cost * (V_reactor/self.Base_Volume)**self.Base_n_Cost        
+        Reactor_Purchase_Cost = self.base_cost * (V_reactor/self.base_volume)**self.base_n_cost        
         self.baseline_purchase_costs['Reactor'] = Reactor_Purchase_Cost
         
         ## The material, pressure and temperature factor are assumed to be 1
@@ -275,5 +275,5 @@ class ContinuousStirredTankReactor(bst.Unit):
         self.F_BM['Reactor'] = Bare_Module
 
         ## Scale the costs using CEPCI
-        CE_Base = self.CE_Base
-        self.baseline_purchase_costs['Reactor'] *= bst.CE/CE_Base
+        CE_base = self.CE_base
+        self.baseline_purchase_costs['Reactor'] *= bst.CE/CE_base

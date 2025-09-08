@@ -61,81 +61,81 @@ class SolidsCentrifuge(bst.SolidsCentrifuge):
         self.centrifuge_type = centrifuge_type
         
         # Initialize new properties
-        self._Base_n_Cost = None
-        self._Base_Cost = None
-        self._CE_Base = None
-        self._Base_n_Cost_ifnot = None
-        self._Base_Cost_ifnot = None
+        self._base_n_cost = None
+        self._base_cost = None
+        self._CE_base = None
+        self._base_n_cost_ifnot = None
+        self._base_cost_ifnot = None
 
     @property
-    def Base_Cost(self):
+    def base_cost(self):
         """
         """
-        if self._Base_Cost is None:
-            self._Base_Cost = 68040   # USD
-        return self._Base_Cost
+        if self._base_cost is None:
+            self._base_cost = 68040   # USD
+        return self._base_cost
     
-    @Base_Cost.setter
-    def Base_Cost(self,value):
+    @base_cost.setter
+    def base_cost(self,value):
         """
         """
-        self._Base_Cost = value
+        self._base_cost = value
     
     @property
-    def Base_n_Cost(self):
+    def base_n_cost(self):
         """
         """
-        if self._Base_n_Cost is None:
-            self._Base_n_Cost = 0.50
-        return self._Base_n_Cost
+        if self._base_n_cost is None:
+            self._base_n_cost = 0.50
+        return self._base_n_cost
 
-    @Base_n_Cost.setter
-    def Base_n_Cost(self, value):
+    @base_n_cost.setter
+    def base_n_cost(self, value):
         """
         """
-        self._Base_n_Cost = value
+        self._base_n_cost = value
     
     @property
-    def CE_Base(self):
+    def CE_base(self):
         """
         """
-        if self._CE_Base is None:
-            self._CE_Base = 567.0
-        return self._CE_Base
+        if self._CE_base is None:
+            self._CE_base = 567.0
+        return self._CE_base
     
-    @CE_Base.setter
-    def CE_Base(self, value):
+    @CE_base.setter
+    def CE_base(self, value):
         """
         """
-        self._CE_Base = value
+        self._CE_base = value
 
     @property
-    def Base_Cost_ifnot(self):
+    def base_cost_ifnot(self):
         """
         """
-        if self._Base_Cost_ifnot is None:
-            self._Base_Cost_ifnot = 170100  # USD
-        return self._Base_Cost_ifnot
+        if self._base_cost_ifnot is None:
+            self._base_cost_ifnot = 170100  # USD
+        return self._base_cost_ifnot
     
-    @Base_Cost_ifnot.setter
-    def Base_Cost_ifnot(self,value):
+    @base_cost_ifnot.setter
+    def base_cost_ifnot(self,value):
         """
         """
-        self._Base_Cost_ifnot = value
+        self._base_cost_ifnot = value
     
     @property
-    def Base_n_Cost_ifnot(self):
+    def base_n_cost_ifnot(self):
         """
         """
-        if self._Base_n_Cost_ifnot is None:
-            self._Base_n_Cost_ifnot = 0.3
-        return self._Base_n_Cost_ifnot
+        if self._base_n_cost_ifnot is None:
+            self._base_n_cost_ifnot = 0.3
+        return self._base_n_cost_ifnot
 
-    @Base_n_Cost_ifnot.setter
-    def Base_n_Cost_ifnot(self, value):
+    @base_n_cost_ifnot.setter
+    def base_n_cost_ifnot(self, value):
         """
         """
-        self._Base_n_Cost_ifnot = value
+        self._base_n_cost_ifnot = value
     
     def _design(self):
         solids, centrifuge_type = self._solids, self.centrifuge_type
@@ -146,8 +146,8 @@ class SolidsCentrifuge(bst.SolidsCentrifuge):
         if ts < lb:
             lb_warning(self, 'Solids loading', ts, 'ton/hr', lb)
         self.design_results['Number of centrifuges'] = ceil(ts/ub)
-        cost = self.Base_Cost*(ts**self.Base_n_Cost) if centrifuge_type else self.Base_Cost_ifnot*(ts**self.Base_n_Cost_ifnot)
-        cost *= bst.CE / self.CE_Base
+        cost = self.base_cost*(ts**self.base_n_cost) if centrifuge_type else self.base_cost_ifnot*(ts**self.base_n_cost_ifnot)
+        cost *= bst.CE / self.CE_base
         self.baseline_purchase_costs['Centrifuges'] = cost
         self.F_BM['Centrifuges'] = 2.03
         self.design_results['Flow rate'] = F_vol_in = self.F_vol_in

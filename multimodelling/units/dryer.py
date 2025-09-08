@@ -134,10 +134,10 @@ class DrumDryer(bst.Unit):
         self.moisture_ID = moisture_ID
     
         # Initialize new properties
-        self._Base_n_Cost = None
-        self._Base_Area = None
-        self._Base_Cost = None
-        self._CE_Base = None
+        self._base_n_cost = None
+        self._base_area = None
+        self._base_cost = None
+        self._CE_base = None
 
     @property
     def utility_agent(self):
@@ -192,60 +192,60 @@ class DrumDryer(bst.Unit):
             self.add_heat_utility(self.H_out - self.H_in, self.T)
 
     @property
-    def Base_Cost(self):
+    def base_cost(self):
         """
         """
-        if self._Base_Cost is None:
-            self._Base_Cost = 210000    # USD
-        return self._Base_Cost
+        if self._base_cost is None:
+            self._base_cost = 210000    # USD
+        return self._base_cost
 
-    @Base_Cost.setter
-    def Base_Cost(self, value):
+    @base_cost.setter
+    def base_cost(self, value):
         """
         """
-        self._Base_Cost = value
-
-    @property
-    def Base_Area(self):
-        """
-        """
-        if self._Base_Area is None:
-            self._Base_Area = 9.0       # m2
-        return self._Base_Area
-
-    @Base_Area.setter
-    def Base_Area(self, value):
-        """
-        """
-        self._Base_Area = value
+        self._base_cost = value
 
     @property
-    def Base_n_Cost(self):
+    def base_area(self):
         """
         """
-        if self._Base_n_Cost is None:
-            self._Base_n_Cost = 0.52
-        return self._Base_n_Cost
+        if self._base_area is None:
+            self._base_area = 9.0       # m2
+        return self._base_area
+
+    @base_area.setter
+    def base_area(self, value):
+        """
+        """
+        self._base_area = value
+
+    @property
+    def base_n_cost(self):
+        """
+        """
+        if self._base_n_cost is None:
+            self._base_n_cost = 0.52
+        return self._base_n_cost
     
-    @Base_n_Cost.setter
-    def Base_n_Cost(self, value):
+    @base_n_cost.setter
+    def base_n_cost(self, value):
         """
         """
-        self._Base_n_Cost = value
+        self._base_n_cost = value
     
     @property
-    def CE_Base(self):
+    def CE_base(self):
         """
         """
-        if self._CE_Base is None:
-            self._CE_Base = 1000.0
-        return self._CE_Base
+        if self._CE_base is None:
+            self._CE_base = 1000.0
+        return self._CE_base
     
-    @CE_Base.setter
-    def CE_Base(self, value):
+    @CE_base.setter
+    def CE_base(self, value):
         """
         """
-        self._CE_Base = value
+        self._CE_base = value
 
     def _cost(self):
         """
@@ -258,7 +258,7 @@ class DrumDryer(bst.Unit):
         ## with 304 s/s side and cross conveyors, dip pan, knife assembly, rotary steam/water
         ## joints, end scrapers, drive, motors and fume hood.
         ## reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Drum_Dryer_Purchase_Cost = self.Base_Cost * (Peripheral_Drum_Area/self.Base_Area)**self.Base_n_Cost
+        Drum_Dryer_Purchase_Cost = self.base_cost * (Peripheral_Drum_Area/self.base_area)**self.base_n_cost
         self.baseline_purchase_costs['Drum Dryer'] = Drum_Dryer_Purchase_Cost
 
         ## Material, pressure and temperature factor
@@ -278,5 +278,5 @@ class DrumDryer(bst.Unit):
         self.F_BM['Drum Dryer'] = Bare_Module
 
         ## Scale the cost using CEPCI
-        CE_Base = self.CE_Base
-        self.baseline_purchase_costs['Drum Dryer'] *= bst.CE/CE_Base
+        CE_base = self.CE_base
+        self.baseline_purchase_costs['Drum Dryer'] *= bst.CE/CE_base
