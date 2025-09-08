@@ -330,7 +330,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         # Calculate the baseline purchase cost for each reactor
         ## The base cost accounts for jacketed agitated vessel. 
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Reactor_Purchase_Cost = self.base_Cost * (V_reactor/self.base_volume)**self.base_n_cost        
+        Reactor_Purchase_Cost = self.base_cost * (V_reactor/self.base_volume)**self.base_n_cost        
         self.baseline_purchase_costs['Reactor'] = Reactor_Purchase_Cost
         
         ## The material, pressure and temperature factor are assumed to be 1

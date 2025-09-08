@@ -105,7 +105,7 @@ class Mill(bst.Unit):
         return self._base_cost
     
     @base_cost.setter
-    def Base_Cost(self,value):
+    def base_cost(self,value):
         """
         """
         self._base_cost = value
