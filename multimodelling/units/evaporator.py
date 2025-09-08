@@ -129,11 +129,11 @@ class MultiEffectEvaporator(bst.Unit):                                      #TOD
         self.chemical = chemical
 
         # New properties
-        self._Base_Cost = None
-        self._Base_Area = None
-        self._Base_n_Cost = None
-        self._CE_Base = None
-        self._Evap_U = None
+        self._base_cost = None
+        self._base_area = None
+        self._base_n_cost = None
+        self._CE_base = None
+        self._evap_U = None
         
     def reset_cache(self, isdynamic=None):
         self._reload_components = True
@@ -259,21 +259,21 @@ class MultiEffectEvaporator(bst.Unit):                                      #TOD
         liq.P = out_wt_solids.P
     
     @property
-    def Evap_U(self):
+    def evap_U(self):
         """
         """
-        if self._Evap_U is None:
-            if self._Type == 'Forced circulation': self._Evap_U = 10731.92      # kJ/(h*m2*k)   From BioSTEAM MultiEffectEvaporator class --> Forced circulation
-            elif self._Type == 'Natural circulation': self._Evap_U = 4906.02    # kJ/(h*m2*k)   From BioSTEAM MultiEffectEvaporator class --> Horizontal tube
-            elif self._Type == 'Falling film': self._Evap_U = 10220.87          # kJ/(h*m2*k)   From BioSTEAM MultiEffectEvaporator class --> Falling film
-            else: self._Evap_U = 8176.70                                        # kJ/(h*m2*k)   From BioSTEAM MultiEffectEvaporator class --> Long-tube vertical
-        return self._Evap_U
+        if self._evap_U is None:
+            if self._Type == 'Forced circulation': self._evap_U = 10731.92      # kJ/(h*m2*k)   From BioSTEAM MultiEffectEvaporator class --> Forced circulation
+            elif self._Type == 'Natural circulation': self._evap_U = 4906.02    # kJ/(h*m2*k)   From BioSTEAM MultiEffectEvaporator class --> Horizontal tube
+            elif self._Type == 'Falling film': self._evap_U = 10220.87          # kJ/(h*m2*k)   From BioSTEAM MultiEffectEvaporator class --> Falling film
+            else: self._evap_U = 8176.70                                        # kJ/(h*m2*k)   From BioSTEAM MultiEffectEvaporator class --> Long-tube vertical
+        return self._evap_U
 
-    @Evap_U.setter
-    def Evap_U(self, value):
+    @evap_U.setter
+    def evap_U(self, value):
         """
         """
-        self._Evap_U = value
+        self._evap_U = value
 
     def _design(self):
         if self.V == 0: 
@@ -299,7 +299,7 @@ class MultiEffectEvaporator(bst.Unit):                                      #TOD
         Th = hu.inlet_utility_stream.T
         LMTD = ht.compute_LMTD(Th, Th, Tci, Tco)
         ft = 1
-        A = abs(bst.design_tools.compute_heat_transfer_area(LMTD, self.Evap_U, Q, ft))
+        A = abs(bst.design_tools.compute_heat_transfer_area(LMTD, self.evap_U, Q, ft))
         
         # Find area and cost of evaporators
         As = [A]
@@ -312,7 +312,7 @@ class MultiEffectEvaporator(bst.Unit):                                      #TOD
                 Tc = evap.outs[0].T
                 Th = evap.outs[2].T
                 LMTD = Th - Tc
-                A = bst.design_tools.compute_heat_transfer_area(LMTD, self.Evap_U, Q, 1.)
+                A = bst.design_tools.compute_heat_transfer_area(LMTD, self.evap_U, Q, 1.)
                 As.append(A)
 
         # Condenser requirements
@@ -341,60 +341,60 @@ class MultiEffectEvaporator(bst.Unit):                                      #TOD
         )
     
     @property
-    def Base_Cost(self):
+    def base_cost(self):
         """
         """
-        if self._Base_Cost is None:
-            self._Base_Cost = self._evap_data['Cost']   # USD
-        return self._Base_Cost
+        if self._base_cost is None:
+            self._base_cost = self._evap_data['Cost']   # USD
+        return self._base_cost
 
-    @Base_Cost.setter
-    def Base_Cost(self, value):
+    @base_cost.setter
+    def base_cost(self, value):
         """
         """
-        self._Base_Cost = value
-
-    @property
-    def Base_Area(self):
-        """
-        """
-        if self._Base_Area is None:
-            self._Base_Area = self._evap_data['Cap']    # m2
-        return self._Base_Area
-
-    @Base_Area.setter
-    def Base_Area(self, value):
-        """
-        """
-        self._Base_Area = value
+        self._base_cost = value
 
     @property
-    def Base_n_Cost(self):
+    def base_area(self):
         """
         """
-        if self._Base_n_Cost is None:
-            self._Base_n_Cost = self._evap_data['n']
-        return self._Base_n_Cost
+        if self._base_area is None:
+            self._base_area = self._evap_data['Cap']    # m2
+        return self._base_area
+
+    @base_area.setter
+    def base_area(self, value):
+        """
+        """
+        self._base_area = value
+
+    @property
+    def base_n_cost(self):
+        """
+        """
+        if self._base_n_cost is None:
+            self._base_n_cost = self._evap_data['n']
+        return self._base_n_cost
     
-    @Base_n_Cost.setter
-    def Base_n_Cost(self, value):
+    @base_n_cost.setter
+    def base_n_cost(self, value):
         """
         """
-        self._Base_n_Cost = value
+        self._base_n_cost = value
     
     @property
-    def CE_Base(self):
+    def CE_base(self):
         """
         """
-        if self._CE_Base is None:
-            self._CE_Base = self._evap_data['CE']
-        return self._CE_Base
+        if self._CE_base is None:
+            self._CE_base = self._evap_data['CE']
+        return self._CE_base
     
-    @CE_Base.setter
-    def CE_Base(self, value):
+    @CE_base.setter
+    def CE_base(self, value):
         """
         """
-        self._CE_Base = value
+        self._CE_base = value
 
     def _cost(self):
         """
@@ -406,7 +406,7 @@ class MultiEffectEvaporator(bst.Unit):                                      #TOD
         ## The base cost account for the evaporator, vacuum system and
         ## condenser.
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Evaporators_Purchase_Cost = self.Base_Cost * (Area/self.Base_Area) ** self.Base_n_Cost
+        Evaporators_Purchase_Cost = self.base_cost * (Area/self.base_area) ** self.base_n_cost
         self.baseline_purchase_costs['Evaporators'] = Evaporators_Purchase_Cost
 
         ## The material, pressure and temperature factor are assumed to be 1
@@ -425,5 +425,5 @@ class MultiEffectEvaporator(bst.Unit):                                      #TOD
         self.F_BM['Evaporators'] = Bare_Module
 
         ## Scale the costs using CEPCI
-        CE_Base = self.CE_Base
-        self.baseline_purchase_costs['Evaporators'] *= bst.CE/CE_Base
+        CE_base = self.CE_base
+        self.baseline_purchase_costs['Evaporators'] *= bst.CE/CE_base
