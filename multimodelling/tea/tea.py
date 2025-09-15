@@ -127,7 +127,7 @@ class TEA(bst.TEA):
                  property_insurance: float = 0.005,         # 0.5% of FCI is a standard for latge-scale process plants
                  supplies: float = 0.05,                    # 5% is a common assumption for indirect material expenses
                  maintenance: float = 0.03,                 # 3% is an industry average for bio-based facilities
-                 administration: float = 0.01,              # 1% is a typical value for admin and support services in industrial operations
+                 administration: float = 0.20,              # 20% is an average from Peters, M. S. ., Timmerhaus, K. D. ., & West, R. E. . (2004). Analysis of Cost Estimation. In Plant design and economics for chemical engineers (pp. 226–279). McGraw-Hill.
                  construction_schedule: tuple = (0.5, 0.5), # 50% firt year and 50% the sencond by default 
                  startup_months: float = 0,                 # The startup is not taken into account
                  startup_FOCfrac: float = 0,                # The startup is not taken into account
@@ -164,4 +164,4 @@ class TEA(bst.TEA):
         return super()._FCI(TDC)
     
     def _FOC(self, FCI):
-        return (FCI*(self.property_tax + self.property_insurance + self.maintenance + self.administration) + self.labor_cost*(1+self.fringe_benefits+self.supplies))
+        return (FCI*(self.property_tax + self.property_insurance + self.maintenance) + self.labor_cost*(1 + self.fringe_benefits + self.supplies + self.administration))
