@@ -122,7 +122,7 @@ class TEA(bst.TEA):
                  operating_days: float = 330,               # 330 days by default 
                  lang_factor: float = None,                 # If no Lang factor is defined, all the installation costs are calculated using the bare module factor
                  labor_cost: float = None,                  
-                 fringe_benefits: float = 0.30,             # 30% is a typical for Western Europe / Spain 
+                 fringe_benefits: float = 0.10,             # 30% is a typical for Western Europe / Spain 
                  property_tax: float = 0.01,                # 1% of FCI as an estimation for industrial property taxes 
                  property_insurance: float = 0.005,         # 0.5% of FCI is a standard for latge-scale process plants
                  supplies: float = 0.05,                    # 5% is a common assumption for indirect material expenses
