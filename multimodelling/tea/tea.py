@@ -112,9 +112,74 @@ def Load_Process_Settings(
 
 class TEA(bst.TEA):
     """
+
+    This object performs the techno-economic analysis of the system
+    given.
+
+    Parameters
+    ----------
+    system : bst.System
+        BioSTEAM System object which simulates the process.
+    IRR : float
+        Internal Return Rate. Set to 0.10 by default.
+    duration : tuple
+        Lifetime of the project used to calculate all financial
+        indicators and cashflows.
+    depreciation : str | np.ndarray
+        Depreciation schedule array or string with format '{schedule}{years}',
+        where years is the number of years until the property value is 0 and schedule
+        is one of the following: 'MACRS', 'SL', 'DDB' or 'SYD'. Default to venture years.
+    income_tax : float
+        Income tax rate. Set to 0.25 by default which is the corporate rate in Spain.
+    operating_days : float
+        Number of operating days per year.
+    lang_factor : float | None
+        Lang factor for estimating the fixed capital investment from total purchase cost.
+        If no lang is provided, it is estimated using the bare module factors.
+    labor_cost : float
+        Total labor cost per year ($/year).
+    fringe_benefits : float
+        Fraction of labor cost for fringe benefits. Set to 0.247 by default since it is the
+        average inside UE.
+    property_tax : float
+        Property tax as a fraction of fixed capital investment. Set to 1% by default.
+    property_insurance : float
+        Insurance as a fraction of fixed capital investment. Set to 1% by default.
+    maintenance : float
+        Equipment maintenance costs as a fraction of fixed capital investment. Set to
+        7% by default.
+    supplies : float
+        Operating supplies as a fraction of maintenance. Set to 15% by default.
+    administration : float
+        Administration cost as a fraction of labour cost. Set to 20% by default.
+    construction_schedule : tuple
+        Schedule for plant construction which represents the fraction of the fixed capital
+        investment spent each year. Note that the construction years will be calculated based
+        on the tuple length. Set to (0.5,0.5) by default which means 50% the first year and 50%
+        the second year.
+    startup_months : float
+        Startup time in months until the steady state is achieved.
+    startup_FOCfrac : float
+        Fraction of fixed operating costs incurred during startup.
+    startup_VOCfrac : float
+        Fraction of variable operating costs incurred during startup.
+    startup_salesfrac : float
+        Fraction of sales during startup.
+    WC_over_FCI : float
+        Working capital as a fraction of fixed capital investment.
+    finance_interest : float
+        Yearly interest of loan as a fraction.
+    finance_years : int
+        Number of years the loan is paid for.
+    finance_fraction : float
+        Fraction of capital cost which needs to be financed.
+    accumulate_interest_during_construction : bool
+        Whether to accumulate interest during construction years. Set
+        to False by default.
+
     """
     def __init__(self,
-                 system: object = None,
+                 system: bst.System = None,
                  IRR: float = 0.10,                         # 10% is a common target in medium-risk industrial projects
                  duration: tuple = None,                    
                  depreciation: str | np.ndarray = 'SL',     # Straight line 
@@ -124,9 +189,9 @@ class TEA(bst.TEA):
                  labor_cost: float = None,                  
                  fringe_benefits: float = 0.247,            # Non-labour cost from European countries https://ec.europa.eu/eurostat/statistics-explained/index.php?title=Wages_and_labour_costs#Net_earnings_and_tax_burden 
                  property_tax: float = 0.01,                # 1% of FCI as an estimation for industrial property taxes 
-                 property_insurance: float = 0.005,         # 0.5% of FCI is a standard for latge-scale process plants
-                 supplies: float = 0.05,                    # 5% is a common assumption for indirect material expenses
-                 maintenance: float = 0.03,                 # 3% is an industry average for bio-based facilities
+                 property_insurance: float = 0.01,          # 1% of FCI is a standard for latge-scale process plants
+                 supplies: float = 0.15,                    # 15% of maintenance from Peters, M. S. ., Timmerhaus, K. D. ., & West, R. E. . (2004). Analysis of Cost Estimation. In Plant design and economics for chemical engineers (pp. 226–279). McGraw-Hill. 
+                 maintenance: float = 0.07,                 # 7% from Peters, M. S. ., Timmerhaus, K. D. ., & West, R. E. . (2004). Analysis of Cost Estimation. In Plant design and economics for chemical engineers (pp. 226–279). McGraw-Hill.
                  administration: float = 0.20,              # 20% is an average from Peters, M. S. ., Timmerhaus, K. D. ., & West, R. E. . (2004). Analysis of Cost Estimation. In Plant design and economics for chemical engineers (pp. 226–279). McGraw-Hill.
                  construction_schedule: tuple = (0.5, 0.5), # 50% firt year and 50% the sencond by default 
                  startup_months: float = 0,                 # The startup is not taken into account
@@ -164,4 +229,4 @@ class TEA(bst.TEA):
         return super()._FCI(TDC)
     
     def _FOC(self, FCI):
-        return (FCI*(self.property_tax + self.property_insurance + self.maintenance) + self.labor_cost*(1 + self.fringe_benefits + self.supplies + self.administration))
+        return (FCI*(self.property_tax + self.property_insurance + self.maintenance + self.maintenance * self.supplies) + self.labor_cost*(1 + self.fringe_benefits + self.administration))
