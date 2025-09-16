@@ -1,9 +1,13 @@
 """
 """
 
+import numpy as np
+from typing import Mapping, Sequence, Union
+
 __all__ = (
     "discounting_to_present_value",
     "updating_to_future_value",
+    "build_nominal_factor",
     "calculate_labor_requirements"
 )
 
@@ -61,6 +65,77 @@ def updating_to_future_value(value: float = None, growth_rate: float = None, yea
 
     # Return the future value
     return Future_Value
+
+def build_nominal_factor(years: Sequence[int], base_year: int, yearly_rates: Union[float, Mapping[int, float]]) -> np.ndarray:
+    """
+    
+    Compute multiplicative factors to convert real (base-year) monetary values
+    into nominal values for each year.
+
+    For a given year y, the factor is:
+        factor(y) = Π_{k=base_year+1..y} (1 + r_k)
+    where r_k is the annual growth/inflation rate applicable to year k.
+    By convention, factor(base_year) = 1.0.
+
+    Parameters
+    ----------
+    years
+        A sequence of integer years aligned with your cash-flow table index
+        (e.g., [2026, 2027, 2028]) or relative year counters (e.g., [-2, -1, 0, 1, ...]).
+        The function returns one factor per element in `years`, in the same order.
+    base_year
+        The base year at which your values are expressed in real terms.
+        Typically this is `years[0]`. Values at `base_year` should not be scaled.
+    yearly_rates
+        Either:
+          • A float r (e.g., 0.03 for 3%): a constant annual growth/inflation rate, or
+          • A mapping {year: rate} giving a (possibly varying) rate for each calendar year.
+            Any year not present in the mapping is assumed to have rate 0.0.
+
+        Important: If you pass a mapping, its keys must be in the same year
+        coordinate as `years` (i.e., calendar years if `years` are calendar years;
+        relative offsets if `years` are relative integers).
+
+    Returns
+    -------
+    numpy.ndarray
+        A 1D array of multiplicative factors aligned with `years`.
+        The element corresponding to `base_year` equals 1.0; later years are the
+        cumulative product of (1 + rate) up to that year.
+
+    """
+    years = np.asarray(years, dtype = int)
+    base_year = int(base_year)
+
+    # Constant rate
+    if isinstance(yearly_rates, (int,float)):
+        r = float(yearly_rates)
+        return (1 + r) ** (years - base_year)
+    
+    # Mapping of year -> rate
+    def rate_for(y: int) -> float:
+        try:
+            return float(yearly_rates[y])
+        except (KeyError, TypeError):
+            return 0.0
+    
+    # The last year
+    max_year = years.max()
+
+    # Build cumulative product from base_year + 1 ... max_year
+    acc = 1.0
+    cumulative = [1.0]
+    for y in range (base_year + 1, max_year + 1):
+        acc *= (1.0 + rate_for(y))
+        cumulative.append(acc)
+    cumulative = np.asarray(cumulative, dtype = float)
+
+    # Map factors back to requested years
+    factors = np.ones_like(years, dtype = float)
+    mask = years > base_year
+    idx = years[mask] - base_year
+    factors[mask] = cumulative[idx]
+    return factors
 
 # Labor calculation
 ## Labor/Equipment correlation
