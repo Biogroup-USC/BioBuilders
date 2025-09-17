@@ -1,7 +1,8 @@
-from .tea import Load_Process_Settings, TEA, InflationTEA
+from .tea import TEA, InflationTEA
+from .settingsprocess import load_process_settings
 
 __all__ = (
-    "Load_Process_Settings",
+    "load_process_settings",
     "TEA",
     "InflationTEA",
 )
