@@ -88,8 +88,8 @@ def build_nominal_factor(years: Sequence[int], base_year: int, yearly_rates: Uni
         Typically this is `years[0]`. Values at `base_year` should not be scaled.
     yearly_rates
         Either:
-          • A float r (e.g., 0.03 for 3%): a constant annual growth/inflation rate, or
-          • A mapping {year: rate} giving a (possibly varying) rate for each calendar year.
+          A float r (e.g., 0.03 for 3%): a constant annual growth/inflation rate, or
+          A mapping {year: rate} giving a (possibly varying) rate for each calendar year.
             Any year not present in the mapping is assumed to have rate 0.0.
 
         Important: If you pass a mapping, its keys must be in the same year

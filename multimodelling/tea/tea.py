@@ -11,114 +11,140 @@ from biosteam._tea import (
 )
 from typing import Mapping
 from ..mathtools.economy import build_nominal_factor
+from numba import njit
 
 __all__ = (
-    "Load_Process_Settings",
     "TEA",
     "TEAInflation"
 )
 
-def Load_Process_Settings(
-            CEPCI: float = 567.5,           # CEPCI is 567.5 (2017) by default (BioSTEAM)
-            electricity: float = 0.0782,    # electricity price is 0.0782 USD/kWh by default (BioSTEAM)
-            heatutility: list | dict = None,
-            coolutility: list | dict = None,
-            streamsprice: dict = None,      # The keys of this dict must be the Stream objects from BioSTEAM
-            ):
-        """
+@njit(cache = True)
+def fill_nominal_taxable_and_nontaxable_cashflows_without_loan(
+    FCI, WC, sales0, VOC_mat0, VOC_util0, FOC0,
+    construction_schedule, start,
+    C_FC, C_WC, S, C,
+    f_sales, f_capex, f_mat, f_util, f_foc, f_wc,
+    startup_time,
+    startup_VOCfrac, startup_FOCfrac, startup_salesfrac, 
+):
+    """
 
-        This function loads all the process settings nedeed to perform the techno economical
-        analysis (TEA). 
+    Populate (in-place) nominal per-year arrays for CAPEX (construction and any
+    pre-filled replacements), Working Capital (deposit/release), Sales, and
+    Operating Costs (VOC + FOC). Startup is applied in the first operating year.
 
-        A CEPCI, electricity, heating agents and cooling agents prices are needed when performing a
-        TEA. Moreover, the prices of certain streams must be defined. For example, the price of the 
-        substrate or the enzymes. So, this function simplifies the definition of all process settings
-        reducing the code. However, the BioSTEAM workflow could be follow as it is showed in 
-        https://biosteam.readthedocs.io/en/latest/tutorial/Sugarcane_ethanol_biorefinery.html.
+    Parameters
+    ----------
+    FCI : float
+        Fixed Capital Investment in base-year currency.
+    WC : float
+        Working capital in base-year currency (e.g., WC_over_FCI * FCI).
+    sales0 : float
+        Steady-state annual sales in base-year currency (pre-inflation).
+    VOC_mat0 : float
+        Steady-state annual raw materials cost in base-year currency.
+    VOC_util0 : float
+        Steady-state annual utilities cost in base-year currency.
+    FOC0 : float
+        Steady-state annual fixed operating cost in base-year currency.
+    construction_schedule : 1d ndarray (len == start)
+        Fractions of FCI invested per construction year.
+    start : int
+        Number of construction years; index of first operating year in arrays.
+    C_FC, C_WC, D, S, C : 1d ndarrays
+        Output arrays (length = start + years). D is not modified here.
+    f_sales, f_capex, f_mat, f_util, f_foc, f_wc : 1d ndarrays
+        Nominal factors aligned with the full calendar index (construction + operation).
+    startup_time : float in [0,1]
+        Fraction of the first operating year under startup conditions.
+    startup_VOCfrac, startup_FOCfrac, startup_salesfrac : float in [0,1]
+        Fractions applied to VOC, FOC and Sales during the startup portion.
 
-        Parameters
-        ----------
-        CEPCI: float
-            The CEPCI is the Chemical Engineering Plant Cost Index which is set by default to 567.5 (2013).
-        electricity: float
-            The electricity parameters refers to its price in USD/kWh. It is setted by default to 0.0782 USD/kWh.
-        heatutility: list | dict
-            This parameter is a list of the heating agents used between the following: 'low_pressure_steam', 'medium_pressure_steam',
-            'high_pressure_steam', 'natural_gas'.
-        coolutility: list | dict
-            This parameter is a list of the cooling agents used between the following: 'cooling_water', 'chilled_water', 'chilled_brine',
-            'propane', 'propylene', 'ethylene'.
-        streamsprice: dict
-            The streams price dictionary contains all the prices of certain streams like the raw materials, solvents or others. The structure of
-            this dictionary is the following: {Stream object : price}. The Stream object is the bst.Stream().
+    """
+    # Fill C_FC
+    C_FC[:start] = FCI * construction_schedule
 
-        """
-        Settings = bst.settings
-        # CEPCI
-        Settings.CEPCI = CEPCI
+    # Nominalise CAPEX
+    C_FC[:] *= f_capex
 
-        # Electricity price
-        Settings.electricity_price = electricity
+    # Nominalise WC
+    wc_base = WC
+    C_WC[start-1] = wc_base * f_wc[start-1]
+    C_WC[-1] = -wc_base * f_wc[-1]
 
-        # Set the heat utility
-        Heat_Utility_ = bst.HeatUtility
-        Heat_Utility_List = []
-        if heatutility is None:
-            # by default the only heat utility used is low pressure steam produced on-site
-            Heat_Utility = Heat_Utility_.get_heating_agent('low_pressure_steam')
-            Heat_Utility.heat_transfer_efficiency = 0.9   #       by default from https://biosteam.readthedocs.io/en/latest/tutorial/Sugarcane_ethanol_biorefinery.html 
-            Heat_Utility.T = 529.2                        # K     by default from https://biosteam.readthedocs.io/en/latest/tutorial/Sugarcane_ethanol_biorefinery.html
-            Heat_Utility.P = 44e5                         # Pa    by default from https://biosteam.readthedocs.io/en/latest/tutorial/Sugarcane_ethanol_biorefinery.html
-            Heat_Utility_List.append(Heat_Utility)
-        elif isinstance(heatutility, list):
-            # A list of heat utilities from BioSTEAM could be provided and the P, T and heat effiency values are the default 
-            for utility in heatutility:
-                Heat_Utility = Heat_Utility_.get_heating_agent(utility)
-                Heat_Utility_List.append(Heat_Utility)
-        elif isinstance(heatutility, dict):
-            # A dictionary which contains the BioSTEAM heat utility as keys and its cost as value
-            for utility in heatutility.keys():
-                try:
-                    Heat_Utility = Heat_Utility_.get_heating_agent(utility)
-                    Heat_Utility.regeneration_price = heatutility[utility]*Heat_Utility.MW
-                    Heat_Utility_List.append(Heat_Utility)
-                except LookupError:
-                    Settings.stream_prices[utility] = heatutility[utility]
-                    Heat_Utility_List.append(utility)
+    # Nominalise sales
+    S_nom = sales0 * f_sales[start:]
+
+    # Nominalise material cost
+    VOC_mat_nom = VOC_mat0 * f_mat[start:]
+
+    # Nominalise utility cost
+    VOC_util_nom = VOC_util0 * f_util[start:]
+
+    # Nominalise FOC
+    FOC_nom = FOC0 * f_foc[start:]
+
+    # Calculate C and S
+    C[start:] = FOC_nom + VOC_mat_nom + VOC_util_nom
+    S[start:] = S_nom
+
+    # Calculate C and S of first years (including startup)
+    w0 = startup_time
+    w1 = 1. - w0
+    VOC = VOC_mat_nom[0] + VOC_util_nom[0]
+    FOC = FOC_nom[0]
+    sales = S_nom[0]
+    
+    C[start] = (w0 * startup_VOCfrac * VOC + w1 * VOC
+                + w0 * startup_FOCfrac * FOC + w1 * FOC)
+    S[start] = w0 * startup_salesfrac * sales + w1 * sales
+
+def nominal_taxable_and_nontaxable_cashflows(
+    FCI, WC, sales0, VOC_mat0, VOC_util0, FOC0,
+    construction_schedule, start,
+    C_FC, C_WC, D, S, C, L, LP,
+    f_sales, f_capex, f_mat, f_util, f_foc, f_wc,
+    startup_time, startup_VOCfrac, startup_FOCfrac, startup_salesfrac,
+    finance_interest, finance_years, finance_fraction, accumulate_interest_during_construction,
+
+):
+    """
+    """
+    # fill nominal cashflows excluding finances
+    fill_nominal_taxable_and_nontaxable_cashflows_without_loan(
+        FCI, WC, sales0, VOC_mat0, VOC_util0, FOC0,
+        construction_schedule, start,
+        C_FC, C_WC, S, C,
+        f_sales, f_capex, f_mat, f_util, f_foc, f_wc,
+        startup_time, startup_VOCfrac, startup_FOCfrac, startup_salesfrac 
+    )
+
+    # Finance
+    if finance_interest:
+        # Interest and years to pay
+        interest = finance_interest
+        years_pay = finance_years if finance_years else 0
         
-        # Set the cool utility
-        Cool_Utility_ = bst.HeatUtility
-        Cool_Utility_List = []
-        if coolutility is None:
-            # by default the only heat utility used is low pressure steam produced on-site
-            Cool_Utility = Cool_Utility_.get_cooling_agent('cooling_water')
-            Cool_Utility.heat_transfer_efficiency = 0.9   #     by default from https://biosteam.readthedocs.io/en/latest/tutorial/Sugarcane_ethanol_biorefinery.html 
-            Cool_Utility.T = 273.15 + 25                  # K   Set to 25ºC by default
-            Cool_Utility.P = 101325                       # Pa  by default in BioSTEAM 
-            Cool_Utility_List.append(Cool_Utility)
-        elif isinstance(coolutility, list):
-            # A list of heat utilities from BioSTEAM could be provided and the P, T and heat effiency values are the default from BioSTEAM
-            for utility in coolutility:
-                Cool_Utility = Cool_Utility_.get_cooling_agent(utility)
-                Cool_Utility_List.append(Cool_Utility)
-        elif isinstance(coolutility, dict):
-            # A dictionary which contains the BioSTEAM cool utility as keys and its cost as value
-            for utility in coolutility.keys():
-                try:
-                    Cool_Utility = Cool_Utility_.get_cooling_agent(utility)
-                    Cool_Utility.cost = coolutility[utility]
-                    Cool_Utility_List.append(Cool_Utility)
-                except LookupError:
-                    Settings.stream_prices[utility] = coolutility[utility]
-                    Cool_Utility_List.append(coolutility[utility])
+        # Calculate the amount of the loan 
+        L[:start] = loan = finance_fraction * C_FC[:start]
 
-        # Set the prices of the process streams given
-        for stream in streamsprice.keys():
-            if not isinstance(stream, object):
-                raise ValueError("The keys of streamsprice dictionary must be the Stream objects. {} is not a Stream object from Biosteam".format(stream))
-            stream.price = streamsprice[stream]
+        # Accumulate interest during construction or not
+        if accumulate_interest_during_construction:
+            loan_principal = loan_principal_with_interest(loan, interest)
+        else:
+            loan_principal = loan.sum()
         
-        return Heat_Utility_List, Cool_Utility_List
+        # Solve loan payment
+        LP[start:start + years_pay] = solve_payment(loan_principal, interest, years_pay)
+        taxable_cashflow = S - C - D - LP
+        nontaxable_cashflow = D + L - C_FC - C_WC
+        if not accumulate_interest_during_construction:
+            nontaxable_cashflow[:start] -= loan * interest
+    else:
+        taxable_cashflow = S - C - D
+        nontaxable_cashflow = D - C_FC - C_WC
+    
+    return taxable_cashflow, nontaxable_cashflow
 
 class TEA(bst.TEA):
     """
@@ -334,13 +360,13 @@ class InflationTEA(bst.TEA):            #TODO add inflation to sales, materials,
                  finance_years: int = None, 
                  finance_fraction: float = None, 
                  accumulate_interest_during_construction: bool = False, 
-                 sales_rate: float | Mapping[int, float] = None,
-                 materials_rate: float | Mapping[int, float] = None,
-                 utilities_rate: float | Mapping[int, float] = None,
+                 sales_rates: float | Mapping[int, float] = None,
+                 materials_rates: float | Mapping[int, float] = None,
+                 utilities_rates: float | Mapping[int, float] = None,
                  foc_rates: float | Mapping[int, float] = None,
                  capex_rates: float | Mapping[int, float] = None,
                  wc_rates: float | Mapping[int, float] = None,
-                 global_rate: float | Mapping[int, float] = None,
+                 global_rates: float | Mapping[int, float] = None,
                 ):
         
         # Call to parent constructor
@@ -358,16 +384,13 @@ class InflationTEA(bst.TEA):            #TODO add inflation to sales, materials,
         self.administration = administration
 
         # New inflation parameters
-        self.sales_rate = sales_rate
-        self.materials_rate = materials_rate
-        self.utilities_rate = utilities_rate
-        self.foc_rate = foc_rates
-        self.capex_rate = capex_rates
-        self.wc_rate = wc_rates
-        self.global_rate = global_rate
-
-        # Use global rate value if provided
-        if self.global_rate: self.sales_rate = self.materials_rate = self.utilities_rate = self.foc_rate = self.capex_rate = self.wc_rate = self.global_rate
+        self.sales_rates = sales_rates
+        self.materials_rates = materials_rates
+        self.utilities_rates = utilities_rates
+        self.foc_rates = foc_rates
+        self.capex_rates = capex_rates
+        self.wc_rates = wc_rates
+        self.global_rates = global_rates
 
     def _years_index(self) -> np.ndarray:
         """
@@ -378,6 +401,14 @@ class InflationTEA(bst.TEA):            #TODO add inflation to sales, materials,
         """
         return np.arange(self._duration[0] - self._start, self._duration[1], dtype = int)
     
+    def _pick_rate(self, specific):
+        """
+        
+        Use the specific rate when provided. Otherwise, use global rate.
+
+        """
+        return specific if specific is not None else self.global_rates
+
     def _factor(self, rates: float | Mapping[int, float]) -> np.ndarray:
         """
         
@@ -386,7 +417,8 @@ class InflationTEA(bst.TEA):            #TODO add inflation to sales, materials,
         
         """
         years = self._years_index()
-        return build_nominal_factor(years, years[0], rates) if rates is not None else np.ones_like(years, dtype = float)
+        picked = self._pick_rate(rates)
+        return build_nominal_factor(years, years[0], picked) if picked is not None else np.ones_like(years, dtype = float)
 
     def _DPI(self, installed_equipment_cost):
         return super()._DPI(installed_equipment_cost)
@@ -406,250 +438,101 @@ class InflationTEA(bst.TEA):            #TODO add inflation to sales, materials,
         inside cashflow assembly.
 
         """
-        foc_from_fci = FCI*(self.property_tax + self.property_insurance + self.maintenance + self.maintenance * self.supplies) * FCI
+        foc_from_fci = FCI * (self.property_tax + self.property_insurance + self.maintenance + self.maintenance * self.supplies)
         labour = self.labor_cost * (1 + self.fringe_benefits + self.administration)
         return foc_from_fci + labour
     
     def _taxable_nontaxable_depreciation_cashflows(self):
         """
         """
-        # Parameters non-influenced by inflation
-        TDC = self.TDC
-        FCI = self._FCI(TDC)
-        start = self._start
-        years = self._years
+        # Base-year cashflows
+        TDC, FCI = self.TDC, self._FCI(self.TDC)
+        FOC0 = self._FOC(FCI)
+        start, years = self._start, self._years
+        VOC_mat0, VOC_util0 = self.system.material_cost, self.system.utility_cost
+        sales0 = self.sales
 
-        # Parameters influenced by inflation
-        FOC0 = self._FOC(FCI)                   # Base-year FOC
-        VOCm0 = self.system.material_cost       # Base-year materials
-        VOCu0 = self.utility_cost               # Base-year utilities
-        sales0 = self.sales                     # Base-year sales
+        # Arrays for calculating cashflow
+        C_FC, C_WC, D, S, C, L, LP = np.zeros((7, start + years))
 
-        # Arrays
-        D, C_FC, C_WC, Loan, LP, C, S = np.zeros((7, start + years))
-
-        # Depreciation (historical cost)
+        # Fill depreciation array
         self._fill_depreciation_array(D, start, years, TDC)
 
-        # CAPEX
-        C_FC[:start] = FCI * self._construction_schedule
-
-        # Add equipment replacements
-        units_iter = self.system.unit_capital_costs.values() if isinstance(self.system, bst.AgileSystem) else self.system.cost_units
-        for u in units_iter:
-            add_all_replacement_costs_to_cashflow_array(u, C_FC, years, start, self.lang_factor)
+        # Add the cost of the replacements
+        units_cap_costs = self.system.unit_capital_costs if isinstance(self.system, bst.AgileSystem) else self.system.cost_units
+        for unit in units_cap_costs:
+            add_all_replacement_costs_to_cashflow_array(unit, C_FC, years, start, self.system.lang_factor)
         
-        # Inflation factors aligned with full year axis
-        years_idx = self._years_index()
-        f_capex = self._factor(self.capex_rate)
-        f_sales = self._factor(self.sales_rate)
-        f_mat = self._factor(self.materials_rate)
-        f_util = self._factor(self.utilities_rate)
-        f_foc = self._factor(self.foc_rate)
-        f_wc = self._factor(self.wc_rate)
+        # Load nominal factor with _factor helper
+        f_sales = self._factor(self.sales_rates)
+        f_capex = self._factor(self.capex_rates)
+        f_mat = self._factor(self.materials_rates)
+        f_util = self._factor(self.utilities_rates)
+        f_foc = self._factor(self.foc_rates)
+        f_wc = self._factor(self.wc_rates)
 
-        # Update CAPEX by year
-        C_FC *= f_capex
-
-        # Update working capital
-        wc_base = self.WC_over_FCI * FCI            # Base-year amount
-        C_WC[start -1] = wc_base * f_wc[start - 1]  # Deposit before operating
-        C_WC[-1] = -wc_base * f_wc[-1]              # Release at the endo of the project
-
-        # Update sales and operating costs
-        S_op = sales0 * f_sales[start:]
-        VOCm_op = VOCm0 * f_mat[start:]
-        VOCu_op = VOCu0 * f_util[start:]
-        FOC_op = FOC0 * f_foc[start:]
-
-        w0 = self._startup_time
-        if years >= 1:
-            # first operating year: weighted between "startup" and "steady"
-            C[start] = w0*(self.startup_VOCfrac*(VOCm_op[0] + VOCu_op[0]) + self.startup_FOCfrac*FOC_op[0]) \
-                       + (1.0 - w0)*((VOCm_op[0] + VOCu_op[0]) + FOC_op[0])
-            S[start] = w0*self.startup_salesfrac*S_op[0] + (1.0 - w0)*S_op[0]
-        if years > 1:
-            C[start+1:] = (VOCm_op[1:] + VOCu_op[1:]) + FOC_op[1:]
-            S[start+1:] = S_op[1:]
-
-        # Financing (nominal)
-        if self.finance_interest:
-            r = self.finance_interest
-            n = self.finance_years or 0
-            Loan[:start] = (self.finance_fraction or 0.0) * C_FC[:start]
-
-            if self.accumulate_interest_during_construction:
-                principal0 = loan_principal_with_interest(Loan[:start], r)
-            else:
-                principal0 = Loan[:start].sum()
-
-            LP[start:start + n] = solve_payment(principal0, r, n)
-
-            taxable_cashflow    = S - C - D - LP
-            nontaxable_cashflow = D + Loan - C_FC - C_WC
-
-            # If not capitalizing interest during construction, subtract it from NPV as cash out
-            if not self.accumulate_interest_during_construction:
-                LI_construction = Loan[:start] * r
-                nontaxable_cashflow[:start] -= LI_construction
-        else:
-            taxable_cashflow    = S - C - D
-            nontaxable_cashflow = D - C_FC - C_WC
-
-        return taxable_cashflow, nontaxable_cashflow, D
+        # calculate taxable and non taxable cashflows
+        return (
+            *nominal_taxable_and_nontaxable_cashflows(
+                FCI, FCI * self.WC_over_FCI, sales0, VOC_mat0, VOC_util0, FOC0,
+                self.construction_schedule, start,
+                C_FC, C_WC, D, S, C, L, LP,
+                f_sales, f_capex, f_mat, f_util, f_foc, f_wc,
+                self._startup_time, self.startup_VOCfrac, self.startup_FOCfrac, self.startup_salesfrac,
+                self.finance_interest, self.finance_years, self.finance_fraction, self.accumulate_interest_during_construction, 
+            ),
+            D
+        )
     
     def get_cashflow_table(self):
         """
-        Return a cashflow table. If inflation rates are provided, the table is **nominal**
-        (sales, OPEX, CAPEX, WC scaled per-year; depreciation at historical cost).
-        NPV is computed with your TEA IRR (use nominal IRR for nominal flows).
         """
-        TDC = self.TDC
-        FCI = self._FCI(TDC)
-        start = self._start
-        years = self._years
+        # Base-year cashflows
+        TDC, FCI = self.TDC, self._FCI(self.TDC)
+        FOC0 = self._FOC(FCI)
+        VOC0 = VOC_mat0, VOC_util0 = self.system.material_cost, self.system.utility_cost
+        sales0 = self.sales
+        
+        # Lifetime
+        start, years = self._start, self._years
         length = start + years
 
-        # base-year blocks
-        FOC0 = self._FOC(FCI)
-        VOCm0 = self.system.material_cost
-        VOCu0 = self.system.utility_cost
-        sales0 = self.sales
+        # Generate arrays
+        C_D, C_FC, C_WC, D, L, LI, LP, LPl, C, S, T, I, TE, FL, NE, CF, DF, NPV, CNPV = data = np.zeros((19, length))
 
-        # factors
-        years_idx = self._years_index()
-        f_capex = self._factor(self.capex_rate)
-        f_sales = self._factor(self.sales_rate)
-        f_mat   = self._factor(self.materials_rate)
-        f_util  = self._factor(self.utilities_rate)
-        f_foc   = self._factor(self.foc_rate)
-        f_wc    = self._factor(self.wc_rate)
-
-        # arrays
-        C_D  = np.zeros(length)  # Depreciable capital outlay
-        C_FC = np.zeros(length)  # Fixed capital investment
-        C_WC = np.zeros(length)
-        D    = np.zeros(length)
-        L    = np.zeros(length)
-        LI   = np.zeros(length)
-        LP   = np.zeros(length)
-        LPl  = np.zeros(length)
-        C    = np.zeros(length)  # Annual operating cost (excl. dep.)
-        S    = np.zeros(length)
-        T    = np.zeros(length)
-        I    = np.zeros(length)
-        TE   = np.zeros(length)
-        FL   = np.zeros(length)
-        NE   = np.zeros(length)
-        CF   = np.zeros(length)
-        DF   = np.zeros(length)
-        NPV  = np.zeros(length)
-        CNPV = np.zeros(length)
-
-        # depreciation (historical)
+        # Fill depreciation
         self._fill_depreciation_array(D, start, years, TDC)
 
-        # CAPEX construction (base-year), then nominalize
-        C_D[:start]  = TDC * self._construction_schedule
-        C_FC[:start] = FCI * self._construction_schedule
-
-        # replacements (base-year amounts first)
-        units_iter = self.system.unit_capital_costs.values() if isinstance(self.system, bst.AgileSystem) else self.system.cost_units
-        for u in units_iter:
-            add_all_replacement_costs_to_cashflow_array(u, C_FC, years, start, self.lang_factor)
-            add_all_replacement_costs_to_cashflow_array(u, C_D,  years, start, self.lang_factor)
-
-        # nominalize CAPEX lines
-        C_FC *= f_capex
-        C_D  *= f_capex
-
-        # Working capital
-        wc_base = self.WC_over_FCI * FCI
-        C_WC[start - 1] = wc_base * f_wc[start - 1]
-        C_WC[-1]        = -wc_base * f_wc[-1]
+        # Build nominal factors array
+        f_sales = self._factor(self.sales_rates)
+        f_capex = self._factor(self.capex_rates)
+        f_mat = self._factor(self.materials_rates)
+        f_util = self._factor(self.utilities_rates)
+        f_foc = self._factor(self.foc_rates)
+        f_wc = self._factor(self.wc_rates)
         
-        # Sales and costs (nominal) with startup
-        S_op    = sales0 * f_sales[start:]
-        VOCm_op = VOCm0  * f_mat[start:]
-        VOCu_op = VOCu0  * f_util[start:]
-        FOC_op  = FOC0   * f_foc[start:]
+        # Nominalise CAPEX
+        
 
+        # Nominalise OPEX
+        FOC_nom = f_foc * FOC0
+        VOC_mat_nom = f_mat * VOC_mat0
+        VOC_util_nom = f_util * VOC_util0
+        
+        # Nominalise sales
+        S_nom = f_sales * sales0
+
+        # Calculate S and C
+        C[start:] = FOC_nom + VOC_mat_nom + VOC_util_nom
+        S[start:] = S_nom
+
+        # Calculate C and S of first years (including startup)
         w0 = self._startup_time
-        if years >= 1:
-            C[start] = w0*(self.startup_VOCfrac*(VOCm_op[0] + VOCu_op[0]) + self.startup_FOCfrac*FOC_op[0]) \
-                       + (1.0 - w0)*((VOCm_op[0] + VOCu_op[0]) + FOC_op[0])
-            S[start] = w0*self.startup_salesfrac*S_op[0] + (1.0 - w0)*S_op[0]
-        if years > 1:
-            C[start+1:] = (VOCm_op[1:] + VOCu_op[1:]) + FOC_op[1:]
-            S[start+1:] = S_op[1:]
+        w1 = 1. - w0
+        VOC = VOC_mat_nom[0] + VOC_util_nom[0]
+        FOC = FOC_nom[0]
+        sales = S_nom[0]
 
-        # Financing (nominal)
-        if self.finance_interest:
-            r = self.finance_interest
-            n = self.finance_years or 0
-            end = start + n
-            L[:start] = (self.finance_fraction or 0.0) * C_FC[:start]
-
-            # amortization schedule
-            if self.accumulate_interest_during_construction:
-                principal0 = loan_principal_with_interest(L[:start], r)
-            else:
-                principal0 = L[:start].sum()
-            LP[start:end] = solve_payment(principal0, r, n)
-
-            loan_principal = 0.0
-            if self.accumulate_interest_during_construction:
-                for i in range(end):
-                    li = (loan_principal + L[i]) * r
-                    LI[i] = li
-                    LPl[i] = loan_principal = loan_principal - LP[i] + li + L[i]
-            else:
-                for i in range(end):
-                    li = 0.0 if i < start else (loan_principal + L[i]) * r
-                    LI[i] = li
-                    LPl[i] = loan_principal = loan_principal - LP[i] + li + L[i]
-                LI[:start] = L[:start] * r
-
-        # Taxable / nontaxable cashflows and taxes
-        taxable_cashflow    = S - C - D - LP
-        nontaxable_cashflow = D + L - C_FC - C_WC
-        if self.finance_interest and not self.accumulate_interest_during_construction:
-            nontaxable_cashflow[:start] -= LI[:start]
-
-        TE[:] = taxable_earnings_with_fowarded_losses(taxable_cashflow)
-        FL[1:] = (taxable_cashflow - TE).cumsum()[:-1]
-        self._fill_tax_and_incentives(I, TE, nontaxable_cashflow, T, D)
-        NE[:] = taxable_cashflow + I - T
-        CF[:] = NE + nontaxable_cashflow
-
-        # Discount with TEA IRR (nominal if flows are nominal)
-        DF[:]  = 1.0 / (1.0 + self.IRR) ** self._get_duration_array()
-        NPV[:] = CF * DF
-        CNPV[:] = NPV.cumsum()
-
-        # Present in MM$
-        DF *= 1e6
-        data = np.vstack([C_D, C_FC, C_WC, D, L, LI, LP, LPl, C, S, T, I, TE, FL, NE, CF, DF, NPV, CNPV]) / 1e6
-        return bst.pd.DataFrame(
-            data.T,
-            index=np.arange(self._duration[0] - start, self._duration[1]),
-            columns=('Depreciable capital [MM$]',
-                     'Fixed capital investment [MM$]',
-                     'Working capital [MM$]',
-                     'Depreciation [MM$]',
-                     'Loan [MM$]',
-                     'Loan interest payment [MM$]',
-                     'Loan payment [MM$]',
-                     'Loan principal [MM$]',
-                     'Annual operating cost (excluding depreciation) [MM$]',
-                     'Sales [MM$]',
-                     'Tax [MM$]',
-                     'Incentives [MM$]',
-                     'Taxed earnings [MM$]',
-                     'Forwarded losses [MM$]',
-                     'Net earnings [MM$]',
-                     'Cash flow [MM$]',
-                     'Discount factor',
-                     'Net present value (NPV) [MM$]',
-                     'Cumulative NPV [MM$]'),
-        )
+        C[start] = (w0 * self.startup_VOCfrac * VOC + w1 * VOC
+                    + w0 * self.startup_FOCfrac * FOC + w1 * FOC)
+        S[start] = w0 * self.startup_salesfrac * sales + w1 * sales
