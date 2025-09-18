@@ -1,13 +1,14 @@
 """
 """
 import numpy as np
+import pandas as pd
 import biosteam as bst
 from biosteam._tea import (
     add_all_replacement_costs_to_cashflow_array,
     solve_payment,
     loan_principal_with_interest,
     taxable_earnings_with_fowarded_losses,
-    NPV_at_IRR
+    cashflow_columns
 )
 from typing import Mapping
 from ..mathtools.economy import build_nominal_factor
@@ -15,7 +16,7 @@ from numba import njit
 
 __all__ = (
     "TEA",
-    "TEAInflation"
+    "InflationTEA"
 )
 
 @njit(cache = True)
@@ -85,8 +86,9 @@ def fill_nominal_taxable_and_nontaxable_cashflows_without_loan(
     FOC_nom = FOC0 * f_foc[start:]
 
     # Calculate C and S
-    C[start:] = FOC_nom + VOC_mat_nom + VOC_util_nom
-    S[start:] = S_nom
+    start1 = start + 1
+    C[start1:] = (FOC_nom + VOC_mat_nom + VOC_util_nom)[1:]
+    S[start1:] = S_nom[1:]
 
     # Calculate C and S of first years (including startup)
     w0 = startup_time
@@ -267,7 +269,7 @@ class TEA(bst.TEA):
     def _FOC(self, FCI):
         return (FCI*(self.property_tax + self.property_insurance + self.maintenance + self.maintenance * self.supplies) + self.labor_cost*(1 + self.fringe_benefits + self.administration))
 
-class InflationTEA(bst.TEA):            #TODO add inflation to sales, materials, utilities, foc, capex and wc
+class InflationTEA(bst.TEA):
     """
 
     This object performs the techno-economic analysis of the system
@@ -490,7 +492,7 @@ class InflationTEA(bst.TEA):            #TODO add inflation to sales, materials,
         # Base-year cashflows
         TDC, FCI = self.TDC, self._FCI(self.TDC)
         FOC0 = self._FOC(FCI)
-        VOC0 = VOC_mat0, VOC_util0 = self.system.material_cost, self.system.utility_cost
+        VOC_mat0, VOC_util0 = self.system.material_cost, self.system.utility_cost
         sales0 = self.sales
         
         # Lifetime
@@ -512,21 +514,30 @@ class InflationTEA(bst.TEA):            #TODO add inflation to sales, materials,
         f_wc = self._factor(self.wc_rates)
         
         # Nominalise CAPEX
-        
+        system = self.system
+        lang_factor = self.lang_factor
+        unit_capital_costs = system.unit_capital_costs if isinstance(system, bst.AgileSystem) else system.cost_units
+        for unit in unit_capital_costs: add_all_replacement_costs_to_cashflow_array(unit, C_FC, years, start, lang_factor)
 
-        # Nominalise OPEX
-        FOC_nom = f_foc * FOC0
-        VOC_mat_nom = f_mat * VOC_mat0
-        VOC_util_nom = f_util * VOC_util0
-        
-        # Nominalise sales
-        S_nom = f_sales * sales0
+        C_FC[:start] = FCI * self.construction_schedule
+        C_FC *= f_capex
+
+        # Nominalise depreciable capital
+        C_D[:start] = TDC * self.construction_schedule
+        C_D *= f_capex
+
+        # Nominalise OPEX and sales
+        FOC_nom         =   FOC0        *   f_foc[start:]
+        VOC_mat_nom     =   VOC_mat0    *   f_mat[start:]
+        VOC_util_nom    =   VOC_util0   *   f_util[start:]
+        S_nom           =   sales0      *   f_sales[start:]
 
         # Calculate S and C
-        C[start:] = FOC_nom + VOC_mat_nom + VOC_util_nom
-        S[start:] = S_nom
+        start1 = start + 1
+        C[start1:] = (FOC_nom + VOC_mat_nom + VOC_util_nom)[1:]
+        S[start1:] = S_nom[1:]
 
-        # Calculate C and S of first years (including startup)
+        # Calculate C and S of first year (including startup)
         w0 = self._startup_time
         w1 = 1. - w0
         VOC = VOC_mat_nom[0] + VOC_util_nom[0]
@@ -536,3 +547,80 @@ class InflationTEA(bst.TEA):            #TODO add inflation to sales, materials,
         C[start] = (w0 * self.startup_VOCfrac * VOC + w1 * VOC
                     + w0 * self.startup_FOCfrac * FOC + w1 * FOC)
         S[start] = w0 * self.startup_salesfrac * sales + w1 * sales
+
+        # Nominalise working capital
+        WC = self.WC_over_FCI * FCI
+        C_WC[start-1] = WC * f_wc[start-1]
+        C_WC[-1] = -WC * f_wc[-1]
+
+        # Add finance if a fraction of TCI is a loan; calculate taxable and non taxable cashflows
+        if self.finance_interest:
+            # Financial parameters
+            interest = self.finance_interest
+            years_pay = self.finance_years
+            end = start + years_pay
+            
+            # Calculate loan
+            L[:start] = loan = self.finance_fraction * (C_FC[:start])
+
+            # Calculate 
+            if self.accumulate_interest_during_construction:
+                initial_loan_principal = loan_principal_with_interest(loan, interest)
+            else:
+                initial_loan_principal = loan.sum()
+            
+            # Solve loan payment
+            LP[start:end] = solve_payment(initial_loan_principal, interest, years_pay)
+            
+            # Calculate interest during construction
+            loan_principal = 0
+            if self.accumulate_interest_during_construction:
+                for i in range(end):
+                    LI[i] = li = (loan_principal + L[i]) * interest
+                    LPl[i] = loan_principal = loan_principal - LP[i] + li + L[i]
+            else:
+                for i in range(end):
+                    if i < start:
+                        li = 0.0
+                    else:
+                        li = (loan_principal + L[i]) * interest
+                    LI[i] = li
+                    LPl[i] = loan_principal = loan_principal - LP[i] + li + L[i]
+                LI[:start] = L[:start] * interest
+            taxable_cashflow = S - C - D - LP
+            nontaxable_cashflow = D + L -C_FC - C_WC
+            if not self.accumulate_interest_during_construction:
+                nontaxable_cashflow[:start] -= LI[:start]
+        else:
+            taxable_cashflow = S - C - D
+            nontaxable_cashflow = D - C_FC - C_WC
+        
+        # Taxable earnings with forwarded losses
+        TE[:] = taxable_earnings_with_fowarded_losses(taxable_cashflow)
+        
+        # Forwarded losses
+        FL[1:] = (taxable_cashflow -TE).cumsum()[:-1]
+
+        # Fill taxes and incentives
+        self._fill_tax_and_incentives(I, TE, nontaxable_cashflow, T, D)
+
+        # Fill net earnings
+        NE[:] = taxable_cashflow + I - T
+
+        # Fill cash flow
+        CF[:] = NE + nontaxable_cashflow
+
+        # Fill discount factor
+        DF[:] = 1/(1 + self.IRR)**self._get_duration_array()
+
+        # Fill net present value
+        NPV[:] = CF * DF
+
+        # Fill cumulative discount factor
+        CNPV[:] = NPV.cumsum()
+
+        DF *= 1e6
+        data /= 1e6
+        return pd.DataFrame(
+            data.transpose(), index = np.arange(self._duration[0]-start, self._duration[1]), columns = cashflow_columns
+        )
