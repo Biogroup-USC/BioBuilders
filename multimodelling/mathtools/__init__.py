@@ -3,6 +3,7 @@ from .economy import discounting_to_present_value, updating_to_future_value, cal
 from .unitsdiameter import calculate_centrifuge_diameter
 from .solveparameter import solve_operating_pressures_multieffectevaporator
 from .unitsarea import calculate_rdvf_area
+from .control import damp_to
 
 __all__ = (
     "log_mean",
@@ -12,4 +13,5 @@ __all__ = (
     "calculate_centrifuge_diameter",
     "solve_operating_pressures_multieffectevaporator",
     "calculate_rdvf_area",
+    "damp_to"
 )
