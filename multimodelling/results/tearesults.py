@@ -5,14 +5,13 @@ import numpy as np
 import biosteam as bst
 from ..tea import TEA
 import matplotlib.pyplot as plt
-from ..mathtools.economy import build_nominal_factor
 import os
 
 __all__ = (
-    "TEAresults"
+    "ResultsTEA"
 )
 
-class TEAresults:
+class ResultsTEA:
     """
     """
     def __init__(self, cashflow: pd.DataFrame = None, TEAobject: bst.TEA | TEA = None):
@@ -27,7 +26,7 @@ class TEAresults:
         else:
             raise ValueError("The TEA object must be a TEA object either from BiosTEAM or Multimodelling.")
 
-    def TEA_report(self, excelreport: bool = False, excelname: str = None, inflation: float = None):
+    def TEA_report(self, excelreport: bool = False, excelname: str = None):
         """
         """
         filename = excelname or "TEA_Report.xlsx"
@@ -48,6 +47,73 @@ class TEAresults:
 
         return df
     
+    def CAPEX_related_to_plant_capacity(
+            self,
+            input_stream: str | int = None,
+            output_stream: str | int = None,
+            units: str = "ton",
+            display: bool = True
+    ):
+        """
+        """
+        # Check one stream is provided
+        if (input_stream is None) == (output_stream is None):
+            raise ValueError("One of the next parameters must be provided: 'input_stream' or 'output_stream'")
+        
+        # CAPEX
+        CAPEX = self.TEA.TCI
+        
+        # Stream selection
+        if input_stream is not None:
+            seq = self.TEA.system.ins
+            key = input_stream
+        else:
+            seq = self.TEA.system.outs
+            key = output_stream
+        
+        # Get the proper stream
+        if isinstance(key, int):
+            try:
+                stream = seq[key]
+            except:
+                raise IndexError("Index out of range {}: {}".format('ins' if input_stream is not None else 'outs', key))
+        elif isinstance(key, str):
+            stream = None
+            for s in seq:
+                if getattr(s, "ID", None) == key:
+                    stream = s
+                    break
+            if stream is None:
+                ids = [getattr(s, "ID") for s in seq]
+                raise ValueError("Stream with ID = {} could not be found. Available IDs {}".format(key, ids))
+        else:
+            raise TypeError("Stream must be 'str' or 'int'")
+        
+        # Calculate ton per year
+        mass_flow_kg_hr = float(stream.F_mass)
+        hours_per_year = getattr(self.TEA, "operating_hours", None)
+        if hours_per_year is None:
+            hours_per_year = 330 * 24
+
+        # This method supports "kg", "ton"
+        u = units.lower().strip()
+        if u == "ton":
+            u = "t/yr"
+            capacity = mass_flow_kg_hr * hours_per_year / 1000
+        elif u == "kg":
+            u = "kg/yr"
+            capacity = mass_flow_kg_hr * hours_per_year
+        else:
+            raise ValueError("Units not supported. Use: 'kg' or 'ton'")
+
+        # display the CAPEX and Capacity
+        if display:
+            print("")
+            print("CAPEX: {:.2f} | Capacity: {:.2f} {} [{}]".format(CAPEX, capacity, units, input_stream if input_stream is not None else output_stream))
+        
+        # Return CAPEX and Capacity
+        return CAPEX, (capacity, u)
+        
     def solve_price(self, stream: bst.Stream = None):
         """
         """
@@ -90,21 +156,18 @@ class TEAresults:
         # Return the ROI
         return Return_On_Investment
     
-    def production_costs(self, streams: list[bst.Stream] = None, depreciation: bool = True):
+    def production_costs(self, streams: list[bst.Stream] = None, depreciation: bool = True, units: int = 0):
         """
         """
-        Production_Costs = self.TEA.production_costs(streams, depreciation)
-
-        # Print the production costs
-        for stream in streams:
-            Index = streams.index(stream)
-            print("")
-            print("Production costs:")
-            print("The production costs of {} are {:.2f} USD/Year.".format(stream.ID, Production_Costs[Index]))
-            print("")
-
-        # Return the production costs
-        return Production_Costs        
+        production_costs = self.TEA.production_costs(streams, depreciation)
+        if units == 0:
+            for stream in streams:
+                Index = streams.index(stream)
+                print("")
+                print("Production costs:")
+                print("The production costs of {} are {:.2f} USD/Year.".format(stream.ID, production_costs[Index]))
+                print("")
+            return production_costs    
     
     def plot_NPV(self, path: str, show_plot: bool = False):
         """
