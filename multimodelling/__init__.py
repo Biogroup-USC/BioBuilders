@@ -8,7 +8,7 @@ from .parameters import get_parameters_from_CSV, get_parameters_from_excel, get_
 from .results import DisplayMassResults, DisplayUnitsResults, TEAresults
 from .tea import load_process_settings, TEA, InflationTEA
 from .mathtools import log_mean, discounting_to_present_value, updating_to_future_value, calculate_centrifuge_diameter, solve_operating_pressures_multieffectevaporator, calculate_labor_requirements, calculate_rdvf_area, damp_to
-from .diagrams import UncertaintyPlotter, plot_spearman_1d
+from .diagrams import UncertaintyPlotter, plot_spearman_1d, ContourStudy
 from .sensitivity import SRC
 
 __all__ = (
@@ -17,5 +17,5 @@ __all__ = (
     'get_parameters_from_CSV', 'get_parameters_from_excel', 'get_price_streams_from_CSV','get_unit_costs_from_CSV', 'DisplayMassResults', 'DisplayUnitsResults', 
     'TEAresults', 'load_process_settings', 'TEA', 'log_mean','discounting_to_present_value','updating_to_future_value','calculate_centrifuge_diameter',
     'solve_operating_pressures_multieffectevaporator', 'calculate_labor_requirements', 'calculate_rdvf_area', 'UncertaintyPlotter','plot_spearman_1d',
-    'SRC', 'LLESettler', 'LiquidsSettler', 'InflationTEA', 'damp_to',
+    'SRC', 'LLESettler', 'LiquidsSettler', 'InflationTEA', 'damp_to', 'ContourStudy',
 )
