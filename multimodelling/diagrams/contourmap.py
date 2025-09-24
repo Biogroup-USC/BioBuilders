@@ -15,20 +15,20 @@ __all__ = (
 @dataclass
 class CSParameter:
     name: str
-    setter: float | None
+    setter: Callable[[float],None]
     element: object = None
     units: str = None
     baseline: float = None
-    bounds: tuple = None
+    bounds: tuple[float, float] = None
     n: int = None
-    levels: float = None
+    levels: int | np.ndarray = None
     coupled: bool = False
     description: str = None
 
 @dataclass
 class CSIndicator:
     name: str
-    getter: float
+    getter: Callable[[],None]
     units: str = None
     element: object  = None
 
@@ -105,6 +105,8 @@ class ContourStudy:
     
     @staticmethod
     def _ix(v, arr):
+        """
+        """
         idx = np.where(np.isclose(arr, v, rtol=1e-10, atol=1e-12))[0]
         return int(idx[0]) if idx.size else int(np.argmin(np.abs(arr-v)))
 
@@ -143,6 +145,7 @@ class ContourStudy:
         Y_plot = Y.copy()
 
         # Simulate each pair
+        failures = []
         for vx, vy in pairs:
             # Get the cordinates of each point
             i = self._ix(vx, x_vals)
@@ -156,7 +159,8 @@ class ContourStudy:
                     # Simulate the system
                     self.system.simulate()
                 except Exception as e:
-                    raise e
+                    failures.append(((vx, vy), repr(e)))
+                    continue
                 
                 # Read and save only the requested indicators
                 for ind in selected_inds:
@@ -171,7 +175,7 @@ class ContourStudy:
                 # Keep NaN and continue
                 continue
         
-        return zs
+        return zs, failures
     
     def plot_contourf(self,
                       X,
