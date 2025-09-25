@@ -109,7 +109,7 @@ class ResultsTEA:
         # display the CAPEX and Capacity
         if display:
             print("")
-            print("CAPEX: {:.2f} | Capacity: {:.2f} {} [{}]".format(CAPEX, capacity, units, input_stream if input_stream is not None else output_stream))
+            print("CAPEX: {:.2f} | Capacity: {:.2f} {} [{}]".format(CAPEX, capacity, u, input_stream if input_stream is not None else output_stream))
         
         # Return CAPEX and Capacity
         return CAPEX, (capacity, u)
@@ -160,15 +160,28 @@ class ResultsTEA:
         """
         """
         production_costs = self.TEA.production_costs(streams, depreciation)
+        operating_hours = self.TEA.operating_hours
         if units == 0:
             for stream in streams:
-                Index = streams.index(stream)
+                idx = streams.index(stream)
                 print("")
                 print("Production costs:")
-                print("The production costs of {} are {:.2f} USD/Year.".format(stream.ID, production_costs[Index]))
+                print("The production costs of {} are {:.2f} USD/Year.".format(stream.ID, production_costs[idx]))
                 print("")
             return production_costs    
-    
+        if units == 1:
+            production_kg_per_year = {}
+            production_costs_per_kg = {}
+            for stream in streams:
+                idx = streams.index(stream)
+                production_kg_per_year[stream.ID] = stream.F_mass * operating_hours
+                production_costs_per_kg[stream.ID] = production_costs[idx]/(production_kg_per_year[stream.ID])
+                print("")
+                print("Production costs:")
+                print("The production costs of {} [{:.2f} kg/yr] are {:.2f} USD/kg ".format(stream.ID, production_kg_per_year[stream.ID], production_costs_per_kg[stream.ID]))
+                print("")
+            return production_costs_per_kg, production_kg_per_year
+
     def plot_NPV(self, path: str, show_plot: bool = False):
         """
         """
