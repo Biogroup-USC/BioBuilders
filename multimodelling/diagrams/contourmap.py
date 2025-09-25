@@ -186,7 +186,8 @@ class ContourStudy:
                       xlabel: str = None,
                       ylabel: str = None,
                       levels: int | np.ndarray = None,
-                      cmap: str = 'RdBu_r', 
+                      cmap: str = 'RdBu_r',
+                      path: str = None
                       ):
         """
         """
@@ -243,10 +244,15 @@ class ContourStudy:
             cb = fig.colorbar(cf, ax = ax)
             cb.set_label(ind if not units else "{} [{}]".format(ind, units))
 
+            # Configure the plot
             ax.set_title(ind if title is None else title)
             ax.set_xlabel(xlabel)
             ax.set_ylabel(ylabel)
             fig.tight_layout()
+            
+            # Save fig if path provided
+            if path:
+                fig.savefig(path)
             figs.append((fig, ax, cf))
         
         return figs
