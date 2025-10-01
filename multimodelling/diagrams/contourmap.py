@@ -186,6 +186,7 @@ class ContourStudy:
                       xlabel: str = None,
                       ylabel: str = None,
                       levels: int | np.ndarray = None,
+                      n_round_ind: int = 1,
                       cmap: str = 'RdBu_r',
                       path: str = None
                       ):
@@ -233,7 +234,7 @@ class ContourStudy:
 
             # Create the plot
             fig, ax = plt.subplots()
-            cf = ax.contourf(X, Y, Zm, levels = levels_arr, cmap = cmap)
+            cf = ax.contourf(X, Y, Zm, levels = np.round(levels_arr,n_round_ind), cmap = cmap)
             
             # colorbar
             units = None
