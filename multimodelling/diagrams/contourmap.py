@@ -175,7 +175,7 @@ class ContourStudy:
                 # Keep NaN and continue
                 continue
         
-        return zs, failures
+        return zs, failures, X_plot, Y_plot
     
     def plot_contourf(self,
                       X,
