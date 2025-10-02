@@ -177,6 +177,53 @@ class ContourStudy:
         
         return zs, failures, X_plot, Y_plot
     
+    def _get_param(self, name_or_param):
+        """
+        """
+        if isinstance(name_or_param, CSParameter):
+            return name_or_param
+        if isinstance(name_or_param, str):
+            for p in self.parameters:
+                if p.name == name_or_param:
+                    return p
+            available = [p.name for p in self.parameters]
+            raise ValueError("Parameter '{}' not found. Availables: {}".format(name_or_param, available))
+        raise TypeError("name_or_param must be a CSParameter or str (name of the parameter)")
+
+    def compute_baseline(self, px: str, py: str, indicators = None, x_display_fn = None , y_display_fn = None):
+        """
+        """
+        px = self._get_param(px)
+        py = self._get_param(py)
+
+        if px.baseline is None or py.baseline is None:
+            raise ValueError("px.baseline and py.baseline must be defined to compute baseline case")
+        
+        if indicators is None:
+            selected_inds = list(self.indicators)
+        else:
+            name_to_inds = {ind.name: ind for ind in self.indicators}
+            if isinstance(indicators, str):
+                indicators = [indicators]
+                missing = [name for name in indicators if name not in name_to_inds]
+                if missing:
+                    raise ValueError("Indicators not found: {}. Availables: {}".format(missing,list(name_to_inds)))
+            selected_inds = [name_to_inds[name] for name in indicators]
+        
+        px.setter(float(px.baseline))
+        py.setter(float(py.baseline))
+        self.system.simulate()
+
+        x_plot = px.baseline
+        y_plot = py.baseline
+        if x_display_fn is not None:
+            x_plot = x_display_fn(px.baseline, py.baseline, self)
+        if y_display_fn is not None:
+            y_plot = y_display_fn(px.baseline, py.baseline, self)
+
+        values = {ind.name: float(ind.getter()) for ind in selected_inds}
+        return{"point": (float(x_plot), float(y_plot)), "values": values}
+
     def plot_contourf(self,
                       X,
                       Y,
@@ -188,7 +235,12 @@ class ContourStudy:
                       levels: int | np.ndarray = None,
                       n_round_ind: int = 1,
                       cmap: str = 'RdBu_r',
-                      path: str = None
+                      path: str = None,
+                      baseline: dict | None = None,
+                      marker_color: str = None,
+                      crosshair: bool = True,
+                      show_baseline_marker: bool = True,
+                      show_baseline_contour: bool = True,
                       ):
         """
         """
@@ -236,6 +288,26 @@ class ContourStudy:
             fig, ax = plt.subplots()
             cf = ax.contourf(X, Y, Zm, levels = np.round(levels_arr,n_round_ind), cmap = cmap)
             
+            if baseline is not None and isinstance(baseline, dict):
+                try:
+                    x0, y0 = baseline.get("point", (None, None))
+                    if x0 is not None and y0 is not None:
+                        if crosshair:
+                            ax.axvline(x0, linestyle = '--', linewidth = 1)
+                            ax.axhline(y0, linestyle = '--', linewidth = 1)
+                        if show_baseline_marker:
+                            ax.plot(x0, y0, color = marker_color,marker = 'o', markersize = 6)
+                    base_vals = baseline.get("values", {})
+                    if show_baseline_contour and ind in base_vals:
+                        v0 = float(base_vals[ind])
+                        cs = ax.contour(X, Y, Zm, levels = [v0], linewidth = 2, linestyle = '--')
+                        try:
+                            ax.clabel(cs, inline = True, fmt = {v0: "{} base".format(ind)})
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
             # colorbar
             units = None
             for iobj in getattr(self, "indicators",[]):
