@@ -262,10 +262,15 @@ class ContourStudy:
                       cmap: str = 'RdBu_r',
                       path: str = None,
                       baseline: dict | None = None,
+                      desired_ind: dict | None = None,
                       marker_color: str = None,
                       crosshair: bool = True,
                       show_baseline_marker: bool = True,
                       show_baseline_contour: bool = True,
+                      baseline_ind_color: str = "White",
+                      baseline_ind_linestyle: str = '--',
+                      desired_ind_color: str = "Green",
+                      desired_ind_linestyle: str = "--"
                       ):
         """
         """
@@ -313,6 +318,7 @@ class ContourStudy:
             fig, ax = plt.subplots()
             cf = ax.contourf(X, Y, Zm, levels = np.round(levels_arr,n_round_ind), cmap = cmap)
             
+            # Add the baseline parameters and indicators
             if baseline is not None and isinstance(baseline, dict):
                 try:
                     x0, y0 = baseline.get("point", (None, None))
@@ -325,13 +331,29 @@ class ContourStudy:
                     base_vals = baseline.get("values", {})
                     if show_baseline_contour and ind in base_vals:
                         v0 = float(base_vals[ind])
-                        cs = ax.contour(X, Y, Zm, levels = [v0], linewidth = 2, linestyle = '--')
+                        cs = ax.contour(X, Y, Zm, levels = [v0], linewidths = 2, colors = [baseline_ind_color],linestyles = baseline_ind_linestyle)
                         try:
                             ax.clabel(cs, inline = True, fmt = {v0: "{} base".format(ind)})
                         except Exception:
                             pass
                 except Exception:
                     pass
+            
+            if desired_ind is not None:
+                if ind not in desired_ind:
+                    pass
+                else:
+                    val = desired_ind[ind]
+                    if isinstance(val, dict):
+                        if len(val) != 1:
+                            raise ValueError("desired_ind['{}'] must have 1 key. It has {}".format(ind, list(val.keys())))
+                    label, v0 = next(iter(val.items()))
+                    v0 = float(v0)
+                    cs = ax.contour(X, Y, Zm, levels = [v0], linewidths = 2, colors = [desired_ind_color], linestyles = desired_ind_linestyle)
+                    try:
+                        ax.clabel(cs,inline = True, fmt = {v0: "{}".format(label)})
+                    except Exception:
+                        pass
 
             # colorbar
             units = None
