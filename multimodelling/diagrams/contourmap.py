@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from ..mathtools.sampling import build_cartesian_grid
 from typing import Callable
 import matplotlib.pyplot as plt
+import time
+from tqdm import tqdm
 
 __all__ = (
     "ContourStudy",
@@ -144,9 +146,22 @@ class ContourStudy:
         X_plot = X.copy()
         Y_plot = Y.copy()
 
+        # time 0
+        t0 = time.perf_counter()
+        
+        # Progress bar
+        try:
+            total = len(pairs)
+        except TypeError:
+            total = ny*nx 
+        bar = tqdm(pairs, total=total, desc="Contour mapping", unit="sim", smoothing=0.0, miniters=1, mininterval=0.0,dynamic_ncols=True)
+
         # Simulate each pair
         failures = []
         for vx, vy in pairs:
+            # Simulation time 0
+            s0 = time.perf_counter()
+
             # Get the cordinates of each point
             i = self._ix(vx, x_vals)
             j = self._ix(vy, y_vals)
@@ -170,11 +185,21 @@ class ContourStudy:
                     X_plot[j, i] = float(x_display_fn(vx, vy, self))
                 if y_display_fn is not None:
                     Y_plot[j, i] = float(y_display_fn(vx, vy, self))
-            
+                        
             except Exception:
                 # Keep NaN and continue
-                continue
+                pass
+            
+            finally:
+                # Update bar progress
+                iter_dt = time.perf_counter() - s0
+                bar.set_postfix_str(f"t/it={iter_dt:.2f}s | fails = {len(failures)}")
+                bar.update(1)
+                bar.refresh()
         
+        bar.close()
+        print("")
+        print(f"Finished at {time.perf_counter()-t0:.1f}s | failures = {len(failures)}")
         return zs, failures, X_plot, Y_plot
     
     def _get_param(self, name_or_param):
