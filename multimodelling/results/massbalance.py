@@ -1,10 +1,75 @@
 """
 """
+from __future__ import annotations
+from dataclasses import dataclass, field
+from typing import Iterable, Sequence, Literal, Optional
+import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 __all__ = (
-    "DisplayMassResults"
+    "DisplayMassResults",
+    "ProcessMassBalance",
 )
+
+class _StreamPrototype:
+    ID: str
+    phase: str
+    T: float
+    P: float
+    H: float
+    vapor_fraction: float | None
+    F_mass: float
+    F_mol: float
+    imass: object
+    imol: object
+
+@dataclass
+class ProcessMassBalance:
+    """
+
+    Creates a table of streams for a BioSTEAM system and exports
+    it as an image.
+
+    Parameters
+    ----------
+    streams: list[bst.Stream] | bst.System.streams
+        Streams of the process.
+    components: list[str] | None
+        Order and compounds to display (IDs from the chemicals).
+        If None, it is created from streams.
+
+    """
+    streams: Iterable[_StreamPrototype]
+    components: Optional[Sequence[str]] = None
+    _stream_list: list[_StreamPrototype] = field(init=False, repr=False)
+
+    def __post_init__(self):
+        self._stream_list = list(self.streams)
+        if self.components is None:
+            comp = set()
+    
+    def build_stream_table(
+            self,
+            *,
+            basis: Literal["mass","molar"] = "mass",
+            include_energy: bool = False,
+            units: dict | None = None,
+            component_decimals: int = 3,
+            totals_decimals: int = 2,
+            order_streams: Optional[Sequence[str]] = None,
+    )-> pd.DataFrame:
+        """
+        """
+        units = units or {
+            "T": "ºC",
+            "P": "bar",
+            "v": "-",
+            "F": "kg/h",
+            "n": "kmol/h",
+            "H": "kW",
+            "Q": "m3/h"
+        }
 
 class DisplayMassResults:
     """
