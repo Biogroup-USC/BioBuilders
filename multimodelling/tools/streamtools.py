@@ -8,7 +8,9 @@ from __future__ import annotations
 from typing import Literal, Sequence
 import pandas as pd
 
-__all__ = ()
+__all__ = (
+    "extract_components_flow",
+)
 
 class _Streamlike:
     available_chemicals: list[object]
