@@ -2,7 +2,7 @@
 """
 import biosteam as bst
 from biosteam.units.design_tools import PressureVessel
-from ..mathtools.unitsdiameter import calculate_centrifuge_diameter
+from ..tools.mathtools.unitsdiameter import calculate_centrifuge_diameter
 import numpy as np
 import math
 

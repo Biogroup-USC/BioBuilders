@@ -2,7 +2,7 @@
 """
 import matplotlib.pyplot as plt
 import pandas as pd
-from .diagramtools import simplify_labels, sanitize_filename
+from ..tools.diagramtools import simplify_labels, sanitize_filename
 import os
 
 __all__ = (

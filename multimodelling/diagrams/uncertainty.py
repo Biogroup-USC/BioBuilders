@@ -4,7 +4,7 @@ import biosteam as bst
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from .diagramtools import simplify_labels, sanitize_filename
+from ..tools.diagramtools import simplify_labels, sanitize_filename
 import os
 
 __all__ = (

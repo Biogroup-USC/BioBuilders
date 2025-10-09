@@ -3,7 +3,7 @@
 
 import biosteam as bst
 import numpy as np
-from ..mathtools.unitsarea import calculate_rdvf_area
+from ..tools.mathtools.unitsarea import calculate_rdvf_area
 
 __all__ = (
     'RotaryVacuumFilter',

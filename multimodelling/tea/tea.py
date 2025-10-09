@@ -11,7 +11,7 @@ from biosteam._tea import (
     cashflow_columns
 )
 from typing import Mapping
-from ..mathtools.economy import build_nominal_factor
+from ..tools.mathtools.economy import build_nominal_factor
 from numba import njit
 
 __all__ = (

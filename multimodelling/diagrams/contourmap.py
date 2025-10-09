@@ -4,7 +4,7 @@ import biosteam as bst
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
-from ..mathtools.sampling import build_cartesian_grid
+from ..tools.mathtools.sampling import build_cartesian_grid
 from typing import Callable
 import matplotlib.pyplot as plt
 import time
