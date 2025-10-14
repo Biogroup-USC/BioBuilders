@@ -1,7 +1,7 @@
 """
 """
 import biosteam as bst
-from ..tools.mathtools import log_mean
+from ..tools.mathtools.logmean import log_mean
 
 __all__ = ("ShellHeatExchanger",)
 
