@@ -10,7 +10,7 @@ from .tea import load_process_settings, TEA, InflationTEA
 from .tools.mathtools import log_mean, discounting_to_present_value, updating_to_future_value, calculate_centrifuge_diameter, solve_operating_pressures_multieffectevaporator, calculate_labor_requirements, calculate_rdvf_area, damp_to
 from .diagrams import UncertaintyPlotter, plot_spearman_1d, ContourStudy
 from .sensitivity import SRC
-from tools import extract_components_flow, calculate_agitator_power
+from .tools import extract_components_flow, calculate_agitator_power
 
 __all__ = (
     'Flash', 'RotatoryVacuumDrumFilter','RotaryVacuumFilter', 'LLEbySplit' ,'ShellHeatExchanger', 'SLECbySplit', 'ExtractionReactor', 'BatchEnzymaticTreatment', 

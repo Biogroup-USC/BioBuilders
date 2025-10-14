@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from ..diagrams import simplify_labels, keep_multiindex_last_level, get_dataframe_positions, sanitize_filename
+from ..tools.diagramtools import simplify_labels, keep_multiindex_last_level, get_dataframe_positions, sanitize_filename
 
 __all__ = (
     "SRC",
