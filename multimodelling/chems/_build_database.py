@@ -94,6 +94,19 @@ DB.insert_data_into_db(
     Hf = -285830            # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
 
+# Free_Phenolic_Compounds
+DB.insert_data_into_db(
+    ID = "Free_Phenolic_Compounds", 
+    formula = "C40H56",     # https://pubchem.ncbi.nlm.nih.gov/compound/lycopene
+    MW = 536.9,             # https://pubchem.ncbi.nlm.nih.gov/compound/lycopene
+    description = "Phenolic compounds extracted",
+    Phase = 's',
+    V = 536.9*(1/0.899),    # m3/mol
+    Rho = 899,              # https://doi.org/10.1155/2024/6252426 from lycopene
+    Cp = 2.1,               # Similar to cutin
+    Hf = -285830            # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
+    )
+
 # n-hentriacontane
 DB.insert_data_into_db(
     ID = "Hentriacontane",
@@ -183,8 +196,18 @@ DB.insert_data_into_db(
     CAS = '67-48-1',
     formula = 'C5H14NOCl',
     MW = 139.62,            # g/mol 
-    Phase = 'l',
+    Phase = 's',
     Cp = 249/139.62,        # J/(g*K) calculated using the hypothetical heat capacity of the liquid (ChCl) obtained in https://doi.org/10.1039/D2CP00377E.
     Rho = 1205,             # kg/m3 from https://www.chemsrc.com/en/cas/67-48-1_829430.html
     V = 139.62*(1/1205),    # m3/mol
+)
+
+# NADES (Choline lactate [1:2])
+DB.insert_data_into_db(
+    ID = 'NADES_ChCl_LA_1_2',
+    MW = (139.62 + 2 * 90.078),          # Ch:LA [1:1]
+    Phase = 'l',
+    Rho = 1138.0,           # kg/m3 https://pmc.ncbi.nlm.nih.gov/articles/PMC9655353/pdf/molecules-27-07429.pdf
+    Cp = 4.18,
+    V = (139.62 + 2 * 90.07794)*(1/1138.0)
 )
