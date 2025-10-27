@@ -29,7 +29,7 @@ class Mill(bst.Unit):
     """
 
     _N_ins = 1
-    _N_outs = 2
+    _N_outs = 1
     _units = {
         'Power': 'kW',
         'Specific Power': 'kWh/kg'
@@ -62,14 +62,11 @@ class Mill(bst.Unit):
 
         #Defining the Outlet
         Out = self.outs[0]
-        Losses = self.outs[1]
 
         # Running the Unit
         ## This Unit is simulated basically as OUT = sfi * IN where the sfi represents the losses
         Out.copy_like(feed)
-        Out.F_mass = (1-self.losses)*feed.F_mass
-        Losses.copy_like(feed)
-        Losses.F_mass = (self.losses)*feed.F_mass
+        Out.F_mass = feed.F_mass
 
     @property
     def power_consumption(self):
