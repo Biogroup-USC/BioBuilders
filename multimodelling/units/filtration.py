@@ -519,3 +519,106 @@ class RotatoryVacuumDrumFilter(bst.Unit):
         ## Scale the costs using CEPCI
         CE_Base = self.CE_base_filter
         self.baseline_purchase_costs['Rotatory Vacuum Drum Filter'] *= bst.CE/CE_Base
+
+membrane_configuration = {       # Pa                               # kg/(m^2 * s * Pa)                     # (m3/s)     
+    "MF_polymer":               {"deltaP": (0.03*10**6, 0.35*10**6),"Lp": (70/(10**9),10000/(10**9)),       "Capacity/unit": (0.001/(10**3), 1/(10**3))},
+    "MF_ceramic":               {"deltaP": (0.3*10**6, 0.5*10**6),  "Lp": (70/(10**9),10000/(10**9)),       "Capacity/unit": (0.001*2/(10**3), 1*3/(10**3))},
+    "UF":                       {"deltaP": (0.1*10**6, 0.7*10**6),  "Lp": (0.8/(10**9), 800/(10**9)),       "Capacity/unit": (0.1/(10**3), 25/(10**3))},
+}
+
+class MembraneFiltration(bst.Unit):
+    """
+    """
+    # Number of input streams
+    _N_ins = 1
+    # Number of output streams
+    _N_outs = 2
+    # Results units
+    _units = {
+        "Area (total)": "m2",
+    }
+
+    def _init(self, type: int = 0, solids_retained: list[str] = [], solids: list[str] = [], solids_retentate_conc: float = 0.60):
+        """
+        """
+        if type == 0:
+            self.type = "MF_polymer"
+        elif type == 1:
+            self.type = "MF_ceramic"
+        elif type == 2:
+            self.type = "UF"
+        
+        self.solids_retained = solids_retained
+        self.solids = solids
+        self.retentate_solids_conc = solids_retentate_conc
+        self._kWh_per_kg = None
+
+    def _run(self):
+        """
+        """
+        # Input stream
+        feed = self.ins
+
+        # Output streams
+        permeate, retentate = self.outs
+        permeate.copy_like(feed)
+
+        # Calculate water (or solvent) in permeate and retentate
+        ## Get the main chemical of the stream
+        main_chemical = feed.main_chemical
+        
+        ## Solvent content is calculated using solid concentration (kg/kg) of retentate
+        solvent_content = (1-self.retentate_solids_conc)
+        
+        # Distribute solvent between retentate and permeate
+        retentate.imass[main_chemical] =  solvent_content * feed.imass[main_chemical]
+        permeate.imass[main_chemical] = (1-solvent_content) * feed.imass[main_chemical]
+
+        # Calculate distribution of solids retained
+        for chem in feed.chemicals.IDs:
+            if chem not in self.solids_retained: continue
+            else: retentate.imass[chem] = 1 * feed.imass[chem]; permeate.imass[chem] = 0 * feed.imass[chem]     #TODO allow to change the % of solids retained
+    
+    @property
+    def kWh_per_kg(self):
+        """
+        """
+        if self._kWh_per_kg is None:
+            self._kWh_per_kg = 10**3    # Lower value from http://dx.doi.org/10.1016/j.jclepro.2016.06.164
+        return self._kWh_per_kg
+
+    def _design(self):
+        """
+        """
+        # The area is calculated using the permeate following the next
+        # equation: A = Q/(Lp * (deltaP))
+        feed = self.ins[0]
+        permeate = self.outs[0]
+
+        mass_flow = permeate.F_mass/3600                        # kg/s
+        Lp = membrane_configuration[self.type]["Lp"]            # kg/(m^2 * s * Pa)
+        deltaP = membrane_configuration[self.type]["deltaP"]    # Pa
+        
+        A = mass_flow / (Lp[1] * deltaP[1])
+
+        # design results
+        design = self.design_results
+        design["Area (total)"] = A
+
+        # Number of modules needed
+        volumetric_flow = permeate.F_vol/3600                               # m3/s
+        capacity = membrane_configuration[self.type]["Capacity/unit"][1]    # m3/s
+        self.parallel["Modules"] = volumetric_flow/capacity
+
+        # Utilities
+        solids_load = 0
+        for solid in self.solids:
+            solids_load += feed.imass[solid]
+
+        power = self.kWh_per_kg * solids_load
+        self.add_power_utility(power)
+    
+    def _cost(self):
+        """
+        """
+        pass
