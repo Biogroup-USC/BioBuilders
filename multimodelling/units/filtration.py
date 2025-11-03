@@ -528,6 +528,29 @@ membrane_configuration = {       # Pa                               # kg/(m^2 * 
 
 class MembraneFiltration(bst.Unit):
     """
+
+    This class simulates a filtration using a membrane system.
+
+    The solids retained must be specified, this solids are assumed to
+    be completely separated. In addition, all the solids must be defined
+    to calculate the solid loading which is used to estimate the power.
+
+    Parameters
+    ----------
+    type : float
+        * [0] Microfiltration using polymer membranes.
+        * [1] Microfiltration using ceramic membranes.
+        * [2] Ultrafiltration.
+    solids_retained : list[str]
+        List of chemical IDs retained in the retentate.
+    solids : list[str]
+        List of chemical IDs of all solids. This is used
+        to calculate the solids loading.
+    solids_retentate_conc : float
+        Mass concentration of solids in the retentate used
+        to calculate the amount of water retained. Default to
+        0.60 kg DW/kg
+
     """
     # Number of input streams
     _N_ins = 1
@@ -551,7 +574,13 @@ class MembraneFiltration(bst.Unit):
         self.solids_retained = solids_retained
         self.solids = solids
         self.retentate_solids_conc = solids_retentate_conc
+        
+        # Properties
         self._kWh_per_kg = None
+        self._base_cost = None
+        self._base_n_cost = None
+        self._base_area = None
+        self._CE_base = None
 
     def _run(self):
         """
@@ -618,7 +647,108 @@ class MembraneFiltration(bst.Unit):
         power = self.kWh_per_kg * solids_load
         self.add_power_utility(power)
     
+    @property
+    def base_cost(self):
+        """
+        """
+        if self._base_cost is None:
+            if self.type.startswith("MF"):
+                self._base_cost = 150000    # $ for membrane and housing
+            elif self.type.startswith("UF"):
+                self._base_cost = 240       # $ for m2 of membrane
+        return self._base_cost
+
+    @base_cost.setter
+    def base_cost(self, value):
+        """
+        """
+        self._base_cost = value
+
+    @property
+    def base_n_cost(self):
+        """
+        """
+        if self._base_n_cost is None:
+            if self.type.startswith("MF"):
+                self._base_n_cost = 0.92
+            elif self.type.startswith("UF"):
+                self._base_n_cost = 1.0
+        return self._base_n_cost
+
+    @base_n_cost.setter
+    def base_n_cost(self, value):
+        """
+        """
+        self._base_n_cost = value
+
+    @property
+    def base_area(self):
+        """
+        """
+        if self._base_area is None:
+            if self.type.startswith("MF"):
+                self._base_area = 50        # m2
+            elif self.type.startswith("UF"):
+                self._base_area = 1         # m2
+        return self._base_area
+
+    @base_area.setter
+    def base_area(self, value):
+        """
+        """
+        self._base_area = value
+
+    @property
+    def CE_base(self):
+        """
+        """
+        if self._CE_base is None:
+            if self.type.startswith("MF"):
+                self._CE_base = 1000
+            elif self.type.startswith("UF"):
+                self._CE_base = 1000
+        return self._CE_base
+
+    @CE_base.setter
+    def CE_base(self, value):
+        """
+        """
+        self._CE_base = value
+
     def _cost(self):
         """
         """
-        pass
+        # Load all the design parameters needed to calculate the costs
+        area = self.design_results["Area (total)"]
+
+        # Calculate the baseline purchase cost for membrane module
+        ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
+        membranes_module = self.base_cost * (area/self.base_area)**self.base_n_cost
+        
+        ## UF membranes are accounted individually, but they represent 10 % of the total cost for small areas and
+        ## 50% for largest
+        if self.type.startswith("UF"):
+            if area < 10:
+                membranes_module *= 1/0.15
+            else:
+                membranes_module *= 1/0.50
+
+        self.baseline_purchase_costs['Membrane module'] = membranes_module
+
+        ## The material, pressure and temperature factors are assumed to be 1
+        self.F_D['Membrane module'] = self.F_M['Membrane module'] = self.F_P['Membrane module'] = 1
+
+        ## The Bare module factor which account for installation costs is calculated as the sum of delivery, installation,
+        ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
+        ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
+        ### Factors
+        Delivery = 0.10
+        Installation = 0.80             # Filters
+        Instrumentation_Control = 0.50
+        Piping = 0.31                   # Solid-Fluid   
+        ### Calculate the bare module
+        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
+        self.F_BM['Membrane module'] = Bare_Module
+
+        ## Scale the costs using CEPCI
+        self.baseline_purchase_costs['Membrane module'] *= bst.CE/self.CE_base
