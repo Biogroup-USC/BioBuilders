@@ -520,10 +520,17 @@ class RotatoryVacuumDrumFilter(bst.Unit):
         CE_Base = self.CE_base_filter
         self.baseline_purchase_costs['Rotatory Vacuum Drum Filter'] *= bst.CE/CE_Base
 
-membrane_configuration = {       # Pa                               # kg/(m^2 * s * Pa)                     # (m3/s)     
-    "MF_polymer":               {"deltaP": (0.03*10**6, 0.35*10**6),"Lp": (70/(10**9),10000/(10**9)),       "Capacity/unit": (0.001/(10**3), 1/(10**3))},
-    "MF_ceramic":               {"deltaP": (0.3*10**6, 0.5*10**6),  "Lp": (70/(10**9),10000/(10**9)),       "Capacity/unit": (0.001*2/(10**3), 1*3/(10**3))},
-    "UF":                       {"deltaP": (0.1*10**6, 0.7*10**6),  "Lp": (0.8/(10**9), 800/(10**9)),       "Capacity/unit": (0.1/(10**3), 25/(10**3))},
+membrane_LMH = {
+    "UF_hollow_fibers": (0.005, 0.016),     # L/s*m2
+    "UF_Spiral_Wound": (0.08, 0.14),        # L/s*m2
+    "UF_Tubes": (0.06, 0.2),                # L/s*m2
+    "MF": (0.001, 0.2)
+}
+membrane_capacity = {
+    "UF_hollow_fibers": (0.1, 25),  # L/s
+    "UF_Spiral_Wound": (0.1, 25),   # L/s
+    "UF_Tubes": (0.1, 25),          # L/s
+    "MF": (0.001, 1.0)              # L/s
 }
 
 class MembraneFiltration(bst.Unit):
@@ -538,9 +545,10 @@ class MembraneFiltration(bst.Unit):
     Parameters
     ----------
     type : float
-        * [0] Microfiltration using polymer membranes.
-        * [1] Microfiltration using ceramic membranes.
-        * [2] Ultrafiltration.
+        * [0] Ultrafiltration using polysulfone hollow fibers.
+        * [1] Ultrafiltration using polysulfone spiral wounds.
+        * [2] Ultrafiltration using polysulfone tubes.
+        * [3] Microfiltration.
     solids_retained : list[str]
         List of chemical IDs retained in the retentate.
     solids : list[str]
@@ -565,11 +573,13 @@ class MembraneFiltration(bst.Unit):
         """
         """
         if type == 0:
-            self.type = "MF_polymer"
+            self.type = "UF_hollow_fibers"
         elif type == 1:
-            self.type = "MF_ceramic"
+            self.type = "UF_Spiral_Wound"
         elif type == 2:
-            self.type = "UF"
+            self.type = "UF_Tubes"
+        elif type == 3:
+            self.type = "MF"
         
         self.solids_retained = solids_retained
         self.solids = solids
@@ -586,57 +596,66 @@ class MembraneFiltration(bst.Unit):
         """
         """
         # Input stream
-        feed = self.ins
+        feed, = self.ins
 
         # Output streams
         permeate, retentate = self.outs
         permeate.copy_like(feed)
 
-        # Calculate water (or solvent) in permeate and retentate
+        # Calculate the amount of solids retained
+        solids_retained = 0
+        for solid in self.solids_retained:
+            flow_permeate = 0 * feed.imass[solid]
+            flow_retentate = 1 * feed.imass[solid]
+            solids_retained += flow_retentate
+
+            permeate.imass[solid] = flow_permeate
+            retentate.imass[solid] = flow_retentate
+
+        # Calculate the amount of water or solvent needed to get the solids concentration
         ## Get the main chemical of the stream
         main_chemical = feed.main_chemical
         
         ## Solvent content is calculated using solid concentration (kg/kg) of retentate
-        solvent_content = (1-self.retentate_solids_conc)
+        C_s = self.retentate_solids_conc
+        water_ret_needed = solids_retained * (1 - C_s) / C_s
         
-        # Distribute solvent between retentate and permeate
-        retentate.imass[main_chemical] =  solvent_content * feed.imass[main_chemical]
-        permeate.imass[main_chemical] = (1-solvent_content) * feed.imass[main_chemical]
+        water_feed = feed.imass[main_chemical]
 
-        # Calculate distribution of solids retained
-        for chem in feed.chemicals.IDs:
-            if chem not in self.solids_retained: continue
-            else: retentate.imass[chem] = 1 * feed.imass[chem]; permeate.imass[chem] = 0 * feed.imass[chem]     #TODO allow to change the % of solids retained
+        ## Could not retain more water than the amount in feed
+        water_ret = min(water_ret_needed, water_feed)
+        water_per = water_feed - water_ret
+        
+        retentate.imass[main_chemical] = water_ret
+        permeate.imass[main_chemical] = water_per
     
     @property
     def kWh_per_kg(self):
         """
         """
         if self._kWh_per_kg is None:
-            self._kWh_per_kg = 10**3    # Lower value from http://dx.doi.org/10.1016/j.jclepro.2016.06.164
+            self._kWh_per_kg = 10**-3   # Lower value from http://dx.doi.org/10.1016/j.jclepro.2016.06.164
         return self._kWh_per_kg
 
     def _design(self):
         """
         """
         # The area is calculated using the permeate following the next
-        # equation: A = Q/(Lp * (deltaP))
+        # equation: LMH = Q/A                                                           #TODO apply temperature increment (+25% for each +10ºC)
         feed = self.ins[0]
         permeate = self.outs[0]
-
-        mass_flow = permeate.F_mass/3600                        # kg/s
-        Lp = membrane_configuration[self.type]["Lp"]            # kg/(m^2 * s * Pa)
-        deltaP = membrane_configuration[self.type]["deltaP"]    # Pa
         
-        A = mass_flow / (Lp[1] * deltaP[1])
+        LMH = membrane_LMH[self.type][1] * 10**-3 * 3600 * permeate.rho  # kg/h         #TODO Use a conservative value (mean for example)S
+        
+        A = permeate.F_mass / LMH
 
         # design results
         design = self.design_results
         design["Area (total)"] = A
 
         # Number of modules needed
-        volumetric_flow = permeate.F_vol/3600                               # m3/s
-        capacity = membrane_configuration[self.type]["Capacity/unit"][1]    # m3/s
+        volumetric_flow = permeate.F_vol/3600                   # m3/s
+        capacity = membrane_capacity[self.type][1]              # m3/s
         self.parallel["Modules"] = volumetric_flow/capacity
 
         # Utilities
