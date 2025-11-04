@@ -10,6 +10,7 @@ import pandas as pd
 
 __all__ = (
     "extract_components_flow",
+    "calculate_stream_price",
 )
 
 @runtime_checkable
@@ -19,6 +20,8 @@ class _StreamLike(Protocol):
     def imass(self): ...
     @property
     def imol(self): ...
+    @property
+    def F_mass(self): ...
 
 def _get_available_chemicals_ID(chemicals: list[object]) -> list[str]:
     """
@@ -60,3 +63,35 @@ def extract_components_flow(
     if as_series:
         return pd.Series(comp_flows,name=label)
     return comp_flows
+
+def calculate_stream_price(composition_price: dict = None, *,stream: _StreamLike = None, chems_price: dict = None, basis: Literal["mass", "molar"] = "mass"):
+    """
+    """
+    if (stream or chems_price) is not None:
+        # Check if all parmeters are provided
+        if chems_price is None: raise ValueError("A price dictionary of each chemical must be given")
+        if stream is None: raise ValueError("A bst.Stream object must be provided")
+
+        # Get a dict with each chemical and its flow
+        flows = extract_components_flow(stream, basis)
+        total = stream.F_mass
+
+        # Calculate the price of the stream per kg as the composition of each chemical multiplied by its price
+        stream_price = 0
+        for key, value in flows.items():
+            if key in chems_price:
+                mass_composition = value/total
+                stream_price += mass_composition * chems_price[key]
+            else:
+                raise KeyError("The next chemical could not be found in the chems_price dictionary: {}".format(key))
+
+        return stream_price
+    elif composition_price is not None:
+        # Get the stream price as composition multiplied by price
+        stream_price = 0
+        for key, value in composition_price.items():
+            stream_price += key * value
+        
+        return stream_price
+    else:
+        raise ValueError("Either composition_price or stream and chems_price must be provided.")

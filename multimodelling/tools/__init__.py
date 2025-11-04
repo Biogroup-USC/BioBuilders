@@ -17,4 +17,5 @@ __all__ = (
     "get_dataframe_positions",
     "simplify_labels",
     "extract_components_flow",
+    "calculate_stream_price",
 )
