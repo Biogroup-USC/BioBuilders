@@ -11,6 +11,7 @@ from .extraction import ExtractionReactor,SLECbySplit,LLEbySplit
 from .filtration import RotaryVacuumFilter, RotatoryVacuumDrumFilter, MembraneFiltration
 from .flash import Flash
 from .distillation import BinaryDistillation
+from .separator import SeparationUnit
 
 __all__ = (
     "BatchEnzymaticTreatment",
@@ -31,5 +32,6 @@ __all__ = (
     "BinaryDistillation",
     "LLESettler",
     "LiquidsSettler",
-    "MembraneFiltration"
+    "MembraneFiltration",
+    "SeparationUnit",
 )
