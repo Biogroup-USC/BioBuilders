@@ -195,7 +195,7 @@ DB.insert_data_into_db(
     ID = 'Choline_Chloride',
     CAS = '67-48-1',
     formula = 'C5H14NOCl',
-    MW = 139.62,            # g/mol 
+    MW = 139.62276,         # g/mol 
     Phase = 's',
     Cp = 249/139.62,        # J/(g*K) calculated using the hypothetical heat capacity of the liquid (ChCl) obtained in https://doi.org/10.1039/D2CP00377E.
     Rho = 1205,             # kg/m3 from https://www.chemsrc.com/en/cas/67-48-1_829430.html
@@ -205,9 +205,9 @@ DB.insert_data_into_db(
 # NADES (Choline lactate [1:2])
 DB.insert_data_into_db(
     ID = 'NADES_ChCl_LA_1_2',
-    MW = (139.62 + 2 * 90.078),          # Ch:LA [1:1]
+    MW = 319.77964,                 # Ch:LA [1:1]
     Phase = 'l',
-    Rho = 1138.0,           # kg/m3 https://pmc.ncbi.nlm.nih.gov/articles/PMC9655353/pdf/molecules-27-07429.pdf
+    Rho = 1138.0,                   # kg/m3 https://pmc.ncbi.nlm.nih.gov/articles/PMC9655353/pdf/molecules-27-07429.pdf
     Cp = 4.18,
     V = (139.62 + 2 * 90.07794)*(1/1138.0)
 )
