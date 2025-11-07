@@ -1,5 +1,5 @@
 from .logmean import log_mean
-from .economy import discounting_to_present_value, updating_to_future_value, calculate_labor_requirements
+from .economy import discounting_to_present_value, updating_to_future_value, calculate_labor_requirements, calculate_mean_median_price
 from .unitsdiameter import calculate_centrifuge_diameter
 from .solveparameter import solve_operating_pressures_multieffectevaporator
 from .unitsarea import calculate_rdvf_area
@@ -15,5 +15,6 @@ __all__ = (
     "solve_operating_pressures_multieffectevaporator",
     "calculate_rdvf_area",
     "calculate_agitator_power",
-    "damp_to"
+    "damp_to",
+    "calculate_mean_median_price",
 )

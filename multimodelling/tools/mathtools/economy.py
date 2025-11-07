@@ -8,7 +8,8 @@ __all__ = (
     "discounting_to_present_value",
     "updating_to_future_value",
     "build_nominal_factor",
-    "calculate_labor_requirements"
+    "calculate_labor_requirements",
+    "calculate_mean_median_price",
 )
 
 # Inflation
@@ -182,3 +183,12 @@ def calculate_labor_requirements(equipment_type_N: dict = None): #TODO Peters pa
 
     # Return the total labor and the total labor per equipment
     return Total_Labor, Labor_per_N_Equip
+
+def calculate_mean_median_price(prices: list[float] = None, type: int = 0):
+    """
+    """
+    if type == 0:
+        price = np.mean(prices)
+    elif type == 1:
+        price = np.median(prices)
+    return price

@@ -18,4 +18,5 @@ __all__ = (
     "simplify_labels",
     "extract_components_flow",
     "calculate_stream_price",
+    "calculate_mean_median_price",
 )
