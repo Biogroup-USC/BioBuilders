@@ -133,7 +133,6 @@ class SRC:
             ax.tick_params(axis = 'y', labelsize = 6)
             ax.tick_params(axis = 'x', labelsize = 6)
             plt.xticks(rotation = 45, ha = 'right')
-            plt.subplots_adjust(bottom = 0.10, top = 0.90, left = 0.25, right = 0.95)
             if show_plot is True:
                 plt.show()
 
