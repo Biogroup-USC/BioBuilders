@@ -1,38 +1,76 @@
 """
 """
 from .chem_db import ChemDataBase
+from ..tools.chemicaltools import normalise_key, coerce_value, validate_minimums, warn_unknown_keys
 import biosteam as bst
 
-__all__=('ChemManager',)
+__all__=('ChemicalsManager',)
 
-class ChemManager:
-
-    def __init__(self, chemlist: list = None):
-        """
-        _______________________________________________________
-
-        This class creates a Chemical Manager that facilitates 
-        the creation of chemicals and setting the thermodynamic
-        properties.
-
-        _______________________________________________________
-
-        ARGUMENTS:
-            chemlist (list):
-                This list must contain the chemicals of the whole
-                system.
-        """
-        self.chems = chemlist if chemlist is not None else []
+class ChemicalsManager:
+    """
     
+    Create and initialise biosteam's thermodynamic package.
+
+    This class helps to create chemicals using BioSTEAM databases (ChEDL/BioSTEAM). If
+    the compound is not found inside these databases, then uses this package
+    database. Just in case the chemical cannot be found there, it asks the user
+    to provide properties for creting the chemical.
+
+    Parameters
+    ----------
+    chem_list : list[str]
+        List of IDs for creating the chemicals. Each ID must follow BioSTEAM conventions
+        (e.g. Water or Lactic_Acid).  
+    
+    """
+
+    def __init__(self, chem_list: list[str] = None):
+        """
+        """
+        if chem_list is None:
+            raise ValueError("You must provide a valid chem_list: 'list[str]'")
+        self.chems = chem_list
+
     def get_chem_list(self):
         """
         
-        This method is used to get the list of chemicals inside the
-        object ChemManager.
+        This method is used to get the list of chemicals inside ChemicalsManager.
 
         """
         return self.chems
     
+    def _solve_chem_kwargs(self, chem_id, db: ChemDataBase, user_props) -> dict:
+        """
+        """
+        # Initialise compulsory properties
+        kwargs = {"ID": chem_id, "cache": False}
+
+        # Check in ChEDL/BioSTEAM database
+        try:
+            _ = bst.Chemical(chem_id, search_db = True, cache = False)
+            kwargs["search_db"] = True
+            return kwargs
+        except LookupError:
+            kwargs['search_db'] = False
+        
+        # Own database
+        if db and db.check_chemical(chem_id):
+            raw = db.get_certain_data_from_db(chem_id, ["rho","MW","formula","Phase","Hvap","Cp","V","Hf"])
+            db_props = {normalise_key(k): coerce_value(normalise_key(k), v) for k, v in raw.items()}
+            kwargs.update(db_props)
+        
+        # user_props (override optional)
+        if user_props and chem_id in user_props:
+            u_props = user_props[chem_id]
+            user_norm = { normalise_key(k): coerce_value(normalise_key(k), v) for k,v in u_props.items()}
+            kwargs.update(user_norm)
+        
+        # Validation and warnings
+        validate_minimums(kwargs, strict = True)
+        warn_unknown_keys(kwargs)
+
+        return kwargs
+
     def creating_chems(self, properties: dict = None, checks = False):                          #TODO add the function to copy properties from a certain chemical
         """                                                                     
         This method allows creating any chemical disregarding wether or
