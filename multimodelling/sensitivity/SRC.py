@@ -123,7 +123,7 @@ class SRC:
             
             # Plot
             N_var = src[indicator].shape[0]
-            fig, ax = plt.subplots(figsize = (6, N_var * 0.5))
+            fig, ax = plt.subplots(figsize = (6, N_var * 0.5), constrained_layout = True)
             
             # Plot a bar chart for this indicator
             ax.barh(coeffs.index, coeffs.values, color = 'skyblue', edgecolor = 'k')
@@ -141,7 +141,7 @@ class SRC:
             if path:
                 safe_ind = sanitize_filename(indicator)
                 file_path = os.path.join(path, 'src_{}.png'.format(safe_ind))
-                fig.savefig(file_path)
+                fig.savefig(file_path, bbox_inches = 'tight', pad_inches = 0.2)
                 print("")
                 print("Plot {} saved to {}".format(safe_ind,path))
                 print("")
