@@ -23,6 +23,11 @@ class ExtractionReactor(bst.Unit):
     # Number of outlet streams
     _N_outs = 1
 
+    _units = {
+        'Reactor volume': 'm3',
+        'Residence time (tau)': 'h',
+    }
+
     def _init(self,
               extract_reaction: bst.Reaction | bst.ReactionSystem = None,
               tau: float = None,
@@ -48,18 +53,18 @@ class ExtractionReactor(bst.Unit):
         """
         """
         # Define the inlet streams
-        Feed, Solvent = self.ins
+        feed, solvent = self.ins
 
         # Define the outlet streams
-        Slurry, = self.outs
+        slurry, = self.outs
 
         # Mix the streams
-        Slurry.mix_from([Feed, Solvent])
-        Slurry.P = self.operating_P
-        Slurry.T = self.operating_T
+        slurry.mix_from([feed, solvent])
+        slurry.P = self.operating_P
+        slurry.T = self.operating_T
 
         # Perform the reaction
-        self.extract_react(Slurry)
+        self.extract_react(slurry)
     
     @property
     def kW_per_m3(self):
@@ -110,18 +115,25 @@ class ExtractionReactor(bst.Unit):
         design = self.design_results
 
         # Load the input streams of the unit and mix them
-        Slurry, = self.outs
+        feed, solvent = self.ins
 
         # Load the parameters
         V_wf = self.V_wf
         tau = self.tau
 
         # Calculate the mixing tank volume
-        Inputs_F_Vol = (Slurry.F_vol)
+        mixed = bst.Stream()
+        mixed.mix_from([feed, solvent], energy_balance = True)
+        mixed.T = self.operating_T
+        mixed.P = self.operating_P
+        Inputs_F_Vol = mixed.F_vol
         V_0 = Inputs_F_Vol * tau
 
         # Add the reactor volume
-        design['Mixing tank volume'] = V_0/V_wf
+        design['Reactor volume'] = V_0/V_wf
+
+        # Add tau
+        design['Residence time (tau)'] = tau
     
     @property
     def base_cost_tank(self):
@@ -183,7 +195,7 @@ class ExtractionReactor(bst.Unit):
         """
         """
         # Load all the design parameters needed to calculate the costs
-        V_Tank = self.design_results['Mixing tank volume']
+        V_Tank = self.design_results['Reactor volume']
 
         # Calculate the baseline purchase cost for the mixing tank
         ## The base cost accounts for jacketed agitated vessel.

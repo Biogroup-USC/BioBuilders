@@ -155,22 +155,19 @@ class ContinuousStirredTankReactor(bst.Unit):
         """
         # Load the dictionary of results
         Design = self.design_results
-        Ins1, Ins2 = self.ins
-        Load = bst.Stream(units = 'kg/hr')
-        Load.mix_from([Ins1, Ins2], energy_balance = True)
+        ins1, ins2 = self.ins
+        load = bst.Stream(units = 'kg/hr')
+        load.mix_from([ins1, ins2], energy_balance = True)
 
         # Calculate the reactor volume
-        Inputs_F_Vol = (Ins1.F_vol + Ins2.F_vol)
-        Input_Flow = Inputs_F_Vol
-        
-        # Calculate the number of batches needed to operate in semi-continuous
+        Input_Flow = load.F_vol
         tau = self.tau                      # h
         V_wf = self.V_wf            
         V_max = self.V_max                  # m3
         V_0 = Input_Flow * tau              # Working volume of the reactor
         if V_0 > V_max:
-            Unit = self.ID
-            Warning('The cost correlation parameters for tank volume have a maximum volume of {} m3. The current volume of {} is {} m3'.format(V_max, Unit, V_0))
+            unit = self.ID
+            Warning('The cost correlation parameters for tank volume have a maximum volume of {} m3. The current volume of {} is {} m3'.format(V_max, unit, V_0))
 
         # Add the reactor volume, the number of reactors, batch time and loading+cleaning time
         Design['Reactor volume (total)'] = (V_0/V_wf)       # m3
@@ -182,10 +179,10 @@ class ContinuousStirredTankReactor(bst.Unit):
 
         # Add the heat utility assuming that the process is adiabatic
         Tf = self.operating_T                   # K
-        Ti = Load.T                             # K
-        if Load.F_mass > 0 and Load.MW > 0:
-            Cp = Load.Cp
-            duty = Cp * (Tf-Ti) * Load.F_mass  # kJ/h
+        Ti = load.T                             # K
+        if load.F_mass > 0 and load.MW > 0:
+            Cp = load.Cp
+            duty = Cp * (Tf-Ti) * load.F_mass  # kJ/h
             self.add_heat_utility(duty, T_in = Ti, T_out = Tf)
         else:
             Warning("[{}] Empty or undefined stream: skipping heat duty".format(self.ID))
