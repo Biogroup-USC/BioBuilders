@@ -230,7 +230,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         # Calculate the reactor volume
         Inputs_F_Vol = (ins1.F_vol + ins2.F_vol)
         Input_Flow = Inputs_F_Vol
-        print(Input_Flow)
+
         # Calculate the number of batches needed to operate in semi-continuous
         time = self.time                                    # h
         time_loading = self.time_loading                    # h
@@ -241,7 +241,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         N_reactors = self.N_reactors
         V_0 = Input_Flow * total_time * 1/(N_reactors-1)    # Volume of each reactor
         V_total = V_0/V_wf                                  # Total volume of each reactor
-        print(V_total,V_0,total_time)
+
         # Minimum 2 reactor: There must be at least 2 reactor to operate in semicontinuous
         if N_reactors < 2:
             raise ValueError("Minimum 2 reactors needed to semicontinuous mode. current: '{}'".format(N_reactors))
@@ -255,7 +255,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         design['Loading time'] = time_loading                   # h
         design['CIP time'] = time_CIP                           # h 
         self.parallel['Reactor'] = N_reactors
-        print(V_total*N_reactors)
+
         # Add the power utility
         Power_Stirring = self.kW_per_m3 * design["Reactor volume (total)"]
         self.add_power_utility(Power_Stirring)
