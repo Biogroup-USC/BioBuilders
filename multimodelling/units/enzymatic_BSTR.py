@@ -1,7 +1,7 @@
 """
 """
 import biosteam as bst
-import math
+from warnings import warn
 
 __all__ = ("BatchEnzymaticTreatment",)
 
@@ -110,7 +110,8 @@ class BatchEnzymaticTreatment(bst.Unit):
               time_loading: float = None,
               time_CIP: float = None,
               operating_T: float = 298.15,
-              operating_P: float = 101325
+              operating_P: float = 101325,
+              N_reactors: int = 2,
               ):
         """
 
@@ -141,6 +142,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         self.time_CIP = time_CIP
         self.operating_T = operating_T
         self.operating_P = operating_P
+        self.N_reactors = N_reactors
         self._kW_per_m3 = None
         self._V_wf = None
         self._V_max = None
@@ -224,37 +226,36 @@ class BatchEnzymaticTreatment(bst.Unit):
         load = bst.Stream(units = 'kg/hr')
         load.copy_like(ins1)
         load.mix_from([ins1, ins2], energy_balance = True)
-        print(out.F_vol)
+        
         # Calculate the reactor volume
         Inputs_F_Vol = (ins1.F_vol + ins2.F_vol)
         Input_Flow = Inputs_F_Vol
-        print(Inputs_F_Vol)
+        print(Input_Flow)
         # Calculate the number of batches needed to operate in semi-continuous
-        time = self.time                    # h
-        time_loading = self.time_loading    # h
-        time_CIP = self.time_CIP            # h
-        V_wf = self.V_wf            
-        V_max = self.V_max                  # m3
-        V_0 = Input_Flow * (time + time_loading + time_CIP) # Volume needed for semicontinuous
-        N = ((V_0)/(V_max * V_wf) + 1)      # One more reactor is always needed to ensure semicontinuos  
-
+        time = self.time                                    # h
+        time_loading = self.time_loading                    # h
+        time_CIP = self.time_CIP                            # h
+        total_time = time + time_loading + time_CIP         # h
+        V_wf = self.V_wf        
+        V_max = self.V_max                                  # m3
+        N_reactors = self.N_reactors
+        V_0 = Input_Flow * total_time * 1/(N_reactors-1)    # Volume of each reactor
+        V_total = V_0/V_wf                                  # Total volume of each reactor
+        print(V_total,V_0,total_time)
         # Minimum 2 reactor: There must be at least 2 reactor to operate in semicontinuous
-        if N < 2:
-            N = 2
-        elif N >= 2 and not isinstance(N, int):
-            
-            # Recalculate the volume of each reactor to obtain an exact number
-            N0 = math.trunc(N) + 1
-            N = N0
+        if N_reactors < 2:
+            raise ValueError("Minimum 2 reactors needed to semicontinuous mode. current: '{}'".format(N_reactors))
+        elif V_total > V_max:
+            raise warn("The volume of each reactor exceeds V_max. Increase 'N_reactors': {} (current)".format(N_reactors))
         
         # Add the reactor volume, the number of reactors, batch time and loading+cleaning time
-        design['Reactor volume (total)'] = (V_0/V_wf)       # m3
-        design['Reactor volume (single)'] = (V_0/V_wf)/N    # m3
-        design['Batch time'] = time                         # h
-        design['Loading time'] = time_loading               # h
-        design['CIP time'] = time_CIP                       # h 
-        self.parallel['Reactor'] = N
-        
+        design['Reactor volume (total)'] = V_total * N_reactors # m3
+        design['Reactor volume (single)'] = V_total             # m3
+        design['Batch time'] = time                             # h
+        design['Loading time'] = time_loading                   # h
+        design['CIP time'] = time_CIP                           # h 
+        self.parallel['Reactor'] = N_reactors
+        print(V_total*N_reactors)
         # Add the power utility
         Power_Stirring = self.kW_per_m3 * design["Reactor volume (total)"]
         self.add_power_utility(Power_Stirring)
