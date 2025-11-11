@@ -218,17 +218,17 @@ class BatchEnzymaticTreatment(bst.Unit):
         """
         """
         # Load the dictionary of results
-        Design = self.design_results
-        Ins1, Ins2 = self.ins
-        Out = self.outs
-        Load = bst.Stream(units = 'kg/hr')
-        Load.copy_like(Ins1)
-        Load.mix_from([Ins1, Ins2], energy_balance = True)
-
+        design = self.design_results
+        ins1, ins2 = self.ins
+        out, = self.outs
+        load = bst.Stream(units = 'kg/hr')
+        load.copy_like(ins1)
+        load.mix_from([ins1, ins2], energy_balance = True)
+        print(out.F_vol)
         # Calculate the reactor volume
-        Inputs_F_Vol = (Ins1.F_vol + Ins2.F_vol)
+        Inputs_F_Vol = (ins1.F_vol + ins2.F_vol)
         Input_Flow = Inputs_F_Vol
-        
+        print(Inputs_F_Vol)
         # Calculate the number of batches needed to operate in semi-continuous
         time = self.time                    # h
         time_loading = self.time_loading    # h
@@ -248,21 +248,21 @@ class BatchEnzymaticTreatment(bst.Unit):
             N = N0
         
         # Add the reactor volume, the number of reactors, batch time and loading+cleaning time
-        Design['Reactor volume (total)'] = (V_0/V_wf)       # m3
-        Design['Reactor volume (single)'] = (V_0/V_wf)/N    # m3
-        Design['Batch time'] = time                         # h
-        Design['Loading time'] = time_loading               # h
-        Design['CIP time'] = time_CIP                       # h 
+        design['Reactor volume (total)'] = (V_0/V_wf)       # m3
+        design['Reactor volume (single)'] = (V_0/V_wf)/N    # m3
+        design['Batch time'] = time                         # h
+        design['Loading time'] = time_loading               # h
+        design['CIP time'] = time_CIP                       # h 
         self.parallel['Reactor'] = N
         
         # Add the power utility
-        Power_Stirring = self.kW_per_m3 * Design["Reactor volume (total)"]
+        Power_Stirring = self.kW_per_m3 * design["Reactor volume (total)"]
         self.add_power_utility(Power_Stirring)
 
         # Add the heat utility assuming that the process is adiabatic
         Tf = self.operating_T                   # K
-        Ti = Load.T                             # K
-        Duty = Load.Cp * (Tf-Ti) * Load.F_mass  # kJ/h
+        Ti = load.T                             # K
+        Duty = load.Cp * (Tf-Ti) * load.F_mass  # kJ/h
         self.add_heat_utility(Duty, T_in = Ti, T_out = Tf)
     
     @property
