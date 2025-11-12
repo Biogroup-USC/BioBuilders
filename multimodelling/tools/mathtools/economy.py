@@ -2,6 +2,7 @@
 """
 
 import numpy as np
+import math
 from typing import Mapping, Sequence, Union
 
 __all__ = (
@@ -142,7 +143,7 @@ def build_nominal_factor(years: Sequence[int], base_year: int, yearly_rates: Uni
 ## Labor/Equipment correlation
 ## Reference: Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
 ## Chapter 6, page 264
-Labor_per_Equip = {
+labor_per_equip = {
     "Blowers": 0.2,                     # Workers/unit/shift                                      
     "Compressors": 0.2,                 # Workers/unit/shift
     "Centrifugal separators": 0.50,     # Workers/unit/shift            
@@ -152,37 +153,76 @@ Labor_per_Equip = {
     "Tray dryer": 0.5,                  # Workers/unit/shift
     "Evaporator": 0.25,                 # Workers/unit/shift
     "Vacuum filter": 0.25,              # Workers/unit/shift    
-    "Plate & Frame filter": 1.0,        # Workers/unit/shift    
-    "Rotatory & Belt filter": 0.1,      # Workers/unit/shift    
-    "Heat Exchanger": 0.1,              # Workers/unit/shift
+    "Plate & frame filter": 1.0,        # Workers/unit/shift    
+    "Rotatory & belt filter": 0.1,      # Workers/unit/shift    
+    "Heat exchanger": 0.1,              # Workers/unit/shift
     "Process vessel": 0.5,              # Workers/unit/shift
     "Batch reactor": 1.0,               # Workers/unit/shift
     "Continuous reactor": 0.5,          # Workers/unit/shift
 }
 
-def calculate_labor_requirements(equipment_type_N: dict = None): #TODO Peters page 264 table
+def calculate_labor_requirements(equipment_type_N: dict = None, shifts: int = 3): #TODO Peters page 264 table
     """
+
+    Calculate the labor requeriments depending on the number and type of equipments used in
+    the process. This calculation could be performed considering 1, 2 or 3 shifts.
+
+    Parameters
+    ----------
+    equipment_type_N : dict[str,int]
+        This dictionary contains each equipment type (key) and its number (value).
+        Moreover, the only valid equipments are the following:
+            * Blowers
+            * Compressors
+            * Centrifugal separators
+            * Crystallizer
+            * Rotatory dryer
+            * Spray dryer
+            * Tray dryer
+            * Evaporator
+            * Vacuum filter
+            * Plate & frame filter
+            * Rotatory & belt filter
+            * Heat exchanger
+            * Process vessel
+            * Batch reactor
+            * Continuous reactor
+    shifts : int
+        Number of shifts to calculate labor requirements.
+
+    Returns
+    -------
+    Int:
+        Labor requirement.
+    dict:
+        Labor per equipment per shift.
+
     """
     # Check if the dictionary of equipment is provided
     if equipment_type_N is None:
         raise ValueError("A dictionary of equipment counts must be provided")
 
     # Dictionary to save the total labor per equipment given the number of each equipment
-    Labor_per_N_Equip = {}
+    labor_per_N_equip = {}
     
     # Total labor variable
-    Total_Labor = 0.0
+    total_labor = 0.0
 
     # Calculate the total labor per equipment of the process
     for equip in equipment_type_N.keys():
-        if equip not in Labor_per_Equip:
-            raise KeyError("{} not found in Labor_per_Equip table: \ {}".format(equip,Labor_per_Equip))
-        Labor = equipment_type_N[equip] * Labor_per_Equip[equip]
-        Labor_per_N_Equip[equip] = Labor
-        Total_Labor += Labor
+        if equip not in labor_per_equip:
+            raise KeyError("{} not found in Labor_per_Equip table: \ {}".format(equip,labor_per_equip))
+        labor = equipment_type_N[equip] * labor_per_equip[equip]
+        labor_per_N_equip[equip] = labor
+        total_labor += labor
+    
+    labor_ceil = math.ceil(total_labor)
 
     # Return the total labor and the total labor per equipment
-    return Total_Labor, Labor_per_N_Equip
+    if shifts == 1:
+        return labor_ceil, labor_per_N_equip
+    elif shifts == 2 or shifts == 3:
+        return labor_ceil/shifts, labor_per_N_equip
 
 def calculate_mean_median_price(prices: list[float] = None, type: int = 0):
     """
