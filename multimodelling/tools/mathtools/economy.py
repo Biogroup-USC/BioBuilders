@@ -222,7 +222,7 @@ def calculate_labor_requirements(equipment_type_N: dict = None, shifts: int = 3)
     if shifts == 1:
         return labor_ceil, labor_per_N_equip
     elif shifts == 2 or shifts == 3:
-        return labor_ceil/shifts, labor_per_N_equip
+        return labor_ceil*shifts, labor_per_N_equip
 
 def calculate_mean_median_price(prices: list[float] = None, type: int = 0):
     """
