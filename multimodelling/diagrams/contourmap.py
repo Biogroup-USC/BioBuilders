@@ -36,6 +36,25 @@ class CSIndicator:
 
 class ContourStudy:
     """
+
+    Construct and evaluate 2-parameter contour maps over BioSTEAM process
+    simulation.
+
+    This class provides the infrastructure required to perform systematic
+    parametric evaluations on a `bst.TEA` object, with the aim of visualizing
+    how economic or process indicators are influenced in a two-dimensional design
+    space. Parameters and indicators are registered through decorators, following
+    BioSTEAM conventions. This enables a clean separation between model definition
+    and the numerical exploration of the design space.
+
+    Parameters
+    ----------
+    TEA : bst.TEA
+        A BioSTEAM TEA object associated with a system capable of being simulated. The
+        TEA must expose a ``system`` attribute and the system must provide ``simulate()``
+        method. The economic or process outputs (indicators) are assumed to be consistent
+        with the state of this system.
+
     """
     def __init__(self,
                  TEA: bst.TEA = None,
@@ -57,18 +76,62 @@ class ContourStudy:
     @property
     def parameters(self):
         """
+
+        List of registered model parameters.
+
         """
         return self._parameters
 
     @property
     def indicators(self):
         """
+
+        List of registered model indicators.
+
         """
         return self._indicators
 
     # Define parameters using BioSTEAM conventions
     def parameter(self,*, name = None, element = None, units = None, baseline = None,
                   bounds = None, n = None, levels = None, coupled = False, description = None):
+        """
+
+        Register a model parameter for contour mapping and parametric studies.
+
+        This method is a decorator that converts a setter function into a `CSParameter` object.
+        A parameter defines how a model variable is perturbed during this parametric study.
+
+        Parameters
+        ----------
+        name : str, optional
+            Name of the parameter. Defaults to the setter function name.
+        element : object, optional
+            Optional reference to the model element that the parameter modifies
+            (e.g., a BioSTEAM 'Unit', 'Stream' or a 'Specification'). Used only
+            for annotation purposes.
+        units : str, optional
+            Physical units of the parameter (e.g., `"kg/h"`). Used for plotting and
+            reporting.
+        baseline : float
+            Baseline value assigned to the parameter which represents its current value.
+        bounds : tuple[float, float]
+            Minimum and maximum values for uniform sampling. Mutually exclusive with `levels`.
+            Required when generating grids for contour maps unless discretization is given explicitly
+            through `levels`.
+        n : int
+            Number of evenly spaced samples between ``bounds`` when creating a grid. If omitted, the grid
+            constructor must apply its own discretization.
+        levels : array_like of float
+            Explicit values at which the parameter is evaluated. Cannot be combined with ``bounds``. Use this
+            when user-defined sampling is required.
+        coupled : bool, default=False
+            Flag for parameters that conceptually depend on other parameters or are part of a coupled design (not           #TODO
+            implemented yet).
+        description : str, optional                                                                                         #TODO
+            Human-readable description of the parameter, useful for plots, reports and documentation (not implemented
+            yet)
+            
+        """
         def decorator(setter_fn: Callable[[float], None]):
             p = CSParameter(
                 name=name or setter_fn.__name__,
@@ -84,6 +147,22 @@ class ContourStudy:
     
     # Define indicator using BioSTEAM conventions
     def indicator(self,*, name = None, units = None, element = None):
+        """
+        
+        Register an indicator (scalar output metric) evaluated after each run.
+        This method is a decorator that converts a setter function into a `CSIndicator` object.
+        Indicators are evaluated after every succesfull simulation during a contour study and
+        their values are stored on a 2D grid for visualisation.
+        Parameters
+        ----------
+        name : str, optional
+            Name of the indicator. Defaults to the name of the getter function.
+        units : str, optional
+            Physical units of the indicator.
+        element: object, optional
+            Optional reference to the model element from which the indicator is derived.
+        
+        """
         def decorator(getter_fn: Callable[[],float]):
             ind = CSIndicator(
                 name=name or getter_fn.__name__,
@@ -95,6 +174,28 @@ class ContourStudy:
     
     def build_grid(self, param_x: str, param_y: str, nx: int, ny: int, order: str = "row"):
         """
+
+        Build a Cartesian grid for two registered parameters.
+
+        This method locates the two parameters by name, reads their bounds and calls
+        `build_cartesian_grid` function to generate a regular 2D grid of (x, y) values
+        which will be used as input in `run_on_grid` method.
+
+        Parameters
+        ----------
+        param_x : str
+            Name of the parameter to be placed on the x-axis.
+        param_y : str
+            Name of the parameter to be placed on the y-axis.
+        nx : int
+            Number of grid points along the x-axis.
+        ny : int
+            Number of grid points along the y-axis.
+        order : {"row", "column"}, default="row"
+            Returned coordinate pairs order which will be directly passed to `build_cartesian_grid`.
+            This affects the order in which simulations are performed but not the shape of ``X`` and
+            ``Y``.
+
         """
         px = next((p for p in self.parameters if p.name == param_x), None)
         py = next((p for p in self.parameters if p.name == param_y), None)
@@ -108,6 +209,19 @@ class ContourStudy:
     @staticmethod
     def _ix(v, arr):
         """
+
+        Return the index of the grid value closest to a given scalar.
+
+        The search first attempts to match values using `numpy.isclose` with a tight tolerance; if no
+        element is considered close, the index of the nearest value (in absolute difference) is returned.
+
+        Parameters
+        ----------
+        V : float
+            Target value to locate in the array.
+        arr : array_like
+            One-dimensional array of grid coordinates.
+
         """
         idx = np.where(np.isclose(arr, v, rtol=1e-10, atol=1e-12))[0]
         return int(idx[0]) if idx.size else int(np.argmin(np.abs(arr-v)))
@@ -118,6 +232,30 @@ class ContourStudy:
             x_display_fn = None, 
             y_display_fn = None):
         """
+
+        Evaluate the BioSTEAM system over a 2D grid of parameter values.
+
+        For each (x, y) pair in ``pairs``, this method assigns the corresponding
+        parameter values through ``px.setter`` and ``py.setter``, calls ``self.system.simulate()``
+        and records the values of the selected indicators on a 2D array. Simulation failures are logged
+        but do not interrupt the execution.
+
+        Parameters
+        ----------
+        X, Y : ndarray
+            2D arrays representing the x- and y- coordinates of the grid, returned by `CountourStudy.build_grid`.
+        pairs : iterable of tuple[float, float]
+            Iterable of (x, y) values indicating the parameter values for each simulation.
+        px, py : CSParameter
+            Parameter objects corresponding to the x and y axes, returned by `ContourStudy.build_grid`.
+        indicators : str or sequence of str
+            Names of the indicators to evaluate, if `None`, all registered indicators are used. Raises an error
+            if any requested indicator is not found.
+        x_display_fn, y_display_fn : callable, optional
+            Optional functions ``f(vx, vy, self) -> float`` used to transform the x and/or y coordinates stored in
+            the plotting grids. This is useful when the design variable is defined in one space but plots should be
+            shown in another (e.g., logarithmic scaling,...)
+
         """
         # 1D axis of the grid
         x_vals = X[0,:]
@@ -204,6 +342,15 @@ class ContourStudy:
     
     def _get_param(self, name_or_param):
         """
+
+        Resolve a parameter from its name or return the object directly.
+
+        Parameters
+        ----------
+        name_or_param : str or CSParameter
+            Either the name of a registered parameter of an existing
+            `CSParameter` instance.
+
         """
         if isinstance(name_or_param, CSParameter):
             return name_or_param
@@ -217,6 +364,24 @@ class ContourStudy:
 
     def compute_baseline(self, px: str, py: str, indicators = None, x_display_fn = None , y_display_fn = None):
         """
+
+        Evaluate indicator at the baseline point of two parameters.
+
+        This method sets both parameters to their baseline values, runs ``self.system.simulate()``
+        and returns the resulting indicator values along with the (x, y) coordinates used for plotting.
+
+        Parameters
+        ----------
+        px, py : str or CSParameter
+            Names or objects of the parameters defining the x and y axis. Both must have a ``baseline`` defined
+            value.
+        indicators : str or sequence of str, optional
+            Names of the indicators to evaluate. If ``None``, all registered indicators are used. Raises an error
+            if any requested indicator is not found.
+        x_display_fn, y_display_fn : callable, optional
+            Optional transformation functions applied to the baseline coordinates before returning them, consistent
+            with those used in ``ContourStudy.run_on_grid``.
+
         """
         px = self._get_param(px)
         py = self._get_param(py)
@@ -273,6 +438,59 @@ class ContourStudy:
                       desired_ind_linestyle: str = "--"
                       ):
         """
+
+        Generate filled contour plots for one or more indicators.
+
+        This method takes precomputed indicator surfaces (returned by `ContourStudy.run_on_grid`) and
+        creates filled contour plots using `matplotlib.pyplot.contourf`. Additional features include 
+        optional baseline markers, crosshair lines and target-value contours for desired indicator levels.
+
+        Parameters
+        ----------
+        X, Y : ndarray
+            2D arrays of x- and y-coordinates of the grid.
+        zs : dict[str, ndarray]
+            Mapping from indicator names to 2D arrays of the same shape as ``X`` and ``Y``.
+        indicators : str or list[str], optional
+            Indicator(s) to plot. If ``None``, all keys in ``zs`` are used. Raises an error if any requested
+            name is missing.
+        title : str, optional
+            Common title for all generated plots. if ``None``, each figure is titled with the indicator name.   #TODO allow to add a title for each figure
+        x_label, y_label : str, optional
+            Labels for the x and y axes.
+        levels : int or array_like, optional
+            * if an integer is given, the number of contour levels to generate.
+            * if an array is given, explicit contour levels.
+            * if `None` levels are generated automatically inferred from the data.
+        n_round_ind : int, default=1
+            Number of decimals to use when rounding generated contour levels.
+        cmap : str, default="RdBu_r"
+            Colormap name passed to `matplotlib.pyplot.contourf`.
+        path : str, optional
+            File path to save each figure. If ``None``, figures are not saved to disk.
+        baseline : dict, optional
+            Baseline information returned by `ContourStudy.compute_baseline`. If provided, a marker, crosshair and/or indicator contour line can be
+            drawn at the baseline point and value.
+        desired_ind : dict, optional
+            Mapping from indicator name to a dictionary ``{label:value}`` specifying a target contour level to highlight for that indicator (e.g.,
+            ``{"MSP": {"Target": 0.83}}``).
+        marker_color : str, optional
+            color of the baseline indicator. If ``None``, Matplotlib defaults are used.
+        crosshair : bool, default=False
+            Wether to draw vertical and horizontal lines at the baseline x and y coordinates.
+        show_baseline_marker : bool, default=True
+            Wether to plot a marker at the baseline plot.
+        show_baseline_contour : bool, default=True
+            Wether to draw a contour line corresponding to the baseline indicator value.
+        baseline_ind_color : str, default="White"
+            Color of the baseline indicator contour line.
+        baseline_ind_linestyle : str, default="--"
+            Line style of the baseline indicator contour line.
+        desired_ind_color : str, default="Green"
+            Color of the desired indicator contour line(s).
+        desired_ind_linestyle : str, default="--"
+            Line style of the desired indicator contour line(s).
+
         """
         # Validate the presence of the indicator selected 
         if indicators is None:

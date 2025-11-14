@@ -1,12 +1,12 @@
 """
 
 This script contains all the code used to build the multimodelling chemical database
-used to store all the chemicals from the case studies. As consequence, when a new chemical
+which is used to store all the chemicals from the case studies. As consequence, when a new chemical
 is created it will be searched in the two databases included in BioSTEAM and in the multimodelling
-database. If the chemical is in no one, then it must be defined.
+database. If the chemical is not in one of them, then it must be defined.
 
-This code also allows the user to create its own database and _build_database could be taken as an 
-example.
+This code also allows the user to create its own database and _build_database could be taken as a
+template.
 
 """
 import sqlite3
@@ -48,9 +48,9 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         Parameters
         ----------
         dbname : str
-                Name of the database. If the database already exists in your current directory
-                write "mydirectory.db". However, a new database could be created by writing a 
-                new name "mynewdatabase.db".
+            Name of the database. If the database already exists in your current directory
+            write "mydirectory.db". However, a new database could be created by writing a 
+            new name "mynewdatabase.db".
     
         """
         # The default name of the database is "MultiModelling_Chem.db"

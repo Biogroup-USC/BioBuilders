@@ -190,11 +190,11 @@ class ChemicalsManager:
         """
         This method is used to initialize the thermo properties of the 
         chemicals.
-        _________________________________________________________________
 
-        chemicalsobj: This argument correponds to the Chemicals object of BioSteam, obtained
-        from the creating_chems method. When the chemicals of the system are 
-        provided, this method initialize the thermodynamic property package.
+        chemicalsobj : bst.Chemicals
+            This argument correponds to the Chemicals object of BioSteam, obtained
+            from the creating_chems method. When the chemicals of the system are 
+            provided, this method initialize the thermodynamic property package.
 
         """
         mixture = bst.IdealMixture.from_chemicals(chemicalsobj)                     #TODO add the feature to use diferent models of mixtures
