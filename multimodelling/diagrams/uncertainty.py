@@ -13,9 +13,28 @@ __all__ = (
 
 class UncertaintyPlotter:
     """
+
+    Class for analysing and visualising uncertainty in a set of variables
+    stored in a ``pandas.DataFrame``.
+
+    During the initialisation, the class applies a label simplification procedure via ``simplify_labels``
+    function and removes the ```'Element'``` level from a column ``MultiIndex`` if present.
+
+    Parameters
+    ----------
+    uncertainty_df : pandas.DataFrame
+        DataFrame containing uncertainty simulations (Monte Carlo method). Each column represents a variable and
+        each row a simulation.
+    simplified_index : list[str]
+        List of simplified labels used to rename the column.
+
     """
     def __init__(self, uncertainty_df : pd.DataFrame = None, simplified_index : list = None):
         """
+
+        Initialise an ``UncertaintyPlotter`` class with an uncertainty DataFrame and a set of simplified
+        column labels.
+
         """
         # Check the parameters
         if uncertainty_df is None: raise ValueError("A pandas DataFrame must be provided")
@@ -36,8 +55,30 @@ class UncertaintyPlotter:
         self.index = simplified_index
         self._stats = None
     
-    def plot_correlation_matix(self, method = 'kendall', path: str = None, show_plot: bool = False, indicators: list[str] = None):
+    def plot_correlation_matrix(self, method = 'kendall', path: str = None, show_plot: bool = False, indicators: list[str] = None):
         """
+
+        Compute and visualise a correlation matrix of the variables contained in the uncertainty DataFrame.
+
+        Pairwise correlations are computed using the method specified (default: ```'kendall'```). The resulting matrix
+        is displayed as a heatmap using ``seaborn.heatmap``.
+
+        If a list of indicators is provided, the correlation matrix is subset so that only the specified indicators appear as rows,
+        while the remaining variables appear as columns.
+
+        Parameters
+        ----------
+        method : {'pearson', 'spearman', 'kendall'}, default 'kendall'
+            Correlation method passed directly to ``DataFrame.corr``.
+        path : str
+            Directory path where the figure will be saved as a ``.png`` file.
+            If ``None``, the figure is not saved.
+        show_plot : bool, default=False
+            If ``True``, the plot is displayed using ``plt.show()``.
+        indicators : list[str]
+            Subset of column names considered as key indicators. when provided, the resulting matrix shows correlations between these
+            indicators (rows) and all other non-indicator variables (columns).
+
         """
         # Compute the pairwise correlation using the method = method
         correlation = self.uncertainty_df.corr(method = method)
@@ -79,6 +120,20 @@ class UncertaintyPlotter:
 
     def plot_distribution_and_stats(self, indicators: list, save_path: str = None, show_plot = False):
         """
+
+        Plot the distribution of selected indicators and compute descriptive statistics for each of them.
+
+        Parameters
+        ----------
+        indicators : list[str]
+            List of column names to analyse. Each element must exist in ``uncertainty_df``.
+        save_path : str
+            Directory where figures will be saved as ``.png`` files. Filenames follow the pattern 
+            ```'distribution_<indicator>.png'``. If ``None``, figures are not written in the disk.
+        show_plot : bool, default=False
+            If ``True``, each figure is shown using ``plt.show()``.
+            if ``False``, figures are closed after saving.
+
         """
         # Check if all indicators given are in the dataframe
         if not all(ind in self.uncertainty_df.columns for ind in indicators):
