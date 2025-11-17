@@ -169,6 +169,24 @@ DB.insert_data_into_db(
     V = (1/1000)*(1/1364),     # m3/mol 
     )
 
+DB.insert_data_into_db(
+    ID = "Cutin_Olig_Sol", 
+    MW = 1,
+    Phase = 's',
+    Cp = 2.1,           #J/(g*K)    https://doi.org/10.1016/S0005-2736(01)00285-1
+    Rho = 1364,         # kJ(kg*K) same as cellulose https://link.springer.com/article/10.1007/s10853-013-7815-6
+    V = (1/1000)*(1/1364),     # m3/mol 
+    )
+
+DB.insert_data_into_db(
+    ID = "Cutin_Olig_Insol", 
+    MW = 1,
+    Phase = 's',
+    Cp = 2.1,           #J/(g*K)    https://doi.org/10.1016/S0005-2736(01)00285-1
+    Rho = 1364,         # kJ(kg*K) same as cellulose https://link.springer.com/article/10.1007/s10853-013-7815-6
+    V = (1/1000)*(1/1364),     # m3/mol 
+    )
+
 # Free Cutin
 DB.insert_data_into_db(
     ID = "Free_Cutin", 
