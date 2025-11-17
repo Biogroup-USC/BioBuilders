@@ -1,5 +1,5 @@
 from .units import (
-    BinaryDistillation, Flash, RotatoryVacuumDrumFilter,RotaryVacuumFilter, LLEbySplit, ShellHeatExchanger, SLECbySplit, ExtractionReactor, 
+    BinaryDistillation, Flash, RotaryVacuumDrumFilter,RotaryVacuumFilter, LLEbySplit, ShellHeatExchanger, SLECbySplit, ExtractionReactor, 
     BatchEnzymaticTreatment, Mill, SolidsCentrifuge, DrumDryer, MultiEffectEvaporator, MixTank, ContinuousStirredTankReactor,LLESettler,
     LiquidsSettler, MembraneFiltration, SeparationUnit,
 )
@@ -13,7 +13,7 @@ from .sensitivity import SRC
 from .tools import extract_components_flow, calculate_agitator_power, calculate_stream_price
 
 __all__ = (
-    'Flash', 'RotatoryVacuumDrumFilter','RotaryVacuumFilter', 'LLEbySplit' ,'ShellHeatExchanger', 'SLECbySplit', 'ExtractionReactor', 'BatchEnzymaticTreatment', 
+    'Flash', 'RotaryVacuumDrumFilter','RotaryVacuumFilter', 'LLEbySplit' ,'ShellHeatExchanger', 'SLECbySplit', 'ExtractionReactor', 'BatchEnzymaticTreatment', 
     'BinaryDistillation','Mill', 'SolidsCentrifuge','DrumDryer', 'MultiEffectEvaporator', 'MixTank', "ContinuousStirredTankReactor", 'ChemDataBase', 'ChemicalsManager',
     'get_parameters_from_CSV', 'get_parameters_from_excel', 'get_price_streams_from_CSV','get_unit_costs_from_CSV', 'DisplayMassResults', 'DisplayUnitsResults', 
     'ResultsTEA', 'load_process_settings', 'TEA', 'log_mean','discounting_to_present_value','updating_to_future_value','calculate_centrifuge_diameter',

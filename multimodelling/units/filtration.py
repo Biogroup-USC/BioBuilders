@@ -192,34 +192,34 @@ class RotaryVacuumFilter(SolidsSeparator):
         """Return area in ft^2 given flow in kg/hr and filter rate in lb/day-ft^2."""
         return flow * 52.91 / filter_rate
 
-class RotatoryVacuumDrumFilter(bst.Unit):
+class RotaryVacuumDrumFilter(bst.Unit):
     """
-    Vacuum drum filtration unit.
+    Rotary vacuum drum filtration unit.
 
-    This unit models a rotary vacuum drum filter used to separate solids from a liquid stream, 
-    optionally including a washing stream to displace part of the liquid and/or impurities. The 
-    model accounts for solvent retention in the solid cake by targeting a specified moisture content. 
-    Washing solvent is partially retained by the solid phase according to a moisture specification, 
-    and the rest is recovered in the filtrate.
-
-    Design calculations include estimation of the required filtration area based on the slurry 
-    flowrate, fluid properties, cake solids concentration, pressure drop, and filtration rate. 
-    The area is used to estimate equipment purchase and installation costs.
+    This unit separates a slurry into a filtrate (liquid phase) and a
+    retentate (solid cake containing retained liquid). A washing stream
+    could be supplied to displace the mother liquor. The amount of liquid
+    retained in the cake is controlled by moisture (kg retained liquids / kg dry solids
+    ).
 
     Parameters
     ----------
     ID : str
-        Unit operation identifier.
-    ins : list of [Stream, Stream]
-        Inlet streams [Feed, Washing]. The feed contains the solids and retained solvent. 
-        The washing stream contains additional solvent to displace retained liquid.
-    outs : list of [Stream, Stream]
-        Outlet streams [Filtrate, Retentate]. The filtrate contains displaced and unretained liquid; 
-        the retentate contains the solid cake and retained liquid.
+        Unit identifier.
+    ins : tuple[Stream]
+        Inlet streams. Must contain at least the feed. The washing stream is optionally.
+        * [0] feed
+        * [1] washing
+    outs : tuple[Stream]
+        Output streams.
+        * [0] Retentate
+        * [1] Filtrate
+    sfi : dict[str,float]
+        Component split to retentate. Keys are component IDs, values are fractions between 0 and 1.
     moisture_content : float, optional
-        Target moisture content in the solid cake (kg retained liquid/kg dry solids). Default is 0.40.
+        Target moisture of the cake (kg liquid/kg dry solids). Default: 0.40.
     washing_chem : list[str], optional
-        List of washing components to consider for retention and displacement (e.g., ["Water", "Ethanol"]).
+        List of liquid components whose distribution is determined by moisture content (e.g., ["Water", "Ethanol"]).
     submergence : float, optional
         Submergence ratio of the filter drum (default = 0.35).
     operating_T : float, optional
@@ -231,7 +231,7 @@ class RotatoryVacuumDrumFilter(bst.Unit):
     rho : float, optional
         Liquid density [kg/m3]. If not provided, it is estimated from the mixed feed and washing streams.
     solids : list[str], optional
-        List of solid-phase component IDs used to determine solid concentration in the slurry.
+        Component IDs considered as dry solids in the cake.
 
     Attributes
     ----------
@@ -244,7 +244,7 @@ class RotatoryVacuumDrumFilter(bst.Unit):
     base_area_filter : float
         Reference filter area [m2] used for scaling. Default is 22.0 m2.
     base_n_cost_filter : float
-        Cost scaling exponent. Default is 0.65.
+        Cost scaling exponent. Default: 0.65.
     CE_base_filter : float
         Base CEPCI value for cost reference. Default is 1000.0.
 
@@ -260,7 +260,8 @@ class RotatoryVacuumDrumFilter(bst.Unit):
     calculate_rdvf_area : Function used for filter area estimation based on fluid and cake properties.
     """
     # Inlets
-    _N_ins = 2
+    _N_ins = 1
+    _ins_size_is_fixed = False
 
     # Outlets
     _N_outs = 2
@@ -269,7 +270,6 @@ class RotatoryVacuumDrumFilter(bst.Unit):
               sfi: dict = None,
               moisture_content: float = 0.40,
               washing_chem: list = None,
-              tau: float = 0.5,
               submergence = 0.35,
               operating_T: float = 298.15,
               operating_P: float = 101325,
@@ -282,7 +282,6 @@ class RotatoryVacuumDrumFilter(bst.Unit):
         self.sfi = sfi
         self.moisture = moisture_content
         self.wash_chems = washing_chem
-        self.tau = tau
         self.submergence = submergence
         self.operating_T = operating_T
         self.operating_P = operating_P
@@ -300,54 +299,74 @@ class RotatoryVacuumDrumFilter(bst.Unit):
         """
         """
         # Define the inlet streams
-        Feed, Washing = self.ins
+        ins = self.ins
+        feed = ins[0]
+
+        if len(ins) > 1:
+            washing = ins[1]
+            has_wash = True
+        else:
+            washing = None
+            has_wash = False
 
         # Define the outlet streams
-        Filtrate, Retentate = self.outs
+        retentate, filtrate = self.outs
+        retentate.T = filtrate.T = self.operating_T
+        retentate.P = filtrate.P = self.operating_P
+        retentate.phase = 's'
+        filtrate.phase = 'l'
 
-        Filtrate.copy_flow(Washing)
-        Filtrate.T = self.operating_T
-        Filtrate.P = self.operating_P
-        Filtrate.phase = 'l'
-
-        Retentate.copy_flow(Feed)
-        Retentate.phase = 's'
-        Retentate.T = self.operating_T
-        Retentate.P = self.operating_P
-
-        # Simulate the separation
-        for chem in self.sfi.keys():
-            Filtrate.imass[chem] = self.sfi[chem] * Feed.imass[chem]
-            Retentate.imass[chem] = (1-self.sfi[chem]) * Feed.imass[chem]
+        # Simulate the separation, by default all go to filtrate
+        filtrate.copy_flow(feed)
+        for chem,sfi in self.sfi.items():
+            filtrate.imass[chem] = (1-sfi) * feed.imass[chem]
+            retentate.imass[chem] = (sfi) * feed.imass[chem]
 
         # Calculate the moisture
-        if self.wash_chems:
-            total_washing = sum(Feed.imass[chem] + Washing.imass[chem] for chem in self.wash_chems)
-            if total_washing == 0:
-                raise ValueError(f"[{self.ID}] No filter washing flow provided.")
+        if self.solids is None or not isinstance(self.solids, list) or not all(isinstance(s, str) for s in self.solids):
+            raise ValueError("[{}] Solids must be provided as a list of component IDs.".format(self.ID))
+        dry_mass = sum(retentate.imass[s] for s in self.solids)
+        if dry_mass <= 0:
+            raise ValueError("[{}] Mass of dry solids is zero; cannot apply moisture specification".format(self.ID))
+
+        def distribute_liquids(liquids_id):
+            # Calculate total liquids entering
+            total_liquid_mass = 0.0
+            for liquid in liquids_id:
+                if has_wash:
+                    total_liquid_mass += feed.imass[liquid] + washing.imass[liquid]
+                else:
+                    total_liquid_mass += feed.imass[liquid]
+
+            if total_liquid_mass <= 0:
+                raise ValueError("[{}] No flow of solvent/washing for specified liquids".format(self.ID))
             
-            # Estimate the dry mass
-            dry_mass = Retentate.F_mass - sum(Retentate.imass[chem] for chem in self.wash_chems)
+            # Calculate the quantity of liquid retained
             retained_liquid_mass = self.moisture * dry_mass
-            if retained_liquid_mass > total_washing:
-                raise ValueError("[{}] Not enough wash/solvent to achieve moisture objective.")
-            retention_ratio = retained_liquid_mass / total_washing
-            for chem in self.wash_chems:
-                total_in = Washing.imass[chem] + Feed.imass[chem]
-                Retentate.imass[chem] = retention_ratio * total_in
-                Filtrate.imass[chem] = (1-retention_ratio) * total_in
-                total_out = Filtrate.imass[chem] + Retentate.imass[chem]
-                if not np.isclose(total_out, total_in, rtol = 1e-5, atol = 1e-8):
-                    raise ValueError("Not enough {} to achieve moisture objective".format(chem))
+
+            if retained_liquid_mass > total_liquid_mass:
+                raise ValueError("[{}] Not enough washing/solvent to achieve moisture objective.")
+            
+            retention_ratio = retained_liquid_mass/total_liquid_mass
+
+            # Apply liquid distribution
+            for liquid in liquids_id:
+                if has_wash:
+                    liquid_mass = feed.imass[liquid] + washing.imass[liquid]
+                else:
+                    liquid_mass = feed.imass[liquid]
+                
+                mass_ret = retention_ratio * liquid_mass
+                mass_filt = liquid_mass - mass_ret
+                retentate.imass[liquid] = mass_ret
+                filtrate.imass[liquid] = mass_filt
+            
+        # Distribute the liquids
+        if self.wash_chems:
+            distribute_liquids(self.wash_chems)
         else:
-            if Washing.F_mass != 0:
-                raise ValueError("If the washing chems are not defined, the washing stream must remain empty")
-            fluid = Feed.main_chemical
-            total_washing = sum(Feed.imass[fluid])
-            retained = self.moisture * Retentate.F_mass
-            retention_ratio = retained / total_washing
-            Retentate.imass[fluid] = retention_ratio * Feed.imass[fluid]
-            Filtrate.imass[fluid] = (1-retention_ratio) * Feed.imass[fluid]
+            solvent = feed.main_chemical
+            distribute_liquids([solvent])
        
     @property
     def delta_P(self):
@@ -384,17 +403,17 @@ class RotatoryVacuumDrumFilter(bst.Unit):
         design = self.design_results
 
         # Load the input streams
-        Feed, Washing = self.ins
+        ins = self.ins
 
         # Load output streams
-        Filtrate, Retentate = self.outs
+        retentate, filtrate = self.outs
 
         # Mix the streams
-        Load = bst.Stream(units='kg/hr')
-        Load.mix_from(Feed,Washing)
+        load = bst.Stream(units='kg/hr')
+        load.mix_from(ins)
 
         # Add the filter total area
-        design['Filter total area'] = self._calculate_filter_area(Load,Filtrate)
+        design['Filter total area'] = self._calculate_filter_area(load,filtrate)
 
     def _calculate_filter_area(self, load, filtrate):
         # Obtain the viscosity
@@ -415,7 +434,7 @@ class RotatoryVacuumDrumFilter(bst.Unit):
         try:
             solids_mass = [load.imass[s] for s in self.solids]
         except KeyError as e:
-            raise ValueError("Solid '{}' not found in the stream.".format(e.args[0])) from None
+            raise ValueError("Solid '{}' not found in the mixture (feed + washing).".format(e.args[0])) from None
         Cs = sum(solids_mass)/load.F_vol
 
         # Calculate the filter area
