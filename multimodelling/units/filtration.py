@@ -369,10 +369,13 @@ class RotaryVacuumDrumFilter(bst.Unit):
                 filtrate.imass[liquid] = mass_filt
             
         # Distribute the liquids
-        if self.wash_chems:
+        if has_wash and self.wash_chems is not None:
             distribute_liquids(self.wash_chems)
+        elif has_wash and self.wash_chems is None:
+            raise ValueError("You must provide the IDs of the washing chems.")
         else:
             solvent = feed.main_chemical
+            print(solvent)
             distribute_liquids([solvent])
        
     @property
