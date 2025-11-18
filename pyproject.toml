@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "multimodelling"
-version = "0.28.7"
+version = "0.29.0"
 description = "Library for biorefinery modelling following the multiescale approach."
 authors = [
     { name = "Isaac", email = "isaacleis.garrote@usc.es" }
