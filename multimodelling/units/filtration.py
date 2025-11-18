@@ -4,6 +4,7 @@
 import biosteam as bst
 import numpy as np
 from ..tools.mathtools.unitsarea import calculate_rdvf_area
+from ..tools.streamtools import main_chemical_mass_basis
 
 __all__ = (
     'RotaryVacuumFilter',
@@ -252,12 +253,14 @@ class RotaryVacuumDrumFilter(bst.Unit):
     -----
     - Assumes uniform retention of solvent and uniform displacement during washing.
     - If no washing stream is supplied, the model will retain solvent directly from the feed identifying it as the main chemical of this stream.
-    - Filtration area is estimated using empirical expressions based on Darcy’s law.
+    - Filtration area is estimated using empirical expressions based on Darcy's law.
     - Equipment costs are scaled from reference values using BioSTEAM conventions.
 
     See Also
     --------
     calculate_rdvf_area : Function used for filter area estimation based on fluid and cake properties.
+    main_chemical_mass_basis : Function used for calculate the main chemical based on mass flow.
+
     """
     # Inlets
     _N_ins = 2
@@ -372,10 +375,9 @@ class RotaryVacuumDrumFilter(bst.Unit):
         if has_wash and self.wash_chems is not None:
             distribute_liquids(self.wash_chems)
         elif has_wash and self.wash_chems is None:
-            raise ValueError("You must provide the IDs of the washing chems.")
+            raise ValueError("You must provide the IDs of the washing chemicals.")
         else:
-            solvent = feed.main_chemical
-            print(solvent)
+            solvent = main_chemical_mass_basis(feed)
             distribute_liquids([solvent])
        
     @property
@@ -521,14 +523,14 @@ class RotaryVacuumDrumFilter(bst.Unit):
         """
         """
         # Load parameters
-        A_Filter = self.design_results['Filter total area']
+        A_filter = self.design_results['Filter total area']
 
         # Calculate the baseline purchase costs for the Rotatory Vacuum Drum Filter
         ## The base cost accounts for a rotatory drum filter, vacuum with discharger,
         ## filtrate pumps, vacuum system, motor and drive.
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Filter_Purchase_Cost = self.base_cost_filter * (A_Filter/self.base_area_filter)**self.base_n_cost_filter
-        self.baseline_purchase_costs['Rotatory Vacuum Drum Filter'] = Filter_Purchase_Cost
+        filter_purchase_cost = self.base_cost_filter * (A_filter/self.base_area_filter)**self.base_n_cost_filter
+        self.baseline_purchase_costs['Rotatory Vacuum Drum Filter'] = filter_purchase_cost
 
         ## The material, pressure and temperature factors are assumed to be 1
         self.F_D['Rotatory Vacuum Drum Filter'] = self.F_M['Rotatory Vacuum Drum Filter'] = self.F_P['Rotatory Vacuum Drum Filter'] = 1
@@ -537,17 +539,17 @@ class RotaryVacuumDrumFilter(bst.Unit):
         ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
         ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
         ### Factors
-        Delivery = 0.10
-        Installation = 0.80             # Filters
-        Instrumentation_Control = 0.25  # Assumed from the range 0.08 - 0.50 mentioned on the book
-        Piping = 0.31                   # Solid-Fluid   
+        delivery = 0.10
+        installation = 0.80             # Filters
+        instrumentation_control = 0.25  # Assumed from the range 0.08 - 0.50 mentioned on the book
+        piping = 0.31                   # Solid-Fluid   
         ### Calculate the bare module
-        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
-        self.F_BM['Rotatory Vacuum Drum Filter'] = Bare_Module
+        bare_module = (1 + (delivery + installation + instrumentation_control + piping))
+        self.F_BM['Rotatory Vacuum Drum Filter'] = bare_module
 
         ## Scale the costs using CEPCI
-        CE_Base = self.CE_base_filter
-        self.baseline_purchase_costs['Rotatory Vacuum Drum Filter'] *= bst.CE/CE_Base
+        CE_base = self.CE_base_filter
+        self.baseline_purchase_costs['Rotatory Vacuum Drum Filter'] *= bst.CE/CE_base
 
 membrane_LMH = {
     "UF_hollow_fibers": (0.005, 0.016),     # L/s*m2
