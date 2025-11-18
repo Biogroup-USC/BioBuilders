@@ -260,7 +260,7 @@ class RotaryVacuumDrumFilter(bst.Unit):
     calculate_rdvf_area : Function used for filter area estimation based on fluid and cake properties.
     """
     # Inlets
-    _N_ins = 1
+    _N_ins = 2
     _ins_size_is_fixed = False
 
     # Outlets
@@ -317,10 +317,17 @@ class RotaryVacuumDrumFilter(bst.Unit):
         filtrate.phase = 'l'
 
         # Simulate the separation, by default all go to filtrate
-        filtrate.copy_flow(feed)
+        if has_wash:
+            load = bst.Stream()
+            load.mix_from([feed,washing])
+            filtrate.copy_flow(load)
+        else:
+            load = feed
+            filtrate.copy_flow(feed)
+        
         for chem,sfi in self.sfi.items():
-            filtrate.imass[chem] = (1-sfi) * feed.imass[chem]
-            retentate.imass[chem] = (sfi) * feed.imass[chem]
+            filtrate.imass[chem] = (1-sfi) * load.imass[chem]
+            retentate.imass[chem] = (sfi) * load.imass[chem]
 
         # Calculate the moisture
         if self.solids is None or not isinstance(self.solids, list) or not all(isinstance(s, str) for s in self.solids):
