@@ -11,6 +11,7 @@ import pandas as pd
 __all__ = (
     "extract_components_flow",
     "calculate_stream_price",
+    "main_chemical_mass_basis",
 )
 
 @runtime_checkable
@@ -63,6 +64,23 @@ def extract_components_flow(
     if as_series:
         return pd.Series(comp_flows,name=label)
     return comp_flows
+
+def main_chemical_mass_basis(stream: _StreamLike):
+    """
+    """
+    # Get available chemicals
+    avail_chemicals = stream.available_chemicals
+
+    # Get flow of each chemical
+    mass_flow = {}
+    for chemical in avail_chemicals:
+        id = chemical.ID
+        mass_flow[id] = stream.imass[id]
+    
+    # Get the main chemical comparing mass flow
+    main_chem = max(mass_flow, key = mass_flow.get)
+
+    return main_chem
 
 def calculate_stream_price(composition_price: dict = None, *,stream: _StreamLike = None, chems_price: dict = None, basis: Literal["mass", "molar"] = "mass"):
     """
