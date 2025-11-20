@@ -121,7 +121,7 @@ DB.insert_data_into_db(
 
 # Amyrin
 DB.insert_data_into_db(
-    ID = "Alpha-Amyrin",    #               https://webbook.nist.gov/cgi/cbook.cgi?ID=638-95-9
+    ID = "Alpha_Amyrin",    #               https://webbook.nist.gov/cgi/cbook.cgi?ID=638-95-9
     MW = 426.72,            # g/mol         https://webbook.nist.gov/cgi/cbook.cgi?ID=638-95-9
     CAS = "638-95-9",       #               https://webbook.nist.gov/cgi/cbook.cgi?ID=638-95-9
     Phase = 's',             
