@@ -7,24 +7,29 @@ __all__ = ("Mill",)
 class Mill(bst.Unit):
     """
 
-    Create a Mill object by providing the losses associated to this process. The impact of
-    size reduction should be simulated in the following updates. 
+    Create a mill for size-reduction.
 
-    ARGUMENTS:
+    This class simulates a mill, accounting for its energy consumption,
+    design and cost. The mass balance assumes that the output is equal
+    to the input.
 
-    - ID (str): This ID refers to the name of this unit.
+    Parameters
+    ----------
+    ID : str
+        Name of the unit operation.
 
-    - ins (list): List of input streams. In this case, there is only 1 input.
+    ins : tuple
+        List of input streams:
+        * [0] solid
 
-    - outs (list): List of output streams. In this case, there is 2 possible outputs. However, the
-    losses stream could be avoided when no losses are being considering.[Out, Losses]
-        
-    - losses (float): The losses associated to this process. This parameter is represented as (g losses/
-    g feed) and it is treated as a separation factor.
+    - outs : tuple
+        List of output streams. 
+        * [0] ground solid
 
-    ATTRIBUTES:
-
-    - power_consumption (float): The power consumption in kWh/kg feed
+    Attributes
+    ----------
+    power_consumption : float
+        Specific power consumption of the mill [kWh/kg]
 
     """
 
@@ -35,13 +40,9 @@ class Mill(bst.Unit):
         'Specific Power': 'kWh/kg'
     }
     
-    def _init(self, losses: float = None, time: float = None):
-        # The _init method is used to add input parameters to the AbstractUnit
-        if not (0 <= losses <= 1):
-            raise ValueError("Losses must be between 0 and 1 (fractional value).")
-        self.losses = losses
-        self.tau = time
-        
+    def _init(self):
+        """
+        """
         # Initialize the properties
         self._power_consumption = None
         self._base_cost = None
@@ -77,7 +78,7 @@ class Mill(bst.Unit):
         """
         if self._power_consumption is None:
             self._power_consumption = 0.016     # kWh/kg from http://dx.doi.org/10.1016/j.jclepro.2016.06.164 / 16 kWh/ton is the upper value for grinding
-        return self._power_consumption          # Aurelie uses 1.1 kW to grind 0.5 g for 5 minutes (2,200 kWh/kg) which leads to 17204.00 USD/hr in utilities
+        return self._power_consumption
 
     def _design(self):
         """
