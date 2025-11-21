@@ -432,8 +432,28 @@ class RotaryVacuumDrumFilter(bst.Unit):
         if self.mu is not None:
             mu = self.mu
         else:
-            mu = load.mu
-        
+            try:
+                mu = load.mu
+            except RuntimeError:
+                try:
+                    # delete solids
+                    for solid in self.solids:
+                        load_like = bst.Stream()
+                        load_like.copy_like(load)
+                        load_like.imass[solid] = 0
+                    # Try to calculate mu
+                    mu = load_like.mu
+                except RuntimeError:
+                    # Use the viscosity of the main chemical if all fail
+                    main_chem = load.main_chemical
+                    available_chems = load.available_chemicals
+                    for chem in available_chems:
+                        if chem.ID == main_chem:
+                            mu = chem.mu
+                            break
+                        else:
+                            continue
+
         # Obtain the density
         if self.rho is not None:
             rho = self.rho
