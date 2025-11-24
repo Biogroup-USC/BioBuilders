@@ -445,11 +445,11 @@ class RotaryVacuumDrumFilter(bst.Unit):
                     mu = load_like.mu
                 except RuntimeError:
                     # Use the viscosity of the main chemical if all fail
-                    main_chem = load.main_chemical
+                    main_chem = main_chemical_mass_basis(load)
                     available_chems = load.available_chemicals
                     for chem in available_chems:
                         if chem.ID == main_chem:
-                            mu = chem.mu
+                            mu = chem.mu('l',self.operating_T,self.operating_P)
                             break
                         else:
                             continue
