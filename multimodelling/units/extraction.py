@@ -44,10 +44,10 @@ class ExtractionReactor(bst.Unit):
         self._kW_per_m3 = kW_per_m3
         self._V_wf = None
         self._V_max = None
-        self._base_cost_tank = None
-        self._base_volume_tank = None
-        self._base_n_cost_tank = None
-        self._CE_base_tank = None
+        self._base_cost = None
+        self._base_volume = None
+        self._base_n_cost = None
+        self._CE_base = None
     
     def _run(self):
         """
@@ -136,60 +136,60 @@ class ExtractionReactor(bst.Unit):
         design['Residence time (tau)'] = tau
     
     @property
-    def base_cost_tank(self):
+    def base_cost(self):
         """
         """
-        if self._base_cost_tank is None:
-            self._base_cost_tank = 75000     # USD
-        return self._base_cost_tank   
+        if self._base_cost is None:
+            self._base_cost = 75000     # USD
+        return self._base_cost   
 
-    @base_cost_tank.setter
-    def base_cost_tank(self, value):
+    @base_cost.setter
+    def base_cost(self, value):
         """
         """
-        self._base_cost_tank = value
-
-    @property
-    def base_volume_tank(self):
-        """
-        """
-        if self._base_volume_tank is None:
-            self._base_volume_tank = 3.0    # m3
-        return self._base_volume_tank
-    
-    @base_volume_tank.setter
-    def base_volume_tank(self, value):
-        """
-        """
-        self._base_volume_tank = value
+        self._base_cost = value
 
     @property
-    def base_n_cost_tank(self):
+    def base_volume(self):
         """
         """
-        if self._base_n_cost_tank is None:
-            self._base_n_cost_tank = 0.53
-        return self._base_n_cost_tank
+        if self._base_volume is None:
+            self._base_volume = 3.0    # m3
+        return self._base_volume
     
-    @base_n_cost_tank.setter
-    def base_n_cost_tank(self, value):
+    @base_volume.setter
+    def base_volume(self, value):
         """
         """
-        self._base_n_cost_tank = value
+        self._base_volume = value
+
+    @property
+    def base_n_cost(self):
+        """
+        """
+        if self._base_n_cost is None:
+            self._base_n_cost = 0.53
+        return self._base_n_cost
+    
+    @base_n_cost.setter
+    def base_n_cost(self, value):
+        """
+        """
+        self._base_n_cost = value
     
     @property
-    def CE_base_tank(self):
+    def CE_base(self):
         """
         """
-        if self._CE_base_tank is None:
-            self._CE_base_tank = 1000.0
-        return self._CE_base_tank
+        if self._CE_base is None:
+            self._CE_base = 1000.0
+        return self._CE_base
     
-    @CE_base_tank.setter
-    def CE_base_tank(self, value):
+    @CE_base.setter
+    def CE_base(self, value):
         """
         """
-        self._CE_base_tank = value
+        self._CE_base = value
     
     def _cost(self):
         """
@@ -200,7 +200,7 @@ class ExtractionReactor(bst.Unit):
         # Calculate the baseline purchase cost for the mixing tank
         ## The base cost accounts for jacketed agitated vessel.
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Mixing_Tank_Purchase_Cost = self.base_cost_tank * (V_Tank/self.base_volume_tank)**self.base_n_cost_tank
+        Mixing_Tank_Purchase_Cost = self.base_cost * (V_Tank/self.base_volume)**self.base_n_cost
         self.baseline_purchase_costs['Mixing Tank'] = Mixing_Tank_Purchase_Cost
 
         ## The material, pressure and temperature factors are assumed to be 1
@@ -219,7 +219,7 @@ class ExtractionReactor(bst.Unit):
         self.F_BM['Mixing Tank'] = Bare_Module
 
         ## Scale the costs using CEPCI
-        self.baseline_purchase_costs['Mixing Tank'] *= bst.CE/self.CE_base_tank
+        self.baseline_purchase_costs['Mixing Tank'] *= bst.CE/self.CE_base
 
 # Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
 # Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
