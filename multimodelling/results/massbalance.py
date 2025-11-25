@@ -66,7 +66,7 @@ class ProcessMassBalance:
             P_decimals: int = 3,
             component_decimals: int = 3,
             totals_decimals: int = 2,
-            save_path: str = "stream_table.png",
+            fig_path: str = None,
             excel_path: str = None
     )-> pd.DataFrame:
         """
@@ -126,6 +126,7 @@ class ProcessMassBalance:
             ]
             streams_df[s.ID] = new_column
 
+        if fig_path:
             # Create streams table
             fig, ax = plt.subplots(figsize = (8, 0.3 + 0.22 * len(streams_df)))
             ax.axis("off")
@@ -135,19 +136,17 @@ class ProcessMassBalance:
                 colLabels = None,
                 rowLoc = "center", cellLoc = "center", loc = "center",
             )
-
             # Format
             tab.auto_set_font_size(False); tab.set_fontsize(5); tab.scale(0.9,1.0)
             fig.tight_layout()
-
             # Save fig
-            fig.savefig(save_path, dpi = 300, bbox_inches = "tight", pad_inches = 0.05)
+            fig.savefig(fig_path, dpi = 300, bbox_inches = "tight", pad_inches = 0.05)
 
-            # Save dataframe
-            if excel_path:
-                streams_df.to_excel(excel_path,index=True,header=False)
+        # Save dataframe
+        if excel_path:
+            streams_df.to_excel(excel_path,index=True,header=False)
 
-        return streams_df[1:], tab
+        return streams_df[1:]
 
 class DisplayMassResults:
     """
