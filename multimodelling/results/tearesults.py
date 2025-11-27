@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import os
 
 __all__ = (
-    "ResultsTEA"
+    "ResultsTEA",
 )
 
 class ResultsTEA:
@@ -209,3 +209,171 @@ class ResultsTEA:
             file_path = os.path.join(path, 'NPV_over_Year.png')
             fig.savefig(file_path)
             plt.close(fig)
+    
+    @staticmethod
+    def _create_production_costs_dict(tea: bst.TEA = None):
+        """
+        """
+        if tea is None: raise ValueError("BioSTEAM TEA object must be provided")
+        
+        # Get TEA object
+        system = tea.system
+
+        # Get production costs individually
+        labour = tea.labor_cost
+        
+        maintenance = tea.FCI * tea.maintenance
+        property_tax = tea.FCI * tea.property_tax
+        property_insurance = tea.FCI * tea.property_insurance
+        supplies = tea.FCI * tea.maintenance * tea.supplies
+        
+        power_utility = system.power_utility.cost
+
+        # Get the total cost of the heat utilities used
+        heat_utilities = system.heat_utilities
+        heat_utilities_dict = {}
+        for utility in heat_utilities:
+            id = utility.agent.ID
+            cost = utility.cost
+            heat_utilities_dict[id] = cost
+        
+        # Get the cost of raw materials
+        raw_materials = system.ins
+        operating_hours = tea.operating_hours
+        raw_materials_cost = {}
+        for raw_material in raw_materials:
+            flow = raw_material.F_mass
+            price = raw_material.price
+            annual_cost = flow * price * operating_hours
+            raw_materials_cost[raw_material.ID] = annual_cost
+        
+        # Generate the breakdown of costs
+        production_costs = {
+            "FOC": {
+                "Labour": labour,
+                "Maintenance": maintenance,
+                "Property": property_tax + property_insurance,
+                "Supplies": supplies
+            },
+            "VOC": raw_materials_cost,
+            "Heat utilities": heat_utilities_dict,
+            "Power utility": power_utility
+        }
+
+        return production_costs
+
+    @staticmethod
+    def _create_bar_arrays(costs_list: list[dict] = None):
+        """
+        """
+        if costs_list is None: raise ValueError(
+            "A list of dictionaries with the costs broken down must be provided"
+        )
+
+        # Create list for every key in the dictionaries
+        labour = []; maintenance = []; property_related = []; supplies = []; power = []
+
+        # Create a list for every key inside heat_utilities and raw_materials
+        raw_materials = {}; heat_utilities = {}
+        for key in costs_list[0]["VOC"].keys():
+            raw_materials[key] = []
+        
+        for key in costs_list[0]["Heat utilities"].keys():
+            heat_utilities[key] = []
+
+        for costs in costs_list:
+            labour.append(costs["FOC"]["Labour"])
+            maintenance.append(costs["FOC"]["Maintenance"])
+            property_related.append(costs["FOC"]["Property"])
+            supplies.append(costs["FOC"]["Supplies"])
+            power.append(costs["Power utility"])
+            
+            for key in raw_materials.keys():
+                material_list = raw_materials[key]
+                material_list.append(costs["VOC"][key])
+            
+            for key in heat_utilities.keys():
+                utility_list = heat_utilities[key]
+                utility_list.append(costs["Heat utilities"][key])
+        
+        # Create a dictionary with all lists as np.array
+        bar_arrays = {
+            "Labour": np.array(labour),
+            "Maintenance": np.array(maintenance),
+            "Property taxes + insurrance": np.array(property_related),
+            "Supplies": np.array(supplies),
+            "Power utilities": np.array(power),
+        }
+
+        # Add raw materials and heat utilities dictionaries
+        materials_utilities = raw_materials
+        materials_utilities.update(heat_utilities)
+        for key in materials_utilities.keys():
+            bar_arrays[key] = np.array(materials_utilities[key])
+        
+        return bar_arrays
+
+    def plot_production_costs_scenarios(
+            self,
+            base_scenario: str = "base case",
+            other_scenarios: dict[str,bst.TEA] = None,
+            title: str = "Breakdown of production costs",
+            y_label: str = "Production costs (USD)",
+            y_lim: tuple[float] = None,
+            save_path: str = None,
+            show: bool = True,
+            width: float = 0.15
+        ):
+        """
+        """
+        # Get base scenario production costs brokendown
+        prod_costs = self._create_production_costs_dict(self.TEA)
+
+        # Create bar charts
+        scenarios = [base_scenario]
+        scenarios_costs = [prod_costs]
+
+        if other_scenarios is not None:
+            for key,value in other_scenarios.items():
+                scenarios.append(key)
+                prod_costs = self._create_production_costs_dict(value)
+                scenarios_costs.append(prod_costs)
+
+        # Create bar chart
+        fig, ax  = plt.subplots()
+
+        bottom = np.zeros(len(scenarios))
+
+        bar_arrays = self._create_bar_arrays(scenarios_costs)
+        
+        for cost, value in bar_arrays.items():
+            plot = ax.bar(scenarios,value,width,label=cost,bottom=bottom)
+            bottom += value
+
+        # Display only the total of costs
+        for element,total in enumerate(bottom):
+            ax.text(
+                element,
+                total,
+                f"{total:.1f}",
+                ha = "center", 
+                va = "bottom"
+            )
+
+        if y_lim is not None:
+            y_limits = y_lim
+        else:
+            y_limits = (0.0, bottom[0]*1.1)
+
+        ax.set(ylabel = y_label, ylim = y_limits)
+        ax.set_title(title)
+        
+        ax.legend(
+            fontsize=4,
+            title= 'Production costs',
+            title_fontsize = 5,
+            loc = 'upper right'
+        )
+        
+        if show: plt.show()
+        if save_path: plt.savefig(save_path)
