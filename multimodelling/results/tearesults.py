@@ -376,7 +376,7 @@ class ResultsTEA:
             currency_factor = 1.
             flow_factor = 1.
         elif basis == 'EUR':
-            currency_factor = self._conversion_dollars_euros
+            currency_factor = self.conversion_dollars_euros
             flow_factor = 1.
         elif basis == 'USD/kg':
             currency_factor = 1.
@@ -387,11 +387,12 @@ class ResultsTEA:
                 mass_flow = self._get_stream_flow_by_id(scenarios_TEA[case].system,stream_id) * operating_h
                 flow_factor[case] = mass_flow
         elif basis == 'EUR/kg':
-            currency_factor = self._conversion_dollars_euros
+            currency_factor = self.conversion_dollars_euros
             flow_factor = {}
             for case in scenarios:
                 stream_id = basis_flow[case]
-                mass_flow = self._get_stream_flow_by_id(scenarios_TEA[case].system,stream_id)
+                operating_h = scenarios_TEA[case].operating_hours
+                mass_flow = self._get_stream_flow_by_id(scenarios_TEA[case].system,stream_id) * operating_h
                 flow_factor[case] = mass_flow
         else:
             raise ValueError("You must provide basis for production cost calculation")
