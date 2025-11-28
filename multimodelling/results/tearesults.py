@@ -331,6 +331,7 @@ class ResultsTEA:
         """
         self._conversion_dollars_euros = value
 
+    @staticmethod
     def _get_stream_flow_by_id(system,stream_id):
         """
         """
@@ -346,10 +347,10 @@ class ResultsTEA:
             self,
             base_scenario: str = "base case",
             other_scenarios: dict[str,bst.TEA] = None,
-            basis: Literal['USD/kg','USD','EUR/kg','EUR'] = 'USD/kg',
+            basis: Literal['USD/kg','USD','EUR/kg','EUR'] = 'USD',
             basis_flow: dict[str,str] = None,
             title: str = "Breakdown of production costs",
-            y_label: str = "Production costs (USD)",
+            y_label: str = "Production costs",
             y_lim: tuple[float] = None,
             save_path: str = None,
             show: bool = True,
@@ -357,20 +358,20 @@ class ResultsTEA:
         ):
         """
         """
-        # Get base scenario production costs brokendown
-        prod_costs = self._create_production_costs_dict(self.TEA)
-
-        # Create bar charts
-        scenarios = [base_scenario]
-        scenarios_costs = [prod_costs]
-
+        # Get the production cost of each case
+        scenarios = []
+        scenarios_costs = []
+        scenarios_TEA = {base_scenario: self.TEA}
         if other_scenarios is not None:
-            for key,value in other_scenarios.items():
-                scenarios.append(key)
-                prod_costs = self._create_production_costs_dict(value)
-                scenarios_costs.append(prod_costs)
+            scenarios_TEA.update(other_scenarios)
+
         
-        # calculate the denomitar for displaying the production costs
+        for key,value in scenarios_TEA.items():
+            scenarios.append(key)
+            prod_costs = self._create_production_costs_dict(value)
+            scenarios_costs.append(prod_costs)
+        
+        # calculate the currency factor and the flow factor depending on the basis parameter
         if basis == 'USD':
             currency_factor = 1.
             flow_factor = 1.
@@ -379,8 +380,21 @@ class ResultsTEA:
             flow_factor = 1.
         elif basis == 'USD/kg':
             currency_factor = 1.
+            flow_factor = {}
             for case in scenarios:
                 stream_id = basis_flow[case]
+                operating_h = scenarios_TEA[case].operating_hours
+                mass_flow = self._get_stream_flow_by_id(scenarios_TEA[case].system,stream_id) * operating_h
+                flow_factor[case] = mass_flow
+        elif basis == 'EUR/kg':
+            currency_factor = self._conversion_dollars_euros
+            flow_factor = {}
+            for case in scenarios:
+                stream_id = basis_flow[case]
+                mass_flow = self._get_stream_flow_by_id(scenarios_TEA[case].system,stream_id)
+                flow_factor[case] = mass_flow
+        else:
+            raise ValueError("You must provide basis for production cost calculation")
 
         # Create bar chart
         fig, ax  = plt.subplots(figsize = (6,4), layout = 'constrained')
@@ -393,8 +407,14 @@ class ResultsTEA:
         x = np.arange(len(scenarios))
 
         for cost, value in bar_arrays.items():
-            plot = ax.bar(x,value,width,label=cost,bottom=bottom)
-            bottom += value
+            updated_value = currency_factor * value
+            
+            if basis == 'EUR/kg' or basis == 'USD/kg':
+                flows = np.array([flow_factor[case] for case in scenarios], dtype=float)
+                updated_value = updated_value / flows
+            
+            plot = ax.bar(x,updated_value,width,label=cost,bottom=bottom)
+            bottom += updated_value
 
         # Display only the total of costs
         for element,total in enumerate(bottom):
@@ -413,7 +433,7 @@ class ResultsTEA:
             y_limits = (0.0, bottom[0]*1.1)
 
         # Axis options
-        ax.set(ylabel = y_label, ylim = y_limits)
+        ax.set(ylabel = y_label+f" ({basis})", ylim = y_limits)
         ax.set_xlim(-0.5,x[-1]+0.5)
         ax.set_title(title)
         ax.set_xticklabels(scenarios)
