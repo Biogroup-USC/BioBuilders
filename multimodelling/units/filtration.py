@@ -316,7 +316,7 @@ class RotaryVacuumDrumFilter(bst.Unit):
         retentate, filtrate = self.outs
         retentate.T = filtrate.T = self.operating_T
         retentate.P = filtrate.P = self.operating_P
-        retentate.phase = 's'
+        retentate.phase = 'l'
         filtrate.phase = 'l'
 
         # Simulate the separation, by default all go to filtrate
