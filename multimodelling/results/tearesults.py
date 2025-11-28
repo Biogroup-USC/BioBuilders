@@ -6,6 +6,7 @@ import biosteam as bst
 from ..tea import TEA
 import matplotlib.pyplot as plt
 import os
+from typing import Literal
 
 __all__ = (
     "ResultsTEA",
@@ -25,6 +26,9 @@ class ResultsTEA:
             self.TEA = TEAobject
         else:
             raise ValueError("The TEA object must be a TEA object either from BiosTEAM or Multimodelling.")
+
+        # Properties
+        self._conversion_dollars_euros = None
 
     def TEA_report(self, excelreport: bool = False, excelname: str = None):
         """
@@ -313,16 +317,43 @@ class ResultsTEA:
         
         return bar_arrays
 
+    @property
+    def conversion_dollars_euros(self):
+        """
+        """
+        if self._conversion_dollars_euros is None:
+            self._conversion_dollars_euros = 0.86
+        return self._conversion_dollars_euros
+
+    @conversion_dollars_euros.setter
+    def conversion_dollars_euros(self,value):
+        """
+        """
+        self._conversion_dollars_euros = value
+
+    def _get_stream_flow_by_id(system,stream_id):
+        """
+        """
+        for stream in system.streams:
+            if stream.ID == stream_id:
+                mass_flow = stream.F_mass
+            else: 
+                continue
+        
+        return mass_flow
+
     def plot_production_costs_scenarios(
             self,
             base_scenario: str = "base case",
             other_scenarios: dict[str,bst.TEA] = None,
+            basis: Literal['USD/kg','USD','EUR/kg','EUR'] = 'USD/kg',
+            basis_flow: dict[str,str] = None,
             title: str = "Breakdown of production costs",
             y_label: str = "Production costs (USD)",
             y_lim: tuple[float] = None,
             save_path: str = None,
             show: bool = True,
-            width: float = 0.15
+            width: float = 0.20
         ):
         """
         """
@@ -338,16 +369,31 @@ class ResultsTEA:
                 scenarios.append(key)
                 prod_costs = self._create_production_costs_dict(value)
                 scenarios_costs.append(prod_costs)
+        
+        # calculate the denomitar for displaying the production costs
+        if basis == 'USD':
+            currency_factor = 1.
+            flow_factor = 1.
+        elif basis == 'EUR':
+            currency_factor = self._conversion_dollars_euros
+            flow_factor = 1.
+        elif basis == 'USD/kg':
+            currency_factor = 1.
+            for case in scenarios:
+                stream_id = basis_flow[case]
 
         # Create bar chart
-        fig, ax  = plt.subplots()
+        fig, ax  = plt.subplots(figsize = (6,4), layout = 'constrained')
 
         bottom = np.zeros(len(scenarios))
 
         bar_arrays = self._create_bar_arrays(scenarios_costs)
         
+        # Dinamically size X axis
+        x = np.arange(len(scenarios))
+
         for cost, value in bar_arrays.items():
-            plot = ax.bar(scenarios,value,width,label=cost,bottom=bottom)
+            plot = ax.bar(x,value,width,label=cost,bottom=bottom)
             bottom += value
 
         # Display only the total of costs
@@ -360,14 +406,18 @@ class ResultsTEA:
                 va = "bottom"
             )
 
+        # Set y limits
         if y_lim is not None:
             y_limits = y_lim
         else:
             y_limits = (0.0, bottom[0]*1.1)
 
+        # Axis options
         ax.set(ylabel = y_label, ylim = y_limits)
+        ax.set_xlim(-0.5,x[-1]+0.5)
         ax.set_title(title)
-        
+        ax.set_xticklabels(scenarios)
+        ax.set_xticks(x)
         ax.legend(
             fontsize=4,
             title= 'Production costs',
@@ -375,5 +425,11 @@ class ResultsTEA:
             loc = 'upper right'
         )
         
+        # Plot options
+        plt.tight_layout()
+
+        # Display
         if show: plt.show()
-        if save_path: plt.savefig(save_path)
+        
+        # Save the figure
+        if save_path: fig.savefig(save_path)
