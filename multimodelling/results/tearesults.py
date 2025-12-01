@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import biosteam as bst
 from ..tea import TEA
+from ..tools.diagramtools import simplify_labels
 import matplotlib.pyplot as plt
 import os
 from typing import Literal
@@ -310,8 +311,8 @@ class ResultsTEA:
         }
 
         # Add raw materials and heat utilities dictionaries
-        materials_utilities = raw_materials
-        materials_utilities.update(heat_utilities)
+        materials_utilities = heat_utilities
+        materials_utilities.update(raw_materials)
         for key in materials_utilities.keys():
             bar_arrays[key] = np.array(materials_utilities[key])
         
@@ -350,6 +351,7 @@ class ResultsTEA:
             basis: Literal['USD/kg','USD','EUR/kg','EUR'] = 'USD',
             basis_flow: dict[str,str] = None,
             title: str = "Breakdown of production costs",
+            simplify_legend: dict = {},
             y_label: str = "Production costs",
             y_lim: tuple[float] = None,
             save_path: str = None,
@@ -409,13 +411,19 @@ class ResultsTEA:
 
         for cost, value in bar_arrays.items():
             updated_value = currency_factor * value
+
+            if cost in simplify_legend:
+                cost = simplify_legend[cost]
             
             if basis == 'EUR/kg' or basis == 'USD/kg':
                 flows = np.array([flow_factor[case] for case in scenarios], dtype=float)
                 updated_value = updated_value / flows
             
-            plot = ax.bar(x,updated_value,width,label=cost,bottom=bottom)
-            bottom += updated_value
+            if np.any(updated_value != 0):
+                plot = ax.bar(x,updated_value,width,label=cost,bottom=bottom)
+                bottom += updated_value
+            else:
+                continue
 
         # Display only the total of costs
         for element,total in enumerate(bottom):
@@ -437,8 +445,8 @@ class ResultsTEA:
         ax.set(ylabel = y_label+f" ({basis})", ylim = y_limits)
         ax.set_xlim(-0.5,x[-1]+0.5)
         ax.set_title(title)
-        ax.set_xticklabels(scenarios)
         ax.set_xticks(x)
+        ax.set_xticklabels(scenarios)
         ax.legend(
             fontsize=4,
             title= 'Production costs',
