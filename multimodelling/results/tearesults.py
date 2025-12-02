@@ -357,6 +357,11 @@ class ResultsTEA:
             simplify_legend: dict = {},
             y_label: str = "Production costs",
             y_lim: tuple[float] = None,
+            xlabel_font: float = 6,
+            legend_font: float = 4,
+            legend_title: str = 'Production costs',
+            legend_title_font: float = 4,
+            legend_loc: str = 'upper right',
             save_path: str = None,
             show: bool = True,
             width: float = 0.20
@@ -449,12 +454,12 @@ class ResultsTEA:
         ax.set_xlim(-0.5,x[-1]+0.5)
         ax.set_title(title)
         ax.set_xticks(x)
-        ax.set_xticklabels(scenarios)
+        ax.set_xticklabels(scenarios, fontsize = xlabel_font)
         ax.legend(
-            fontsize=4,
-            title= 'Production costs',
-            title_fontsize = 5,
-            loc = 'upper right'
+            fontsize = legend_font,
+            title = legend_title,
+            title_fontsize = legend_title_font,
+            loc = legend_loc
         )
         
         # Plot options
