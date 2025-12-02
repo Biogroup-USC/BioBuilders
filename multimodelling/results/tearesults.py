@@ -224,6 +224,9 @@ class ResultsTEA:
         # Get TEA object
         system = tea.system
 
+        # Get operating hours
+        operating_hours = tea.operating_hours
+
         # Get production costs individually
         labour = tea.labor_cost
         
@@ -232,15 +235,15 @@ class ResultsTEA:
         property_insurance = tea.FCI * tea.property_insurance
         supplies = tea.FCI * tea.maintenance * tea.supplies
         
-        power_utility = system.power_utility.cost
+        power_utility = system.power_utility.cost * operating_hours
 
         # Get the total cost of the heat utilities used
         heat_utilities = system.heat_utilities
         heat_utilities_dict = {}
         for utility in heat_utilities:
             id = utility.agent.ID
-            cost = utility.cost
-            heat_utilities_dict[id] = cost
+            annual_cost = utility.cost * operating_hours
+            heat_utilities_dict[id] = annual_cost
         
         # Get the cost of raw materials
         raw_materials = system.ins
