@@ -557,21 +557,29 @@ class ContourStudy:
                 except Exception:
                     pass
             
-            if desired_ind is not None:
-                if ind not in desired_ind:
+            if desired_ind is not None and ind in desired_ind:
+                val_dict = desired_ind[ind]
+                # Check if the value for the indicator (key) is a dictionary.
+                if not isinstance(val_dict,dict):
+                    raise ValueError("Desired indicator values must be a dictionary[str,float]")
+                
+                float_values = [float(v) for v in val_dict.values()]
+
+                # Check if the dictionary is empty
+                if not val_dict:
+                    raise ValueError("desired_ind['{}'] cannot be an empty dict".format(ind))
+                
+                # Build a dict according to fmt
+                fmt_dict = {float(v): label for label,v in val_dict.items()}
+                
+                # Plot levels provided
+                cs = ax.contour(X, Y, Zm, levels = float_values, linewidths = 2, colors = [desired_ind_color], linestyles = desired_ind_linestyle)
+                
+                # Add label of each level
+                try:
+                    ax.clabel(cs,inline = True, fmt = fmt_dict)
+                except Exception:
                     pass
-                else:
-                    val = desired_ind[ind]
-                    if isinstance(val, dict):
-                        if len(val) != 1:
-                            raise ValueError("desired_ind['{}'] must have 1 key. It has {}".format(ind, list(val.keys())))
-                    label, v0 = next(iter(val.items()))
-                    v0 = float(v0)
-                    cs = ax.contour(X, Y, Zm, levels = [v0], linewidths = 2, colors = [desired_ind_color], linestyles = desired_ind_linestyle)
-                    try:
-                        ax.clabel(cs,inline = True, fmt = {v0: "{}".format(label)})
-                    except Exception:
-                        pass
 
             # colorbar
             units = None
