@@ -3,6 +3,7 @@
 import biosteam as bst
 from biosteam.units.design_tools import PressureVessel
 from ..tools.mathtools.unitsdiameter import calculate_centrifuge_diameter
+from ..tools.mathtools.power import calculate_agitator_power
 import numpy as np
 import math
 
@@ -26,6 +27,7 @@ class ExtractionReactor(bst.Unit):
     _units = {
         'Reactor volume': 'm3',
         'Residence time (tau)': 'h',
+        'Volumetric power': 'kW/m3',
     }
 
     def _init(self,
@@ -33,7 +35,10 @@ class ExtractionReactor(bst.Unit):
               tau: float = None,
               operating_T: float = None,
               operating_P: float = None,
-              kW_per_m3: float = None
+              kW_per_m3: float = None,
+              agitator_speed: float = None,
+              reference_volume: float = None,
+              flow_type: str["Radial","Axial"] = "Radial"
               ):
         """
         """
@@ -41,7 +46,15 @@ class ExtractionReactor(bst.Unit):
         self.tau = tau
         self.operating_T = operating_T if operating_T is not None else (273.15 + 25.0)
         self.operating_P = operating_P if operating_P is not None else 101325
-        self._kW_per_m3 = kW_per_m3
+        self.kW_per_m3 = kW_per_m3
+        self.reference_volume = reference_volume
+        self.flow_type = flow_type
+        self._impeller_Np = None
+        self._rotational_speed = agitator_speed
+        self._impeller_D = None
+        self._height_diameter = None
+        self._diameter_turbine = None
+        self._agitator_efficiency = None
         self._V_wf = None
         self._V_max = None
         self._base_cost = None
@@ -67,18 +80,87 @@ class ExtractionReactor(bst.Unit):
         self.extract_react(slurry)
     
     @property
-    def kW_per_m3(self):
+    def impeller_Np(self):
         """
         """
-        if self._kW_per_m3 is None:
-            self._kW_per_m3 = (0.79*1000*(1.417**3)*(0.373**5))/90  # using 1 m3 data --> http://dx.doi.org/10.1016/j.jclepro.2016.06.164
-        return self._kW_per_m3
+        if self._impeller_Np is None:
+            if self.flow_type == "Radial":
+                self._impeller_Np = 3.44        # http://dx.doi.org/10.1016/j.jclepro.2016.06.164 for 10 m3
+            elif self.flow_type == "Axial":
+                self._impeller_Np = 0.79        # http://dx.doi.org/10.1016/j.jclepro.2016.06.164 for 10 m3
+        return self._impeller_Np
     
-    @kW_per_m3.setter
-    def kW_per_m3(self,value):
+    @impeller_Np.setter
+    def impeller_Np(self,value):
         """
         """
-        self._kW_per_m3 = value
+        self._impeller_Np = value
+
+    @property
+    def rotational_speed(self):
+        """
+        """
+        return self._rotational_speed
+
+    @rotational_speed.setter
+    def rotational_speed(self,value):
+        """
+        """
+        self._rotational_speed = value
+    
+    @property
+    def impeller_D(self):
+        """
+        """
+        return self._impeller_D
+
+    @impeller_D.setter
+    def impeller_D(self,value):
+        """
+        """
+        self._impeller_D = value
+
+    @property
+    def height_diameter(self):
+        """
+        """
+        if self._height_diameter is None:
+            self._height_diameter = 1.0
+        return self._height_diameter
+    
+    @height_diameter.setter
+    def height_diameter(self,value):
+        """
+        """
+        self._height_diameter = value
+    
+    @property
+    def diameter_turbine(self):
+        """
+        """
+        if self._diameter_turbine is None:
+            self._diameter_turbine = 1/3
+        return self._diameter_turbine
+    
+    @diameter_turbine.setter
+    def diameter_turbine(self,value):
+        """
+        """
+        self._diameter_turbine = value
+    
+    @property
+    def agitator_efficiency(self):
+        """
+        """
+        if self._agitator_efficiency is None:
+            self._agitator_efficiency = 0.90
+        return self._agitator_efficiency
+    
+    @agitator_efficiency.setter
+    def agitator_efficiency(self,value):
+        """
+        """
+        self._agitator_efficiency = value
 
     @property
     def V_max(self):            # This value is selected because the range of the cost correlation is 3 - 90 m3
@@ -121,16 +203,65 @@ class ExtractionReactor(bst.Unit):
         V_wf = self.V_wf
         tau = self.tau
 
-        # Calculate the mixing tank volume
+        # Mix streams
         mixed = bst.Stream()
         mixed.mix_from([feed, solvent], energy_balance = True)
+        
+        # Calculate heat utility     
+        Ti = mixed.T
+        Tf = self.operating_T
+        Cpi = mixed.Cp
+
         mixed.T = self.operating_T
         mixed.P = self.operating_P
-        Inputs_F_Vol = mixed.F_vol
-        V_0 = Inputs_F_Vol * tau
+
+        Cpf = mixed.Cp
+        duty = ((Cpf + Cpi)/2) * mixed.F_mass * (Tf - Ti)
+        self.add_heat_utility(duty, T_in = Ti, T_out = Tf)
+
+        # Calculate reactor volume
+        inputs_F_Vol = mixed.F_vol
+        V_0 = inputs_F_Vol * tau
+
+        # Calculate power utility
+        if self.kW_per_m3 is not None:
+            volumetric_power = self.kW_per_m3
+            power = volumetric_power * V_0
+        elif self.reference_volume and self.rotational_speed is not None:
+            volumetric_power = calculate_agitator_power(
+                Np = self.impeller_Np,
+                N = self.rotational_speed,
+                rho = mixed.rho,
+                V_reactor = self.reference_volume,
+                D_impeller = self.impeller_D,
+                H_per_D = self.height_diameter,
+                D_over_T = self.diameter_turbine,
+                efficiency = self.agitator_efficiency,
+            )
+
+            power = volumetric_power * V_0
+        else:
+            volumetric_power = calculate_agitator_power(
+                Np = self.impeller_Np,
+                N = 1.417,                              # http://dx.doi.org/10.1016/j.jclepro.2016.06.164 for 10 m3
+                rho = mixed.rho,
+                V_reactor = self.reference_volume,
+                D_impeller = self.impeller_D,
+                H_per_D = self.height_diameter,
+                D_over_T = self.diameter_turbine,
+                efficiency = self.agitator_efficiency,
+            )
+
+            raise Warning("Volumetric power was calculated using Piccinno value for rotational speed in 10 m^3 reactor" \
+            "since neither kW_per_m3 nor agitator speed with reference volume were provided.")
+
+        self.add_power_utility(power)
 
         # Add the reactor volume
         design['Reactor volume'] = V_0/V_wf
+
+        # Add volumetric power
+        design['Volumetric power'] = volumetric_power
 
         # Add tau
         design['Residence time (tau)'] = tau
