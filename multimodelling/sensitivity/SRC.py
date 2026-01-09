@@ -13,6 +13,15 @@ class SRC:
 
     Class for performing Standardized Regression Coefficients (SRC) sensitivity analysis.
 
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing BioSTEAM Monte Carlo simulation results.
+    parameter_cols : list[str]
+        List of column names for input parameters.
+    indicator_cols : list[str]
+        List of column names for output indicators.
+
     """
 
     def __init__(self, df: pd.DataFrame, parameter_cols: list[str], indicator_cols: list[str], simplified_labels: dict | list = None):
@@ -20,15 +29,6 @@ class SRC:
 
         Initialize SRC analysis with data and column names.
 
-        Parameters
-        ----------
-        df : pd.DataFrame
-            DataFrame containing BioSTEAM Monte Carlo simulation results.
-        parameter_cols : list[str]
-            List of column names for input parameters.
-        indicator_cols : list[str]
-            List of column names for output indicators.
-        
         """
         # Get the last level if Multiindex
         df_flatten = keep_multiindex_last_level(df = df)
@@ -95,6 +95,7 @@ class SRC:
         
         # Return SRC DataFrame
         src_df = pd.DataFrame(results, index = self.parameters)
+        
         return src_df
     
     def plot_src(self, src: pd.DataFrame, path : str = None, show_plot: bool = False) -> None:
