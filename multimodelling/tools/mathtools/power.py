@@ -82,3 +82,33 @@ def calculate_agitator_power(
     if is_kW:
         power = power/1000
     return power/V_reactor if return_volumetric else power
+
+VOLUMETRIC_POWER_BY_TYPE = {
+    "Mild": (0.03 + 0.10)/2,    # From table 10.16 (Sinnot Chapter 10)        
+    "Medium": (1.0 + 1.5)/2,    # From table 10.16 (Sinnot Chapter 10)    
+    "Severe": (1.5 + 2.0)/2,    # From table 10.16 (Sinnot Chapter 10)    
+    "Violent": 2.25,            # Assumption based on table 10.16 (Sinnot Chapter 10)
+}
+
+def estimate_volumetric_power(agitation_type: str = "Medium"):
+    """
+
+    This function returns the volumetric power for estimating agitator
+    consumption.
+
+    Volumetric power is selected depending on agitation conditions. The
+    values used for each condition come from Towler, Gavin P., and 
+    R. K. Sinnott. 2022. Chemical Engineering Design : Principles, Practice 
+    and Economics of Plant and Process Design. Chapter 10.
+
+    parameters
+    ----------
+    agitation_type : str
+        * "Mild": blending, mixing and homogeneous reactions.
+        * "Medium": Heat transfer and liquid-liquid mixing.
+        * "Severe": Slurry suspension, gas absorption and emulsions.
+        * "Violent": Fine slurry suspension. 
+
+    """
+    volumetric_power = VOLUMETRIC_POWER_BY_TYPE[agitation_type]
+    return volumetric_power
