@@ -6,6 +6,7 @@ from ..tools.mathtools.unitsdiameter import calculate_centrifuge_diameter
 from ..tools.mathtools.power import calculate_agitator_power
 import numpy as np
 import math
+from typing import Literal
 
 __all__ = (
     "ExtractionReactor",
@@ -38,7 +39,7 @@ class ExtractionReactor(bst.Unit):
               kW_per_m3: float = None,
               agitator_speed: float = None,
               reference_volume: float = None,
-              flow_type: str["Radial","Axial"] = "Radial"
+              flow_type: Literal["Radial","Axial"] = "Radial"
               ):
         """
         """
