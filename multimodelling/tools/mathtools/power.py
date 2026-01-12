@@ -59,7 +59,7 @@ def calculate_agitator_power(
     # Basic validations
     if Np <= 0: raise ValueError("Np must be > 0")
     if rho <= 0: raise ValueError("rho must be > 0")
-    if not 0. < efficiency <= 1.: raise ("Efficiency must be between 0 and 1")
+    if not 0. < efficiency <= 1.: raise ValueError("Efficiency must be between 0 and 1")
     if H_per_D <= 0: raise ValueError("H_per_D must be > 0")
     if D_impeller is None and V_reactor is None:
         raise ValueError("Provide D_impeller or V_reactor")
