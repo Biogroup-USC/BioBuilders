@@ -85,3 +85,8 @@ def calculate_centrifuge_diameter(
     Diameter = np.sqrt((Sigma * 8 * 9.81)/(H * omega**2))
 
     return Diameter, Sigma
+
+def calculate_impeller_diameter():
+    """
+    """
+    
