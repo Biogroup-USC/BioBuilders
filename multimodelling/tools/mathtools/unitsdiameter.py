@@ -3,7 +3,8 @@
 import numpy as np
 
 __all__ = (
-    "calculate_centrifuge_diameter"
+    "calculate_centrifuge_diameter",
+    "calculate_impeller_diameter",
 )
 
 def calculate_centrifuge_diameter(
@@ -86,7 +87,26 @@ def calculate_centrifuge_diameter(
 
     return Diameter, Sigma
 
-def calculate_impeller_diameter():
+def calculate_impeller_diameter(
+        V_reactor: float = None,
+        impeller_react_diameter: float = 1/3,
+        height_diameter: float = 1.,
+):
     """
+
+    This functions calculates vessel diameter using its volume, impeller/diameter and
+    height/diameter proportions.
+
+    Parameters
+    ----------
+    V_reactor : float
+        Volume of the reactor [m^3].
+    impeller_react_diameter : float
+        impeller : diameter proportion [m/m].
+    height_diameter : float
+        height : diameter proportion [m/m].
+
     """
-    
+    impeller_diameter = (4 * V_reactor /((impeller_react_diameter**-1)**3 * height_diameter * np.pi))**(1/3)
+
+    return impeller_diameter
