@@ -1,8 +1,8 @@
 from .tea import TEA, InflationTEA
-from .settingsprocess import load_process_settings
+from .settingsprocess import ProcessSettingsManager
 
 __all__ = (
-    "load_process_settings",
+    "ProcessSettingsManager",
     "TEA",
     "InflationTEA",
 )

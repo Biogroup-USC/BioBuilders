@@ -1,109 +1,169 @@
 """
 """
-import biosteam as bst
+from biosteam import settings, UtilityAgent, Thermo, Stream
+from typing import Literal
+from collections.abc import Mapping
 
 __all__ = (
-    "load_process_settings",
+    "ProcessSettingsManager",
 )
 
-def load_process_settings(
-            CEPCI: float = 567.5,           # CEPCI is 567.5 (2017) by default (BioSTEAM)
-            electricity: float = 0.0782,    # electricity price is 0.0782 USD/kWh by default (BioSTEAM)
-            heatutility: list | dict = None,
-            coolutility: list | dict = None,
-            streamsprice: dict = None,      # The keys of this dict must be the Stream objects from BioSTEAM
-            ):
+ALLOWED_AGENT_ATTRS = {
+    "T",
+    "P",
+    "phase",
+    "heat_transfer_price",
+    "regeneration_price",
+    "heat_transfer_efficiency",
+    "T_limit",
+    "isfuel",
+    "dT",
+    "thermo",
+    "units",
+    "ID",
+}
+
+class ProcessSettingsManager:
+    """
+    """
+    def __init__(
+            self,
+            CEPCI: float = None,
+            electricity_price: float = None,
+            streams_price: dict[Stream, float] = None,
+    ):
         """
-
-        This function loads all the process settings nedeed to perform the techno economical
-        analysis (TEA). 
-
-        A CEPCI, electricity, heating agents and cooling agents prices are needed when performing a
-        TEA. Moreover, the prices of certain streams must be defined. For example, the price of the 
-        substrate or the enzymes. So, this function simplifies the definition of all process settings
-        reducing the code. However, the BioSTEAM workflow could be follow as it is showed in 
-        https://biosteam.readthedocs.io/en/latest/tutorial/Sugarcane_ethanol_biorefinery.html.
-
-        Parameters
-        ----------
-        CEPCI: float
-            The CEPCI is the Chemical Engineering Plant Cost Index which is set by default to 567.5 (2013).
-        electricity: float
-            The electricity parameters refers to its price in USD/kWh. It is setted by default to 0.0782 USD/kWh.
-        heatutility: list | dict
-            This parameter is a list of the heating agents used between the following: 'low_pressure_steam', 'medium_pressure_steam',
-            'high_pressure_steam', 'natural_gas'.
-        coolutility: list | dict
-            This parameter is a list of the cooling agents used between the following: 'cooling_water', 'chilled_water', 'chilled_brine',
-            'propane', 'propylene', 'ethylene'.
-        streamsprice: dict
-            The streams price dictionary contains all the prices of certain streams like the raw materials, solvents or others. The structure of
-            this dictionary is the following: {Stream object : price}. The Stream object is the bst.Stream().
-
         """
-        Settings = bst.settings
-        # CEPCI
-        Settings.CEPCI = CEPCI
+        self.CEPCI = CEPCI
+        self.electricity_price = electricity_price
+        self.streams_price = streams_price
 
-        # Electricity price
-        Settings.electricity_price = electricity
+        # Biosteam settings
+        self.settings = settings
+    
+    @property
+    def heat_utilities(self):
+        """
+        """
+        return self.settings.heating_agents
+    
+    @property
+    def heat_utilities_ids(self):
+        """
+        """
+        return {util.ID for util in self.settings.heating_agents}
 
-        # Set the heat utility
-        Heat_Utility_ = bst.HeatUtility
-        Heat_Utility_List = []
-        if heatutility is None:
-            # by default the only heat utility used is low pressure steam produced on-site
-            Heat_Utility = Heat_Utility_.get_heating_agent('low_pressure_steam')
-            Heat_Utility.heat_transfer_efficiency = 0.9   #       by default from https://biosteam.readthedocs.io/en/latest/tutorial/Sugarcane_ethanol_biorefinery.html 
-            Heat_Utility.T = 529.2                        # K     by default from https://biosteam.readthedocs.io/en/latest/tutorial/Sugarcane_ethanol_biorefinery.html
-            Heat_Utility.P = 44e5                         # Pa    by default from https://biosteam.readthedocs.io/en/latest/tutorial/Sugarcane_ethanol_biorefinery.html
-            Heat_Utility_List.append(Heat_Utility)
-        elif isinstance(heatutility, list):
-            # A list of heat utilities from BioSTEAM could be provided and the P, T and heat effiency values are the default 
-            for utility in heatutility:
-                Heat_Utility = Heat_Utility_.get_heating_agent(utility)
-                Heat_Utility_List.append(Heat_Utility)
-        elif isinstance(heatutility, dict):
-            # A dictionary which contains the BioSTEAM heat utility as keys and its cost as value
-            for utility in heatutility.keys():
-                try:
-                    Heat_Utility = Heat_Utility_.get_heating_agent(utility)
-                    Heat_Utility.regeneration_price = heatutility[utility]*Heat_Utility.MW
-                    Heat_Utility_List.append(Heat_Utility)
-                except LookupError:
-                    Settings.stream_prices[utility] = heatutility[utility]
-                    Heat_Utility_List.append(utility)
+    @property
+    def cool_utilities(self):
+        """
+        """
+        return self.settings.cooling_agents
+
+    @property
+    def cool_utilities_ids(self):
+        """
+        """
+        return {util.ID for util in self.settings.cooling_agents}
+
+    def create_utility(
+            self, 
+            utility_type: Literal["Heat","Cool"],
+            utility_id: str,
+            utility_phase: Literal["l","g"],
+            utility_T: float,
+            utility_P: float,
+            utility_units: Literal["kg/hr","kmol/hr","m3/hr"],
+            utility_transfer_price: float,
+            utility_regen_price: float,
+            utility_transfer_efficiency: float,
+            isutilityfuel: bool,
+            utility_dT: float,
+            utility_thermo: Thermo | None = None,
+            utility_T_limit: float = None,
+    ):
+        """
+        """
+        # Validate if the same utility exists to avoid duplicates
+        if not utility_id or not isinstance(utility_id,str):
+            raise TypeError("utility_id must be a non-empty string")
         
-        # Set the cool utility
-        Cool_Utility_ = bst.HeatUtility
-        Cool_Utility_List = []
-        if coolutility is None:
-            # by default the only heat utility used is low pressure steam produced on-site
-            Cool_Utility = Cool_Utility_.get_cooling_agent('cooling_water')
-            Cool_Utility.heat_transfer_efficiency = 0.9   #     by default from https://biosteam.readthedocs.io/en/latest/tutorial/Sugarcane_ethanol_biorefinery.html 
-            Cool_Utility.T = 273.15 + 25                  # K   Set to 25ºC by default
-            Cool_Utility.P = 101325                       # Pa  by default in BioSTEAM 
-            Cool_Utility_List.append(Cool_Utility)
-        elif isinstance(coolutility, list):
-            # A list of heat utilities from BioSTEAM could be provided and the P, T and heat effiency values are the default from BioSTEAM
-            for utility in coolutility:
-                Cool_Utility = Cool_Utility_.get_cooling_agent(utility)
-                Cool_Utility_List.append(Cool_Utility)
-        elif isinstance(coolutility, dict):
-            # A dictionary which contains the BioSTEAM cool utility as keys and its cost as value
-            for utility in coolutility.keys():
-                try:
-                    Cool_Utility = Cool_Utility_.get_cooling_agent(utility)
-                    Cool_Utility.cost = coolutility[utility]
-                    Cool_Utility_List.append(Cool_Utility)
-                except LookupError:
-                    Settings.stream_prices[utility] = coolutility[utility]
-                    Cool_Utility_List.append(coolutility[utility])
-
-        # Set the prices of the process streams given
-        for stream in streamsprice.keys():
-            if not isinstance(stream, object):
-                raise ValueError("The keys of streamsprice dictionary must be the Stream objects. {} is not a Stream object from Biosteam".format(stream))
-            stream.price = streamsprice[stream]
+        if utility_type not in ("Heat", "Cool"):
+            raise ValueError("Utility type must be 'Heat' or 'Cool'")
         
-        return Heat_Utility_List, Cool_Utility_List
+        if utility_id in self.heat_utilities_ids or utility_id in self.cool_utilities_ids:
+            raise ValueError(f"Utility '{utility_id}' already exists.")
+
+        # Create the new utility agent
+        utility_agent = UtilityAgent(
+            ID = utility_id,
+            phase = utility_phase,
+            T = utility_T,
+            P = utility_P,
+            units = utility_units,
+            thermo = utility_thermo,
+            T_limit = utility_T_limit,
+            heat_transfer_price = utility_transfer_price,
+            regeneration_price = utility_regen_price,
+            heat_transfer_efficiency = utility_transfer_efficiency,
+            isfuel = isutilityfuel,
+            dT = utility_dT,
+        )
+
+        # Add this utility agent to settings
+        if utility_type == "Heat":
+            self.settings.heating_agents.append(utility_agent)
+        else:
+            self.settings.cooling_agents.append(utility_agent)
+    
+    def update_utility_agent(
+            self,
+            utility_id: str,
+            **kwargs
+    ):
+        """
+        """
+        settings = self.settings
+
+        # Get the utility agent
+        if utility_id in self.heat_utilities_ids:
+            utility_agent = settings.get_heating_agent(utility_id)
+        elif utility_id in self.cool_utilities_ids:
+            utility_agent = settings.get_cooling_agent(utility_id)
+        else:
+            raise ValueError(f"'{utility_id}' is not a valid utility agent. Check heating and"
+                             "cooling utilities or create a new utility.")
+        
+        # validate if the attributes given exist
+        for attr, value in kwargs.items():
+            if attr not in ALLOWED_AGENT_ATTRS:
+                raise AttributeError(f"{attr} is not a valid UtilityAgent attribute")
+            
+            if not hasattr(utility_agent, attr):
+                raise AttributeError(f"UtilityAgent {utility_agent.ID} has no attribute '{attr}'")
+
+            setattr(utility_agent,attr,value)
+    
+    @staticmethod
+    def _set_streams_price(
+            streams_prices: dict[Stream, float | int],
+    ):
+        """
+        """
+        for stream, price in streams_prices.items():
+            if not isinstance(price, (float, int)):
+                raise TypeError(f"Price for '{stream.ID}' stream must be a number (int/float).")
+            stream.price = float(price)
+    
+    def load_settings(self):
+        """
+        """
+        # Load CECPI and electricity price
+        if self.CEPCI is not None:
+            self.settings.CEPCI = float(self.CEPCI)
+        
+        if self.electricity_price is not None:
+            self.settings.electricity_price = float(self.electricity_price)
+
+        # Load streams price
+        if self.streams_price is not None:
+            self._set_streams_price(self.streams_price)

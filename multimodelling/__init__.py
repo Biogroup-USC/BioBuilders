@@ -32,7 +32,7 @@ from .units import (
 from .tea import (
     TEA,
     InflationTEA,
-    load_process_settings,
+    ProcessSettingsManager,
 )
 
 from .results import (
@@ -102,7 +102,7 @@ __all__ = (
     # Tea
     'TEA',
     'InflationTEA',
-    'load_process_settings',
+    'ProcessSettingsManager',
 
     # Results
     'ProcessMassBalance',
@@ -130,5 +130,5 @@ __all__ = (
     'solve_operating_pressures_multieffectevaporator',
     'calculate_rdvf_area',
     'calculate_centrifuge_diameter',
-    'calculate_impeller_diameter',                 
+    'calculate_impeller_diameter',            
 )
