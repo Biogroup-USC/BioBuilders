@@ -145,7 +145,7 @@ class ProcessSettingsManager:
     
     @staticmethod
     def _set_streams_price(
-            streams_prices: dict[Stream, float],
+            streams_prices: dict[Stream, float | int],
     ):
         """
         """
