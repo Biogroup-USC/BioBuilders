@@ -111,6 +111,7 @@ class BatchEnzymaticTreatment(bst.Unit):
               time_CIP: float = None,
               operating_T: float = 298.15,
               operating_P: float = 101325,
+              kW_per_m3: float = None,
               N_reactors: int = 2,
               ):
         """
@@ -143,7 +144,7 @@ class BatchEnzymaticTreatment(bst.Unit):
         self.operating_T = operating_T
         self.operating_P = operating_P
         self.N_reactors = N_reactors
-        self._kW_per_m3 = None
+        self.kW_per_m3 = kW_per_m3
         self._V_wf = None
         self._V_max = None
         self._base_cost = None
@@ -174,20 +175,6 @@ class BatchEnzymaticTreatment(bst.Unit):
         Product.copy_flow(Load)
         self.reaction(Product)
     
-    @property
-    def kW_per_m3(self):
-        """
-        """
-        if self._kW_per_m3 is None:
-            self._kW_per_m3 = ((0.79*1000*(1.417**3)*(0.373**5))/90)/1    #kW/m3       using 1 m3 data --> http://dx.doi.org/10.1016/j.jclepro.2016.06.164
-        return self._kW_per_m3
-    
-    @kW_per_m3.setter
-    def kW_per_m3(self, value):
-        """
-        """
-        self._kW_per_m3 = value
-
     @property
     def V_wf(self):
         """
@@ -257,8 +244,15 @@ class BatchEnzymaticTreatment(bst.Unit):
         self.parallel['Reactor'] = N_reactors
 
         # Add the power utility
-        Power_Stirring = self.kW_per_m3 * design["Reactor volume (total)"]
-        self.add_power_utility(Power_Stirring)
+        if self.kW_per_m3 is not None:
+            volumetric_power = self.kW_per_m3
+            power = volumetric_power * V_0
+        else:
+            raise ValueError("kW_per_m3 must be provided to calculate power requirements."
+                             "In case you have no data, use `agitator_volumetric_power_determination`"
+                             "to stimate the volumetric power.")
+        
+        self.add_power_utility(power)
 
         # Add the heat utility assuming that the process is adiabatic
         Tf = self.operating_T                   # K
