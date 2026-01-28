@@ -20,4 +20,5 @@ __all__ = (
     "calculate_stream_price",
     "calculate_mean_median_price",
     "main_chemical_mass_basis",
+    "build_cartesian_grid",
 )
