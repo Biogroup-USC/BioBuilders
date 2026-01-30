@@ -5,7 +5,7 @@ from .solveparameter import solve_operating_pressures_multieffectevaporator
 from .unitsarea import calculate_rdvf_area
 from .control import damp_to
 from .power import calculate_agitator_power
-from sampling import build_cartesian_grid
+from .sampling import build_cartesian_grid
 
 __all__ = (
     "log_mean",
