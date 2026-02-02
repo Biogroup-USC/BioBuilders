@@ -21,4 +21,5 @@ __all__ = (
     "calculate_mean_median_price",
     "main_chemical_mass_basis",
     "build_cartesian_grid",
+    "sort_streams_by_phases",
 )

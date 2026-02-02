@@ -12,6 +12,7 @@ __all__ = (
     "extract_components_flow",
     "calculate_stream_price",
     "main_chemical_mass_basis",
+    "sort_streams_by_phases",
 )
 
 @runtime_checkable
@@ -81,6 +82,14 @@ def main_chemical_mass_basis(stream: _StreamLike):
     main_chem = max(mass_flow, key = mass_flow.get)
 
     return main_chem
+
+def sort_streams_by_phases(streams: list = None, phase: tuple | str = 'l'):
+    """
+    """
+    if isinstance(phase,tuple):
+        return [s for s in streams if s.phase in phase]
+    else:
+        return [s for s in streams if s.phase == phase]
 
 def calculate_stream_price(composition_price: dict = None, *,stream: _StreamLike = None, chems_price: dict = None, basis: Literal["mass", "molar"] = "mass"):
     """
