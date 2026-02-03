@@ -1,0 +1,37 @@
+{
+    "Protein extraction (Viscozyme)": {
+        "type": "Reaction",
+        "basis": "wt",
+        "reactant": "Protein",
+        "conversion": 0.712,
+        "stoichiometry": {
+            "Protein": -1,
+            "Protein_Soluble": 1
+        },
+        "notes": "Protein extraction from tomato pomace with cell wall-degrading enzymes"
+    },
+
+    "Protein extraction (Trypsin)": {
+        "type": "Reaction",
+        "basis": "wt",
+        "reactant": "Protein",
+        "conversion": 0.38,
+        "stoichiometry": {
+            "Protein": -1,
+            "Peptides": 1
+        },
+        "notes": "Peptides extraction from tomato pomace with cell wall-degrading enzymes"
+    },
+
+    "Protein hydrolysis (Trypsin)": {
+        "type": "Reaction",
+        "basis": "wt",
+        "reactant": "Protein_Soluble",
+        "conversion": 1.0,
+        "stoichiometry": {
+            "Protein_Soluble": -1,
+            "Peptides": 1
+        },
+        "notes": "Peptides extraction from tomato pomace with cell wall-degrading enzymes"
+    }
+}
