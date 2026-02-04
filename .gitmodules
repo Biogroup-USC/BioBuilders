@@ -1,4 +1,4 @@
-[submodule "multiscale-modelling-biorefinery-case-studies"]
-	path = multiscale-modelling-biorefinery-case-studies
-	url = https://github.com/Biogroup-USC/multiscale-modelling-biorefinery-case-studies.git
+[submodule "BRAVAS-SystemLab"]
+	path = BRAVAS-SystemLab
+	url = https://github.com/Biogroup-USC/BRAVAS-SystemLab.git
 	branch = main
