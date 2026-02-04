@@ -29,6 +29,7 @@ from .units import (
     MembraneFiltration,
     SeparationUnit,
     BatchEnzymaticTreatment,
+    BiomassBoiler,
 )
 
 from .tea import (
@@ -102,6 +103,7 @@ __all__ = (
     'MembraneFiltration',
     'SeparationUnit',
     'BatchEnzymaticTreatment',
+    'BiomassBoiler',
 
     # Tea
     'TEA',
