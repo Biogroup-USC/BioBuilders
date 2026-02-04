@@ -3,16 +3,16 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "multimodelling"
+name = "bravas"
 version = "0.29.6"
-description = "Library for biorefinery modelling following the multiescale approach."
+description = "Library to perform biorefinery and value chain assestment."
 authors = [
-    { name = "Isaac", email = "isaacleis.garrote@usc.es" }
+    { name = "Isaac, Andrea", email = "isaacleis.garrote@usc.es" }
 ]
 readme = "README.md"
 requires-python = ">=3.8, <3.13"
 license = { text = "MIT"}
-urls = { "Homepage" = "https://github.com/Biogroup-USC/multiscale-modelling-biorefinery-code.git" }
+urls = { "Homepage" = "https://github.com/Biogroup-USC/BRAVAS.git" }
 dependencies = [
   "biosteam>=2.51.4",
   "pandas>=2.2.2",
