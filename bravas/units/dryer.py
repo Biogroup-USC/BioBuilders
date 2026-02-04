@@ -6,7 +6,7 @@ import numpy as np
 from thermosteam import separations as sep
 
 __all__ = (
-    "SprayDryer","DrumDryer"
+    "SprayDryer", "DrumDryer"
 )
 
 class SprayDryer(bst.Unit):

@@ -1,5 +1,5 @@
 from .enzymatic_BSTR import BatchEnzymaticTreatment
-from .mill import Mill
+from .mill import BallMill, AttritionMill
 from .heatexchanger import ShellHeatExchanger
 from .extraction import *
 from .dryer import SprayDryer, DrumDryer
@@ -15,7 +15,8 @@ from .separator import SeparationUnit
 
 __all__ = (
     "BatchEnzymaticTreatment",
-    "Mill",
+    "BallMill",
+    "AttritionMill",
     "ShellHeatExchanger",
     "ExtractionReactor",
     "SLECbySplit",
