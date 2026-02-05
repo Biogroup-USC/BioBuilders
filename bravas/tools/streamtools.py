@@ -27,6 +27,19 @@ class _StreamLike(Protocol):
 
 def _get_available_chemicals_ID(chemicals: list[object]) -> list[str]:
     """
+
+    This function takes a list of Chemical objects and returns a list
+    with its IDs.
+
+    Parameters
+    ----------
+    chemicals : list
+        List of chemical objects.
+
+    Returns
+    -------
+    List of Chemical.ID.
+
     """
     return [str(chem.ID) for chem in chemicals]
 
