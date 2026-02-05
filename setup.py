@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='bravas',
-    version='0.29.9',
+    version='0.30.0',
     author= "Isaac, Andrea",
     author_email= "isaacleis.garrote@usc.es",
     description = 'Library to perform biorefinery and value chain assestment',  
