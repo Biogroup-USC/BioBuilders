@@ -7,11 +7,11 @@ create new chemicals.
 from chem_db import ChemDataBase
 
 # Create the database
-DB = ChemDataBase("multimodelling/chems/database/MultiModelling_Chem.db")
-DB.create_table_chemical_properties()
+db = ChemDataBase("./bravas/data/bravas_chemical_database.db")
+db.create_table_chemical_properties()
 
 # Viscozyme
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Viscozyme", 
     MW = 1, 
     Phase = 's', 
@@ -23,7 +23,7 @@ DB.insert_data_into_db(
     )
 
 # Protein
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Protein", 
     MW = 1, 
     Phase = 's', 
@@ -34,7 +34,7 @@ DB.insert_data_into_db(
     )
 
 # Peptides
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Peptides", 
     MW = 1, 
     Phase = 's', 
@@ -45,7 +45,7 @@ DB.insert_data_into_db(
     )
 
 # Structural_Protein
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID="Structural_Protein", 
     MW = 1, 
     Phase = 's', 
@@ -57,7 +57,7 @@ DB.insert_data_into_db(
     )
 
 # Trypsin 
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Trypsin", 
     MW = 1, 
     Phase = 's', 
@@ -69,7 +69,7 @@ DB.insert_data_into_db(
     )
 
 # Non_Protein
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Non_Protein", 
     MW = 1, 
     Phase = 's', 
@@ -81,7 +81,7 @@ DB.insert_data_into_db(
     )
 
 # Phenolic_Compounds
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Phenolic_Compounds", 
     CAS = "502-65-8", 
     formula = "C40H56",     # https://pubchem.ncbi.nlm.nih.gov/compound/lycopene
@@ -95,7 +95,7 @@ DB.insert_data_into_db(
     )
 
 # Free_Phenolic_Compounds
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Free_Phenolic_Compounds", 
     formula = "C40H56",     # https://pubchem.ncbi.nlm.nih.gov/compound/lycopene
     MW = 536.9,             # https://pubchem.ncbi.nlm.nih.gov/compound/lycopene
@@ -108,7 +108,7 @@ DB.insert_data_into_db(
     )
 
 # n-hentriacontane
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Hentriacontane",
     CAS = "630-04-6",       #               https://webbook.nist.gov/cgi/cbook.cgi?ID=C630046&Mask=200
     MW = 436.84,            # g/mol         https://webbook.nist.gov/cgi/cbook.cgi?ID=C630046&Mask=200
@@ -120,7 +120,7 @@ DB.insert_data_into_db(
 )
 
 # Amyrin
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Alpha_Amyrin",    #               https://webbook.nist.gov/cgi/cbook.cgi?ID=638-95-9
     MW = 426.72,            # g/mol         https://webbook.nist.gov/cgi/cbook.cgi?ID=638-95-9
     CAS = "638-95-9",       #               https://webbook.nist.gov/cgi/cbook.cgi?ID=638-95-9
@@ -131,7 +131,7 @@ DB.insert_data_into_db(
 )
 
 # Pectin
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Pectin",
     MW = 1.0,               # g/mol
     Phase = 's',             
@@ -140,7 +140,7 @@ DB.insert_data_into_db(
 )
 
 # Lignin Fiber
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Lignin_Fiber",
     MW = 1.0,               # g/mol
     Phase = 's',             
@@ -149,7 +149,7 @@ DB.insert_data_into_db(
 )
 
 # Cutin
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Cutin", 
     MW = 1, 
     CAS = "54990-88-4",
@@ -160,7 +160,7 @@ DB.insert_data_into_db(
     )
 
 # Cutin Oligomers
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Cutin_Olig", 
     MW = 1,
     Phase = 's',
@@ -169,7 +169,7 @@ DB.insert_data_into_db(
     V = (1/1000)*(1/1364),     # m3/mol 
     )
 
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Cutin_Olig_Sol", 
     MW = 1,
     Phase = 's',
@@ -178,7 +178,7 @@ DB.insert_data_into_db(
     V = (1/1000)*(1/1364),     # m3/mol 
     )
 
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Cutin_Olig_Insol", 
     MW = 1,
     Phase = 's',
@@ -188,7 +188,7 @@ DB.insert_data_into_db(
     )
 
 # Free Cutin
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Free_Cutin", 
     MW = 1,
     Phase = 's',
@@ -198,7 +198,7 @@ DB.insert_data_into_db(
     )
 
 # Cholinium Hexanoate
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = 'Cholinium_Hexanoate',
     formula = 'C11H25NO3',              # The sum of Choline    https://pubchem.ncbi.nlm.nih.gov/compound/choline#section=SMILES and Hexanoate https://pubchem.ncbi.nlm.nih.gov/compound/hexanoate
     MW = 104.17 + 115.15,               # The sum of both
@@ -209,7 +209,7 @@ DB.insert_data_into_db(
 )
 
 # NADES (Choline lactate [1:2])
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = 'NADES_ChCl_LA_1_2',
     formula = 'C11H26NO6Cl',
     MW = 319.77964,                 # Ch:LA [1:2]

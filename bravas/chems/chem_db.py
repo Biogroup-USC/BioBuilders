@@ -1,8 +1,8 @@
 """
 
-This script contains all the code used to build the multimodelling chemical database
+This script contains all the code used to build BRAVAS chemical database
 which is used to store all the chemicals from the case studies. As consequence, when a new chemical
-is created it will be searched in the two databases included in BioSTEAM and in the multimodelling
+is created it will be searched in the two databases included in BioSTEAM and in BRAVAS
 database. If the chemical is not in one of them, then it must be defined.
 
 This code also allows the user to create its own database and _build_database could be taken as a
@@ -53,8 +53,8 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
             new name "mynewdatabase.db".
     
         """
-        # The default name of the database is "MultiModelling_Chem.db"
-        self.dbname = dbname if dbname is not None else "MultiModelling_Chem.db"
+        # Default name of the database
+        self.dbname = dbname if dbname is not None else "bravas_chemical_database.db"
 
         # Initialize the connection property
         self._connection = None
@@ -104,10 +104,10 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
         return self._connection
     
     @classmethod
-    def copy_multimodelling_db(cls, dest_path: str = None):
+    def copy_bravas_db(cls, dest_path: str = None):
         """
 
-        This method is used to copy the Multimodelling database from the package
+        This method is used to copy the BRAVAS database from the package
         installation to a destination folder.
 
         Parameters
@@ -122,52 +122,53 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
             Instance of ChemDataBase connected to the destination database.
 
         """
-        DB_Filename = "Multimodelling_Chem.db"
-        Appname = "Multimodelling_Database"
+        db_filename = "bravas_chemical_database.db"
+        appname = "BRAVAS_data"
     
-        # Source DB path from installed package
-        Current_Directory = os.path.dirname(__file__)
-        Internal_DB_Path = os.path.join(Current_Directory, "database", DB_Filename)
-        if not os.path.exists(Internal_DB_Path):
-            raise FileNotFoundError(f"The internal database could not be found in: {Internal_DB_Path}")
+        # source db path from installed package
+        current_directory = os.path.dirname(__file__)
+        package_root = os.path.dirname(current_directory)
+        internal_db_path = os.path.join(package_root, "data", db_filename)
+        if not os.path.exists(internal_db_path):
+            raise FileNotFoundError(f"The internal database could not be found in: {internal_db_path}")
         
         # Determine destination path
         if dest_path is None:
-            User_Dir = user_data_dir(Appname, appauthor=False)
-            os.makedirs(User_Dir, exist_ok=True)
-            Final_Destination = os.path.join(User_Dir, DB_Filename)
+            user_dir = user_data_dir(appname, appauthor=False)
+            os.makedirs(user_dir, exist_ok=True)
+            final_destiny = os.path.join(user_dir, db_filename)
         else:
-            Final_Destination = os.path.abspath(dest_path)
-            os.makedirs(os.path.dirname(Final_Destination), exist_ok=True)
-    
+            final_destiny = os.path.abspath(dest_path)
+            os.makedirs(os.path.dirname(final_destiny), exist_ok=True)
+
         # Copy if not exists
-        if not os.path.exists(Final_Destination):
-            shutil.copy(Internal_DB_Path, Final_Destination)
-            print(f"Database copied to: {Final_Destination}")
+        if not os.path.exists(final_destiny):
+            shutil.copy(internal_db_path, final_destiny)
+            print(f"Database copied to: {final_destiny}")
         else:
-            print(f"Database already exists at: {Final_Destination}")
+            print(f"Database already exists at: {final_destiny}")
     
-        return cls(Final_Destination)
+        return cls(final_destiny)
 
     @classmethod
-    def delete_multimodelling_db(cls):
+    def delete_bravas_db(cls):
         """
 
-        This method deletes the Multimodelling database previously created using
-        the method called copy_multimodelling_db.
+        This method deletes BRAVAS database previously created using
+        the method called copy_bravas_db.
 
         """
         # Name of the App
-        Appname = "Multimodelling_Database"
+        appname = "BRAVAS_data"
 
         # Get the user directory
-        User_Dir = user_data_dir(Appname, appauthor = False)
+        user_dir = user_data_dir(appname, appauthor = False)
 
-        if os.path.exists(User_Dir):
-            shutil.rmtree(User_Dir)
-            print("User database folder deleted: {}".format(User_Dir))
+        if os.path.exists(user_dir):
+            shutil.rmtree(user_dir)
+            print("User database folder deleted: {}".format(user_dir))
         else:
-            print("User database folder does not exist: {}".format(User_Dir))
+            print("User database folder does not exist: {}".format(user_dir))
 
     def commit_changes(self):
         """
