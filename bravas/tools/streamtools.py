@@ -122,3 +122,39 @@ def calculate_stream_price(composition_price: dict = None, *,stream: _StreamLike
         return stream_price
     else:
         raise ValueError("Either composition_price or stream and chems_price must be provided.")
+    
+def validate_compiled_chemicals(streams: list = None):
+    """
+
+    Validates that each stream has the same chemicals compared
+    to the first which is used as template. Returns a list with
+    all the chemicals IDs.
+
+    Parameters
+    ----------
+    streams : list
+        List of BioSTEAM Stream objects.
+
+    Returns
+    -------
+    list
+        list of chemicals IDs.
+
+    """
+    # Get the compiled chemicals inside stream's thermo
+    stream_thermo = streams[0].thermo
+
+    # Get all the chemical IDs in thermo
+    chemicals_ID = _get_available_chemicals_ID(stream_thermo.chemicals)
+    
+    # Check if all streams have the same thermo
+    for s in streams[1:]:
+        s_chemicals = _get_available_chemicals_ID(s.thermo.chemicals)
+        for chem in s_chemicals:
+            if chem not in chemicals_ID:
+                raise ValueError(f"'{chem}' not present in '{streams[0].ID}' thermo.")
+            else:
+                continue
+    
+    # return validated chemicals ID
+    return chemicals_ID
