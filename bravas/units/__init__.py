@@ -1,5 +1,5 @@
 from .enzymatic_BSTR import BatchEnzymaticTreatment
-from .mill import Mill
+from .mill import BallMill, AttritionMill
 from .heatexchanger import ShellHeatExchanger
 from .extraction import *
 from .dryer import SprayDryer, DrumDryer
@@ -12,10 +12,13 @@ from .filtration import RotaryVacuumFilter, RotaryVacuumDrumFilter, MembraneFilt
 from .flash import Flash
 from .distillation import BinaryDistillation
 from .separator import SeparationUnit
+from .boiler import BiomassBoiler
+from .pellet import PelletMill
 
 __all__ = (
     "BatchEnzymaticTreatment",
-    "Mill",
+    "BallMill",
+    "AttritionMill",
     "ShellHeatExchanger",
     "ExtractionReactor",
     "SLECbySplit",
@@ -34,4 +37,6 @@ __all__ = (
     "LiquidsSettler",
     "MembraneFiltration",
     "SeparationUnit",
+    "BiomassBoiler",
+    "PelletMill"
 )

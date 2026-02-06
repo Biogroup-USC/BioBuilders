@@ -6,63 +6,181 @@ import numpy as np
 from thermosteam import separations as sep
 
 __all__ = (
-    "SprayDryer","DrumDryer"
+    "SprayDryer", "DrumDryer"
 )
 
 class SprayDryer(bst.Unit):
     """
+    Create a spray dryer for drying solids.
+
+    This class simulates a dryer, accounting for its evaporation capacity, design and cost.
+    The mass balance uses the moisture content in flows to equal input and ouputs.
+
+    Parameters
+    ----------
+    ID: str
+        Name of the unit operation.
+
+    ins: tuple
+        List of input streams:
+        * [0] solid flow with high humidity
+    
+    outs: tuple
+        List of output streams:
+        * [0] dryed solids
+        * [1] evaporated water
+
+    Attributes
+    ----------
+    moisture_content: float
+        Humidity content of the flow (fraction)
     """
+
     _N_ins = 1
     _N_outs = 2
+    _units = {
+        'Evaporation rate': 'kg/hr',
+        'Heat duty': 'kJ/hr'
+    }
 
-    def _init(self, 
-              moisture_content: float = None,
-              split: float = None,
-              operating_T: float = None,
-              ):
+    def _init(self,
+              moisture_content = 0.10,
+              dryer_efficiency = 0.80, # From Piccinno et al. (2016)
+    ):
         """
+        Initialize the properties.
         """
-        self.moisture = moisture_content if moisture_content is not None else 0.15
-        self.split = split
-        self._operating_T = operating_T
+        self. moisture_content = moisture_content
+        self.dryer_efficiency = dryer_efficiency
 
-    @property
-    def operating_T(self):
-        """
-        """
-        if self._operating_T is None:
-            self._operating_T = (273.15 + 100)
-        return self._operating_T
-        
-    @operating_T.setter
-    def operating_T(self,value):
-        """
-        """
-        self._operating_T = value
+        self._base_cost = None
+        self._base_evaporation_capacity = None
+        self._base_n_cost = None
+        self._CE_base = None
+
+        # Add heating utilty (air)
+        self.heat_utilities =[bst.HeatUtility()]
 
     def _run(self):
         """
         """
-        # Define the streams 
+        # Define the streams
         Feed = self.ins[0]
         Dryed, Water = self.outs
-        
-        # Define the temperature of the outlet streams
-        Dryed.T = 273.1 + 100 if self.operating_T <= (273.15 + 100) else self.operating_T
-        Water.T = 273.1 + 100 if self.operating_T <= (273.15 + 100) else self.operating_T
+        Dryed.copy_like(Feed)
 
-        # Water balance
-        
+        # Remove all water first
+        Water.copy_flow(Dryed, 'Water', remove=True)
+
+        # Adjust final moisture
+        sep.adjust_moisture_content(Dryed, Water, self.moisture_content)
+        Water.phase = 'g'
+        Dryed.phase = 's'
+        Feed.phase = 's'
 
     def _design(self):
-        """
-        """
-        pass
+        Dryed, Water = self.outs
 
+        evap_rate = Water.get_total_flow('kg/hr')
+        self.design_results['Evaporation rate'] = evap_rate
+
+        # Energy demand 
+        latent_heat = 2276 # kJ/kg for water at 105 ºC (2 bar) from HYSYS (low pressure steam)
+        Q = evap_rate * latent_heat / self.dryer_efficiency
+        self.design_results['Heat duty'] = Q
+
+        steam = bst.settings.get_heating_agent('low_pressure_steam')
+        if not self.heat_utilities:
+            self.add_heat_utility(
+                unit_duty = Q,
+                T_in = 378.15, # K (105ºC and 2 bar)
+                agent = steam
+            )
+        else:
+            self.heat_utilities[0].duty = Q
+
+    @property
+    def base_cost(self):
+        """
+        """
+        if self._base_cost is None:
+            self._base_cost = 2000000 # USD from: Rules of Thumb
+        return self._base_cost
+
+    @base_cost.setter
+    def base_cost(self, value):
+        """
+        """
+        self._base_cost = value
+
+    @property
+    def base_evaporation_capacity(self):
+        """
+        """
+        if self._base_evaporation_capacity is None:
+            self._base_evaporation_capacity = 1 # kg/hr from: Rules of Thumb
+        return self._base_evaporation_capacity
+    
+    @base_evaporation_capacity.setter
+    def base_evaporation_capacity(self, value):
+        """
+        """
+        self._base_evaporation_capacity = value
+    
+    @property
+    def base_n_cost(self):
+        """
+        """
+        if self._base_n_cost is None:
+            self._base_n_cost = 0.42 # From: Rules of Thumb
+        return self._base_n_cost
+    
+    @base_n_cost.setter
+    def base_n_cost(self, value):
+        """
+        """
+        self._base_n_cost = value
+    
+    @property
+    def CE_base(self):
+        if self._CE_base is None:
+            self._CE_base = 1000
+        return self._CE_base
+    
+    @CE_base.setter
+    def CE_base(self, value):
+        """
+        """
+        self._CE_base = value
+    
     def _cost(self):
         """
         """
-        pass
+        # Load all the design parameters needed
+        Evaporation_Rate = self.design_results['Evaporation rate']
+
+        # Calculate the design cost for the spray dryer: Including instrumentation, pressure nozzle atomization, residence time about 16 s,
+        # access platform, support steel, air preheater, feed system, fan, motor and drive and dust collectors. Tin = 150ºC and Tout = 75ºC
+        Spray_Dryer_Purchase_Cost = self.base_cost * (Evaporation_Rate/self.base_evaporation_capacity) ** self.base_n_cost
+        self.baseline_purchase_costs['Spray Dryer'] = Spray_Dryer_Purchase_Cost
+
+        # The material, pressure and temperature factor are assumed to be 1
+        self.F_D['Spray Dryer'] = self.F_M['Spray Dryer'] = self.F_P['Spray Dryer'] = 1
+
+        # The bare module factor which account for installation cost is calculated as the sum of delivery, installation, piping, instrumentation and controls
+        Delivery = 0.10
+        Installation = 0.60 # Dryer
+        Instrumentation_Control = 0.50
+        Piping = 0.31 # Solid-fluid
+
+        # Calculate the bare module with percentages from Peters: Plant Design and Economics for Chemical Engineers
+        Bare_Module = (1 + (Delivery + Installation +  Instrumentation_Control + Piping))
+        self.F_BM['Spray Dryer'] = Bare_Module
+
+        # Scale the cost using CEPCI
+        CE_base = self.CE_base
+        self.baseline_purchase_costs['Spray Dryer'] *= bst.CE/CE_base
+
 
 # Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
 # Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.

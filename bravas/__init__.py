@@ -16,9 +16,11 @@ from .units import (
     RotaryVacuumFilter,
     ExtractionReactor,
     ShellHeatExchanger,
+    SprayDryer,
     DrumDryer,
     SolidsCentrifuge,
-    Mill,
+    BallMill,
+    AttritionMill,
     MultiEffectEvaporator,
     MixTank,
     ContinuousStirredTankReactor,
@@ -27,6 +29,8 @@ from .units import (
     MembraneFiltration,
     SeparationUnit,
     BatchEnzymaticTreatment,
+    BiomassBoiler,
+    PelletMill,
 )
 
 from .tea import (
@@ -87,9 +91,11 @@ __all__ = (
     'RotaryVacuumFilter',
     'ExtractionReactor',
     'ShellHeatExchanger',
+    'SprayDryer',
     'DrumDryer',
     'SolidsCentrifuge',
-    'Mill',
+    'BallMill',
+    'AttritionMill',
     'MultiEffectEvaporator',
     'MixTank',
     'ContinuousStirredTankReactor',
@@ -98,6 +104,8 @@ __all__ = (
     'MembraneFiltration',
     'SeparationUnit',
     'BatchEnzymaticTreatment',
+    'BiomassBoiler',
+    'PelletMill',
 
     # Tea
     'TEA',
