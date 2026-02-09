@@ -78,9 +78,7 @@ __all__ = (
     'ChemicalsManager',
 
     # Parameters
-    'get_parameters_from_CSV',
-    'get_parameters_from_excel',
-    'get_price_streams_from_CSV',
+    'parse_case_spec',
 
     # Unit operation
     'BinaryDistillation',
