@@ -116,6 +116,6 @@ def parse_case_spec(source: str | Path | Mapping[str,Any]) -> dict[str,Any]:
 
     return {
         "unit_operations": units_params,
-        "techno-economic": tea_params,
+        "techno_economic": tea_params,
         "stream_prices": stream_prices,
     }
