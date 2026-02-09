@@ -4,9 +4,7 @@ from .chems import (
 )
 
 from .parameters import (
-    get_parameters_from_CSV,
-    get_parameters_from_excel,
-    get_price_streams_from_CSV,
+    parse_case_spec,
 )
 
 from .units import (
