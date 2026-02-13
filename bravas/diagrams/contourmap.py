@@ -424,7 +424,7 @@ class ContourStudy:
                       ylabel: str = None,
                       levels: int | np.ndarray = None,
                       n_round_ind: int = 1,
-                      cmap: str = 'RdBu_r',
+                      cmap: str = 'Spectral_r',
                       path: str = None,
                       baseline: dict | None = None,
                       desired_ind: dict | None = None,

@@ -72,11 +72,14 @@ def build_cartesian_grid(
     # Build pairs based on the order given
     if order == "row":
         # File by file, from left to right
-        pairs = [(float(xx), float(yy)) for yy in y for xx in x]
+        idx_pairs = [(i,j) for j in range(ny) for i in range(nx)]
+        pairs = [(x[i], y[j]) for i in range(ny) for i in range(nx)]
     elif order == "serpentine":
         # Alternating files; inverting x direction
+        idx_pairs = []
         pairs = []
-        for j, yy in enumerate(y):
+        for j in range(ny):
+            
             xs = x if (j % 2 == 0) else x[::-1]
             pairs.extend((float(xx), float(yy)) for xx in xs)
     else:
