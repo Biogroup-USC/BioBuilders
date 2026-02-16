@@ -3,16 +3,19 @@
 import numpy as np
 import pandas as pd
 import biosteam as bst
+import flexsolve as flx
 from biosteam._tea import (
     add_all_replacement_costs_to_cashflow_array,
     solve_payment,
     loan_principal_with_interest,
     taxable_earnings_with_fowarded_losses,
-    cashflow_columns
+    cashflow_columns,
+    NPV_with_sales
 )
 from typing import Mapping
 from ..tools.mathtools.economy import build_nominal_factor
 from numba import njit
+from warnings import warn
 
 __all__ = (
     "TEA",
@@ -224,7 +227,7 @@ class TEA(bst.TEA):
                  income_tax: float = 0.25,                  # 25% is the corporate tax rate in Spain
                  operating_days: float = 330,               # 330 days by default 
                  lang_factor: float = None,                 # If no Lang factor is defined, all the installation costs are calculated using the bare module factor
-                 labor_cost: float = None,                  
+                 labor_cost: float = 0.0,                  
                  fringe_benefits: float = 0.247,            # Non-labour cost from European countries https://ec.europa.eu/eurostat/statistics-explained/index.php?title=Wages_and_labour_costs#Net_earnings_and_tax_burden 
                  property_tax: float = 0.01,                # 1% of FCI as an estimation for industrial property taxes 
                  property_insurance: float = 0.01,          # 1% of FCI is a standard for latge-scale process plants
@@ -267,9 +270,19 @@ class TEA(bst.TEA):
         return super()._FCI(TDC)
     
     def _FOC(self, FCI):
-        return (FCI*(self.property_tax + self.property_insurance + self.maintenance + self.maintenance * self.supplies) + self.labor_cost*(1 + self.fringe_benefits + self.administration))
+        """
 
-class InflationTEA(bst.TEA):
+        Base-year (real) fixed operating costs model (per year).
+        Supplies are modelled as a fraction of maintenance; administration as
+        a fraction of labour. This value is later scaled year-by-year by 'foc_rates'
+        inside cashflow assembly.
+
+        """
+        foc_from_fci = FCI*(self.property_tax + self.property_insurance + self.maintenance + self.maintenance * self.supplies)
+        foc_from_labour = self.labor_cost*(1 + self.fringe_benefits + self.administration)
+        return foc_from_fci + foc_from_labour
+
+class InflationTEA(TEA):
     """
 
     This object performs the techno-economic analysis of the system
@@ -370,20 +383,13 @@ class InflationTEA(bst.TEA):
                  wc_rates: float | Mapping[int, float] = None,
                  global_rates: float | Mapping[int, float] = None,
                 ):
-        
         # Call to parent constructor
-        super().__init__(system, IRR, duration, depreciation, income_tax, operating_days, lang_factor, 
-                         construction_schedule, startup_months, startup_FOCfrac, startup_VOCfrac, startup_salesfrac, 
-                         WC_over_FCI, finance_interest, finance_years, finance_fraction, accumulate_interest_during_construction)
-        
-        # Parameters
-        self.labor_cost = labor_cost
-        self.fringe_benefits = fringe_benefits
-        self.property_tax = property_tax 
-        self.property_insurance = property_insurance
-        self.supplies= supplies
-        self.maintenance = maintenance
-        self.administration = administration
+        super().__init__(
+            system, IRR, duration, depreciation, income_tax, operating_days, lang_factor, labor_cost, fringe_benefits,
+            property_tax, property_insurance, supplies, maintenance, administration, construction_schedule, startup_months, 
+            startup_FOCfrac, startup_VOCfrac, startup_salesfrac, WC_over_FCI, finance_interest, finance_years, finance_fraction, 
+            accumulate_interest_during_construction
+        )
 
         # New inflation parameters
         self.sales_rates = sales_rates
@@ -432,17 +438,7 @@ class InflationTEA(bst.TEA):
         return super()._FCI(TDC)
     
     def _FOC(self, FCI):
-        """
-
-        Base-year (real) fixed operating costs model (per year).
-        Supplies are modelled as a fraction of maintenance; administration as
-        a fraction of labour. This value is later scaled year-by-year by 'foc_rates'
-        inside cashflow assembly.
-
-        """
-        foc_from_fci = FCI * (self.property_tax + self.property_insurance + self.maintenance + self.maintenance * self.supplies)
-        labour = self.labor_cost * (1 + self.fringe_benefits + self.administration)
-        return foc_from_fci + labour
+        return super()._FOC(FCI)
     
     def _taxable_nontaxable_depreciation_cashflows(self):
         """
@@ -624,3 +620,45 @@ class InflationTEA(bst.TEA):
         return pd.DataFrame(
             data.transpose(), index = np.arange(self._duration[0]-start, self._duration[1]), columns = cashflow_columns
         )
+    
+    def solve_sales(self):
+        """
+        Return the required additional sales [USD] to reach the breakeven 
+        point (NPV = 0) through cash flow analysis. 
+        
+        """
+        discount_factors = (1 + self.IRR)**self._get_duration_array()
+        sales_coefficients = np.ones_like(discount_factors, dtype=float)
+        start = self._start
+        sales_coefficients[:start] = 0
+        w0 = self._startup_time
+        sales_coefficients[start] =  w0*self.startup_salesfrac + (1.-w0)
+        
+        # Scale sales
+        sales_coefficients *= self._factor(self.sales_rates)
+
+        taxable_cashflow, nontaxable_cashflow, depreciation = self._taxable_nontaxable_depreciation_cashflows()
+        if np.isnan(taxable_cashflow).any():
+            warn('nan encountered in cashflow array; resimulating system', category=RuntimeWarning)
+            self.system.simulate()
+            taxable_cashflow, nontaxable_cashflow, depreciation = self._taxable_nontaxable_depreciation_cashflows()
+            if np.isnan(taxable_cashflow).any():
+                raise RuntimeError('nan encountered in cashflow array')
+        args = (taxable_cashflow, 
+                nontaxable_cashflow, 
+                depreciation,
+                sales_coefficients,
+                discount_factors,
+                self._fill_tax_and_incentives)
+        x0 = self._sales if np.isfinite(self._sales) else 0
+        f = NPV_with_sales
+        y0 = f(x0, *args)
+        x1 = x0 - y0 / self._years # First estimate
+        try:
+            sales = flx.aitken_secant(f, x0, x1, xtol=10, ytol=100.,
+                                      maxiter=1000, args=args, checkiter=True)
+        except:
+            bracket = flx.find_bracket(f, x0, x1, args=args)
+            sales = flx.IQ_interpolation(f, *bracket, args=args, xtol=10, ytol=100, maxiter=1000, checkiter=False)
+        self._sales = sales
+        return sales
