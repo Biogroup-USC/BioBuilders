@@ -4,7 +4,6 @@ from math import pi
 from typing import Literal
 
 __all__ = (
-    "calculate_agitator_power",
     "agitator_volumetric_power_determination",
 )
 
