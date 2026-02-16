@@ -112,7 +112,7 @@ def parse_case_spec(source: str | Path | Mapping[str,Any]) -> dict[str,Any]:
     if not isinstance(stream_prices, dict):
         raise ValueError("'stream prices' must be a dict")
     
-    stream_prices = {str(k): float(v) for k,v in stream_prices.items()}
+    stream_prices = {str(k): v for k,v in stream_prices.items()}
 
     return {
         "unit_operations": units_params,

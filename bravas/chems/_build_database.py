@@ -7,7 +7,7 @@ create new chemicals.
 from chem_db import ChemDataBase
 
 # Create the database
-DB = ChemDataBase("multimodelling/chems/database/MultiModelling_Chem.db")
+DB = ChemDataBase("bravas/chems/database/multimodelling_chems.db")
 DB.create_table_chemical_properties()
 
 # Viscozyme
@@ -46,7 +46,7 @@ DB.insert_data_into_db(
 
 # Structural_Protein
 DB.insert_data_into_db(
-    ID="Structural_Protein", 
+    ID="Protein_Soluble", 
     MW = 1, 
     Phase = 's', 
     V = (1/1000)*(1/1350),     # m3/mol 

@@ -54,7 +54,7 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
     
         """
         # The default name of the database is "MultiModelling_Chem.db"
-        self.dbname = dbname if dbname is not None else "MultiModelling_Chem.db"
+        self.dbname = dbname if dbname is not None else "multimodelling_chems.db"
 
         # Initialize the connection property
         self._connection = None
@@ -122,8 +122,8 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
             Instance of ChemDataBase connected to the destination database.
 
         """
-        DB_Filename = "Multimodelling_Chem.db"
-        Appname = "Multimodelling_Database"
+        DB_Filename = "multimodelling_chems.db"
+        Appname = "multimodelling_database"
     
         # Source DB path from installed package
         Current_Directory = os.path.dirname(__file__)
@@ -158,7 +158,7 @@ class ChemDataBase:          #TODO I´d like to create anoter table for chemical
 
         """
         # Name of the App
-        Appname = "Multimodelling_Database"
+        Appname = "multimodelling_database"
 
         # Get the user directory
         User_Dir = user_data_dir(Appname, appauthor = False)

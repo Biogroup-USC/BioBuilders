@@ -1,4 +1,5 @@
 recursive-include bravas *.py
 recursive-include bravas/chems/database *.db
+recursive-include bravas/data/ *.json
 exclude bravas/chems/_build_database.py
 exclude bravas/test.py

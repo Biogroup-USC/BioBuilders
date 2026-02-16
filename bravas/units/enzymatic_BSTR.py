@@ -3,7 +3,7 @@
 import biosteam as bst
 from .reactors import BatchAgitatedReactor
 from ..tools.reactiontools import load_reaction_library, build_reaction_from_dict
-from pathlib import Path
+from importlib.resources import files
 
 __all__ = ("BatchEnzymaticTreatment",)
 
@@ -117,7 +117,7 @@ class BatchEnzymaticTreatment(BatchAgitatedReactor):
         # Use default reactions when a str is provided
         if isinstance(reaction,str):
             # Load json library
-            lib_path = Path(__file__).with_name("reactions.json")
+            lib_path = files("bravas").joinpath("data","reactions.json")
             library = load_reaction_library(lib_path)
             
             # search if the reaction exists

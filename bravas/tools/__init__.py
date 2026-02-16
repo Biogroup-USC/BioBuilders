@@ -10,7 +10,7 @@ __all__ = (
     "calculate_centrifuge_diameter",
     "solve_operating_pressures_multieffectevaporator",
     "calculate_rdvf_area",
-    "calculate_agitator_power",
+    "agitator_volumetric_power_determination",
     "damp_to",
     "sanitize_filename",
     "keep_multiindex_last_level",

@@ -4,7 +4,7 @@ from .unitsdiameter import calculate_centrifuge_diameter, calculate_impeller_dia
 from .solveparameter import solve_operating_pressures_multieffectevaporator
 from .unitsarea import calculate_rdvf_area
 from .control import damp_to
-from .power import calculate_agitator_power
+from .power import agitator_volumetric_power_determination
 from .sampling import build_cartesian_grid
 
 __all__ = (
@@ -16,7 +16,7 @@ __all__ = (
     "calculate_impeller_diameter",
     "solve_operating_pressures_multieffectevaporator",
     "calculate_rdvf_area",
-    "calculate_agitator_power",
+    "agitator_volumetric_power_determination",
     "damp_to",
     "calculate_mean_median_price",
     "build_cartesian_grid",

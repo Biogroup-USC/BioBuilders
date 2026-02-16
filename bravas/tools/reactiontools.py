@@ -92,13 +92,8 @@ def build_reaction_from_dict(d: dict) -> bst.Reaction:
 
         stoich = d["stoichiometry"]
 
-        reactants = [f"{-nu} {ID}" for ID, nu in stoich.items() if nu < 0]
-        products = [f"{-nu} {ID}" for ID, nu in stoich.items() if nu > 0]
-
-        react_string = "+".join(reactants) + "->" "+".join(products)
-
         reaction = bst.Reaction(
-            reaction=react_string,
+            reaction=stoich,
             reactant=d["reactant"],
             X=d["conversion"],
             basis=d["basis"]
