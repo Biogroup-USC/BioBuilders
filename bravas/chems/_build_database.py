@@ -218,3 +218,22 @@ DB.insert_data_into_db(
     Cp = 4.18,
     V = ((139.62 + 2 * 90.07794)/1000)*(1/1138.0)
 )
+
+# Lipids
+DB.insert_data_into_db(
+    ID = "Lipids",
+    MW = 1,
+    Phase = 's',
+    Rho = 920,                  # kg/m3 is a generic reference based on the vegetable fats and oils of the olive pomace
+    Cp = 1.364,                 # kJ/(kg·K) same as cellulose: https://link.springer.com/article/10.1007/s10853-013-7815-6
+    Hf = -285830                # J/mol Water from: https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2
+)
+
+# Carbohydrates
+DB.insert_data_into_db(
+    ID = "Carbohydrates",
+    MW = 1,
+    Phase = 's',
+    Rho = 1500,                 # 1500 kg/m3 is the mean of the generic reference value (1.4 - 1.6 g/cm3)
+    Cp = 1.75,                  # kJ/(kg·K) generic reference value for polysaccharides: https://doi.org/10.1080/10942910701444705
+)
