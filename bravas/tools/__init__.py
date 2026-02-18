@@ -22,4 +22,7 @@ __all__ = (
     "main_chemical_mass_basis",
     "build_cartesian_grid",
     "sort_streams_by_phases",
+    "geodesic_distance",
+    "haversine_distance",
+    "euclidean_distance",
 )

@@ -70,6 +70,9 @@ from .tools import (
     calculate_rdvf_area,
     calculate_centrifuge_diameter,
     calculate_impeller_diameter,
+    geodesic_distance,
+    haversine_distance,
+    euclidean_distance,
 )
 
 __all__ = (
@@ -134,5 +137,8 @@ __all__ = (
     'solve_operating_pressures_multieffectevaporator',
     'calculate_rdvf_area',
     'calculate_centrifuge_diameter',
-    'calculate_impeller_diameter',            
+    'calculate_impeller_diameter',
+    'geodesic_distance',
+    'haversine_distance',
+    'euclidean_distance',            
 )

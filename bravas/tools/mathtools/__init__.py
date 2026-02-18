@@ -6,6 +6,7 @@ from .unitsarea import calculate_rdvf_area
 from .control import damp_to
 from .power import agitator_volumetric_power_determination
 from .sampling import build_cartesian_grid
+from .distance import geodesic_distance, haversine_distance, euclidean_distance
 
 __all__ = (
     "log_mean",
@@ -20,4 +21,7 @@ __all__ = (
     "damp_to",
     "calculate_mean_median_price",
     "build_cartesian_grid",
+    "geodesic_distance",
+    "haversine_distance",
+    "euclidean_distance",
 )
