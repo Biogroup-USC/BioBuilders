@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bravas"
-version = "0.31.3"
+version = "0.31.4"
 description = "Library to perform biorefinery and value chain assestment."
 authors = [
     { name = "Isaac, Andrea", email = "isaacleis.garrote@usc.es" }
