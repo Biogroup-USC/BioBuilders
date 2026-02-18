@@ -3,7 +3,6 @@
 import biosteam as bst
 from biosteam.units.design_tools import PressureVessel
 from ..tools.mathtools.unitsdiameter import calculate_centrifuge_diameter
-from ..tools.mathtools.power import calculate_agitator_power
 import numpy as np
 import math
 from typing import Literal
