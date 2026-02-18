@@ -1,6 +1,6 @@
 """
 """
-
+import os
 import pandas as pd
 import re
 
@@ -9,6 +9,7 @@ __all__ = (
     "keep_multiindex_last_level",
     "get_dataframe_positions",
     "sanitize_filename",
+    "filename_to_save",
 )
 
 def simplify_labels(full_labels: list = None, keywords: list | dict = None):
@@ -129,3 +130,24 @@ def sanitize_filename(filename: str) -> str:
 
     """
     return re.sub(r'[^A-Za-z0-9\-_]+','_',filename).strip('_')
+
+def filename_to_save(path: str, filename: str, default_filename: str, extension: str, create_new: bool = True):
+    """
+    """
+    # Check if path exists
+    os.makedirs(path,exist_ok=create_new)
+
+    # check if filename is provided or use default
+    if filename is None:
+        filename = default_filename
+    
+    # check if the extension was provided in the filename
+    if extension is None:
+        raise ValueError("An extension must be provided.")
+    
+    if not filename.lower().endswith(extension):
+        filename += extension
+    
+    # Build file path
+    file_path = os.path.join(path,filename)
+    return file_path

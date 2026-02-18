@@ -203,31 +203,19 @@ class ContourStudy:
             missing_p = [n for n,p in [(param_x, px),(param_y, py)] if p is None]
             raise ValueError("Parameters not found: {}".format(missing_p))
         
-        X,Y,pairs = build_cartesian_grid(xbounds=px.bounds, ybounds=py.bounds, nx=nx, ny=ny,return_pairs=True,order=order)
-        return X, Y, pairs, px, py
-    
-    @staticmethod
-    def _ix(v, arr):
-        """
-
-        Return the index of the grid value closest to a given scalar.
-
-        The search first attempts to match values using `numpy.isclose` with a tight tolerance; if no
-        element is considered close, the index of the nearest value (in absolute difference) is returned.
-
-        Parameters
-        ----------
-        V : float
-            Target value to locate in the array.
-        arr : array_like
-            One-dimensional array of grid coordinates.
-
-        """
-        idx = np.where(np.isclose(arr, v, rtol=1e-10, atol=1e-12))[0]
-        return int(idx[0]) if idx.size else int(np.argmin(np.abs(arr-v)))
+        X,Y,pairs,idx_pairs = build_cartesian_grid(
+            xbounds=px.bounds, 
+            ybounds=py.bounds, 
+            nx=nx, 
+            ny=ny,
+            return_pairs=True,
+            return_idx=True,
+            order=order
+        )
+        return X, Y, pairs, idx_pairs, px, py
 
     def run_on_grid(
-            self, X, Y, pairs, px, py,
+            self, X, Y, pairs, idx_pairs, px, py,
             indicators = None,
             x_display_fn = None, 
             y_display_fn = None):
@@ -246,6 +234,7 @@ class ContourStudy:
             2D arrays representing the x- and y- coordinates of the grid, returned by `CountourStudy.build_grid`.
         pairs : iterable of tuple[float, float]
             Iterable of (x, y) values indicating the parameter values for each simulation.
+        idx_pairs : iterable of tuple[float, float]
         px, py : CSParameter
             Parameter objects corresponding to the x and y axes, returned by `ContourStudy.build_grid`.
         indicators : str or sequence of str
@@ -258,8 +247,6 @@ class ContourStudy:
 
         """
         # 1D axis of the grid
-        x_vals = X[0,:]
-        y_vals = Y[:,0]
         ny, nx = Y.shape
 
         # Create one z per indicator
@@ -284,26 +271,32 @@ class ContourStudy:
         X_plot = X.copy()
         Y_plot = Y.copy()
 
+        # Validate pairs and idx_pairs
+        if len(pairs) != len(idx_pairs):
+            raise ValueError("pairs and idx_pairs must have the same lenght")
+
         # time 0
         t0 = time.perf_counter()
         
         # Progress bar
-        try:
-            total = len(pairs)
-        except TypeError:
-            total = ny*nx 
-        bar = tqdm(pairs, total=total, desc="Contour mapping", unit="sim", smoothing=0.0, miniters=1, mininterval=0.0,dynamic_ncols=True)
+        total = len(pairs)
+        bar = tqdm(
+            zip(pairs,idx_pairs),
+            total=total,
+            desc="Contour mapping",
+            unit="sim",
+            smoothing=0.0,
+            miniters=1,
+            mininterval=0.0,
+            dynamic_ncols=True,
+        )
 
         # Simulate each pair
         failures = []
-        for vx, vy in pairs:
+        for (vx,vy), (i,j) in bar:
             # Simulation time 0
             s0 = time.perf_counter()
 
-            # Get the cordinates of each point
-            i = self._ix(vx, x_vals)
-            j = self._ix(vy, y_vals)
-            
             try:
                 # Change the parameters
                 px.setter(float(vx))
@@ -324,15 +317,15 @@ class ContourStudy:
                 if y_display_fn is not None:
                     Y_plot[j, i] = float(y_display_fn(vx, vy, self))
                         
-            except Exception:
-                # Keep NaN and continue
-                pass
+            except Exception as e:
+                # register error if simulation fails
+                failures.append(((vx,vy),"outer:{}".format(repr(e))))
+                continue
             
             finally:
                 # Update bar progress
                 iter_dt = time.perf_counter() - s0
                 bar.set_postfix_str(f"t/it={iter_dt:.2f}s | fails = {len(failures)}")
-                bar.update(1)
                 bar.refresh()
         
         bar.close()

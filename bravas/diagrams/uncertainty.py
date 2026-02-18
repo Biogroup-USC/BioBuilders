@@ -4,7 +4,7 @@ import biosteam as bst
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from ..tools.diagramtools import simplify_labels, sanitize_filename
+from ..tools.diagramtools import simplify_labels, sanitize_filename, filename_to_save
 import os
 
 __all__ = (
@@ -54,8 +54,8 @@ class UncertaintyPlotter:
         self.uncertainty_df = Df_Copy
         self.index = simplified_index
         self._stats = None
-    
-    def plot_correlation_matrix(self, method = 'kendall', path: str = None, show_plot: bool = False, indicators: list[str] = None):
+
+    def plot_correlation_matrix(self, method = 'kendall', path: str = None, filename: str | None = None, show_plot: bool = False, indicators: list[str] = None):
         """
 
         Compute and visualise a correlation matrix of the variables contained in the uncertainty DataFrame.
@@ -71,8 +71,9 @@ class UncertaintyPlotter:
         method : {'pearson', 'spearman', 'kendall'}, default 'kendall'
             Correlation method passed directly to ``DataFrame.corr``.
         path : str
-            Directory path where the figure will be saved as a ``.png`` file.
-            If ``None``, the figure is not saved.
+            Directory path where the figure will be saved.
+        filename : str
+            name of the figure to save it as `filename.png`.
         show_plot : bool, default=False
             If ``True``, the plot is displayed using ``plt.show()``.
         indicators : list[str]
@@ -85,17 +86,18 @@ class UncertaintyPlotter:
 
         # Subset matrix if only indicators should be shown
         if indicators:
-            non_indicator_cols = [col for col in correlation.columns if col not in indicators]
-            correlation = correlation.loc[indicators, non_indicator_cols]
+            indicators_ok = [c for c in indicators if c in correlation.index]
+            if not indicators_ok:
+                raise ValueError("None of the provided indicators are present in the Dataframe columns")
+            non_indicator_cols = [col for col in correlation.columns if col not in indicators_ok]
+            correlation = correlation.loc[indicators_ok, non_indicator_cols]
 
-        # Create the plot
-        N_Vars = self.uncertainty_df.shape[1]
-        if indicators:
-            fig, ax = plt.subplots(figsize = (N_Vars * 0.55, len(indicators) * 0.90))
-            plt.subplots_adjust(top = 0.90, bottom = 0.35, left = 0.20, right = 1.0)
-        else:
-            fig, ax = plt.subplots(figsize = (N_Vars * 0.55, N_Vars * 0.55))
-            plt.subplots_adjust(top = 0.90, bottom = 0.25, left = 0.20, right = 1.0)
+        # n_cols and n_rows
+        n_cols = correlation.shape[1]
+        n_rows = correlation.shape[0]
+
+        # Create fig, ax
+        fig, ax = plt.subplots(figsize = (max(10, n_cols * 0.55), max(5, n_rows * 0.55)), constrained_layout = True)
 
         # Create a heat map
         sns.heatmap(
@@ -113,8 +115,13 @@ class UncertaintyPlotter:
 
         # Save the figure
         if path:
-            file_path = os.path.join(path, '{}.png'.format(method))
-            fig.savefig(file_path)
+            # Default filename
+            default_filename = "{}_correlation".format(method)            
+
+            file_path = filename_to_save(
+                path, filename, default_filename, ".png"
+            )
+            fig.savefig(file_path, dpi = 300, bbox_inches = "tight")
 
         plt.close(fig)
 
