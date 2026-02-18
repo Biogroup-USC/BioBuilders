@@ -1,4 +1,4 @@
-from .SRC import SRC
+from src_method import StandRegCoeffs
 
 __all__ = (
     "SRC",
