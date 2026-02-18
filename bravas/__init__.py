@@ -50,7 +50,7 @@ from .diagrams import (
 )
 
 from .sensitivity import (
-    SRC,
+    StandRegCoeffs,
 )
 
 from .tools import (
@@ -119,7 +119,7 @@ __all__ = (
     'ContourStudy',
 
     # Sensitivity
-    'SRC',
+    'StandRegCoeffs',
 
     # Tools
     'extract_components_flow',

@@ -5,10 +5,10 @@ import os
 from ..tools.diagramtools import simplify_labels, keep_multiindex_last_level, get_dataframe_positions, sanitize_filename
 
 __all__ = (
-    "SRC",
+    "StandRegCoeffs",
 )
 
-class SRC:
+class StandRegCoeffs:
     """
 
     Class for performing Standardized Regression Coefficients (SRC) sensitivity analysis.
