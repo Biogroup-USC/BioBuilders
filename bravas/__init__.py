@@ -35,6 +35,7 @@ from .tea import (
     TEA,
     InflationTEA,
     ProcessSettingsManager,
+    TransportationCost,
 )
 
 from .results import (
@@ -110,6 +111,7 @@ __all__ = (
     'TEA',
     'InflationTEA',
     'ProcessSettingsManager',
+    'TransportationCost',
 
     # Results
     'ProcessMassBalance',
