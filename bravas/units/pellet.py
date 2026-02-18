@@ -68,6 +68,7 @@ class PelletMill(bst.Unit):
 
         # Running the unit
         Out.copy_like(Feed)
+        Out.F_mass = Feed.F_mass 
 
     @property
     def power_consumption(self):
