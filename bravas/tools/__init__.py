@@ -16,6 +16,7 @@ __all__ = (
     "keep_multiindex_last_level",
     "get_dataframe_positions",
     "simplify_labels",
+    "filename_to_save",
     "extract_components_flow",
     "calculate_stream_price",
     "calculate_mean_median_price",
