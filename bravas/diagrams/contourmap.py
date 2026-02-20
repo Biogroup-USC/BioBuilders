@@ -246,6 +246,10 @@ class ContourStudy:
             shown in another (e.g., logarithmic scaling,...)
 
         """
+        # store initial values
+        vx_restore 
+        vy_restore
+
         # 1D axis of the grid
         ny, nx = Y.shape
 
@@ -331,6 +335,7 @@ class ContourStudy:
         bar.close()
         print("")
         print(f"Finished at {time.perf_counter()-t0:.1f}s | failures = {len(failures)}")
+
         return zs, failures, X_plot, Y_plot
     
     def _get_param(self, name_or_param):

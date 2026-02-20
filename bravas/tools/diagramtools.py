@@ -3,6 +3,8 @@
 import os
 import pandas as pd
 import re
+from collections import Counter
+from typing import Literal
 
 __all__ = (
     "simplify_labels",
@@ -12,35 +14,96 @@ __all__ = (
     "filename_to_save",
 )
 
-def simplify_labels(full_labels: list = None, keywords: list | dict = None):
+def build_pattern(string: str, sep: Literal["auto","underscore","space"] = "auto") -> str:
     """
+
+    Build a regex pattern to match `string` inside `label`.
+
+    Parameters
+    ----------
+    string : str
+        Keyword to search.
+    label : str
+        Label where keyword will be searched.
+    sep : {"auto", "underscore", "space"}
+        - "auto": detect based on label content.
+        - "underscore": treat "_" and spaces as separators.
+        - "space": use word boundaries (\b).
+
     """
+    sep = sep.lower()
+    label = re.escape(string.lower())
+
+    if sep == "auto":
+        if "_" in string:
+            sep = "underscore"
+        else:
+            sep = "space"
+
+    if sep == "underscore":
+        return rf"(^|[_\s]){label}([_\s]\$)"
+    elif sep == "space":
+        return rf"\b{label}\b"
+    else:
+        raise ValueError("sep must be 'auto', 'underscore' or 'space'")
+
+def simplify_labels(full_labels: list = None, keywords: list | dict = None, sep: str = "space"):
+    """
+
+    Simplify column labels based on provided keywords.
+
+    If keyword is:
+        - dict: returns "key units",
+        - list: retunrs "key",
+        - None: returns original labels
+
+    """
+
     # if keywords are not provided, give back the original labels
     if keywords is None:
         return list(full_labels)
     
-    Simplified_Labels = []
+    simplified_labels = []
     for label in full_labels:
         # Avoid error with upper/lower letters
-        Lower_Label = label.lower()
+        lower_label = str(label).lower()
 
-        # Add the new label and its units if keywords is a dict
+        # Robust matching using word boundaries
+        def match_key(key, lower_label):
+            pattern = build_pattern(key, lower_label)
+            return re.search(pattern, lower_label)
+
         if isinstance(keywords, dict):
-            Match = next(
-                ("{} {}".format(key, units) for key, units in keywords.items() if key.lower() in Lower_Label), label
+            match = next(
+                (
+                    f"{key} {units}"
+                    for key,units in keywords.items()
+                    if match_key(key,lower_label)
+                ),
+                label
             )
-
-        # Add only the new label if keywords is a list
         else:
-            Match = next(
-                (key for key in keywords if key.lower() in Lower_Label), label
+            match = next(
+                (
+                    key for key in keywords if match_key(key,lower_label)
+                ),
+                label
             )
 
-        # Append the label
-        Simplified_Labels.append(Match)
+        # append simplified label
+        simplified_labels.append(match)
+    
+    # Count labels that may be duplicated
+    counts = Counter(simplified_labels)
+    duplicates = [label for label, n in counts.items() if n > 1]
+    if duplicates:
+        raise ValueError(
+            f"Some duplicated labels encountered: {duplicates} "
+            "Adjust 'keywords' to avoid collisions."
+        )
 
     # Return the list of simplified labels
-    return Simplified_Labels
+    return simplified_labels
 
 def keep_multiindex_last_level(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -66,7 +129,7 @@ def keep_multiindex_last_level(df: pd.DataFrame) -> pd.DataFrame:
         df_copy.columns = pd.Index(last_col, name = last_col_name)
     
     # Keep last level for index
-    if isinstance(df_copy, pd.MultiIndex):
+    if isinstance(df_copy.index, pd.MultiIndex):
         last_idx = df_copy.index.get_level_values(-1)
         last_idx_name = df_copy.index.names[-1]
         df_copy.index = pd.Index(last_idx, name = last_idx_name)

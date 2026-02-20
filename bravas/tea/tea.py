@@ -12,7 +12,7 @@ from biosteam._tea import (
     cashflow_columns,
     NPV_with_sales
 )
-from typing import Mapping
+from typing import Mapping, Literal, Collection
 from ..tools.mathtools.economy import build_nominal_factor
 from numba import njit
 from warnings import warn
@@ -621,7 +621,68 @@ class InflationTEA(TEA):
             data.transpose(), index = np.arange(self._duration[0]-start, self._duration[1]), columns = cashflow_columns
         )
     
-    def solve_sales(self):
+    def solve_price(
+            self, 
+            streams: bst.Stream|Collection[bst.Stream],
+            xtol=10.0,
+            ytol=100.0,
+            maxiter=1000,
+            checkiter=False,
+            reset_guess=False,
+            store_guess=False,
+            method: Literal["Bracket and interpolation","Secant"] = "Bracket and interpolation"
+        ):
+        """
+        Return the price [USD/kg] of a stream(s) at the break even point (NPV = 0)
+        through cash flow analysis. 
+        
+        Parameters
+        ----------
+        streams :
+            Streams with variable selling price.
+            
+        """
+        if isinstance(streams, bst.Stream): streams = [streams]
+        system = self.system
+        price2cost = sum([system._price2cost(i) for i in streams])
+        if price2cost == 0.: 
+            raise ValueError('cannot solve price of empty streams')
+        
+        original_prices = [i.price for i in streams]
+        try:
+            sales = self.solve_sales(
+                xtol=xtol, ytol=ytol, maxiter=maxiter, 
+                checkiter=checkiter, reset_guess=reset_guess, 
+                store_guess=store_guess, method=method
+            )
+            
+            current_price = sum([system.get_market_value(i) for i in streams]) / abs(price2cost)
+        
+        except Exception:
+            for i in streams: 
+                i.price = 0.
+            sales = self.solve_sales(
+                xtol=xtol, ytol=ytol, maxiter=maxiter, checkiter=checkiter, 
+                reset_guess=reset_guess, store_guess=store_guess, method=method
+            )
+            current_price = 0.
+        
+        finally:
+            for i, p in zip(streams, original_prices):
+                i.price = p
+
+        return current_price + sales / price2cost 
+
+    def solve_sales(
+            self, 
+            xtol=10.0,
+            ytol=100.0,
+            maxiter=1000,
+            checkiter=False,
+            reset_guess=False,
+            store_guess=False,
+            method: Literal["Bracket and interpolation","Secant"] = "Bracket and interpolation"
+        ):
         """
         Return the required additional sales [USD] to reach the breakeven 
         point (NPV = 0) through cash flow analysis. 
@@ -650,15 +711,19 @@ class InflationTEA(TEA):
                 sales_coefficients,
                 discount_factors,
                 self._fill_tax_and_incentives)
-        x0 = self._sales if np.isfinite(self._sales) else 0
+        x0 = 0.0 if reset_guess else (self._sales if np.isfinite(self._sales) else 0)
         f = NPV_with_sales
         y0 = f(x0, *args)
         x1 = x0 - y0 / self._years # First estimate
-        try:
-            sales = flx.aitken_secant(f, x0, x1, xtol=10, ytol=100.,
-                                      maxiter=1000, args=args, checkiter=True)
-        except:
+        if method == "Secant":
+            sales = flx.aitken_secant(f, x0, x1, xtol=xtol, ytol=ytol,
+                                      maxiter=maxiter, args=args, checkiter=checkiter)
+        elif method == "Bracket and interpolation":
             bracket = flx.find_bracket(f, x0, x1, args=args)
-            sales = flx.IQ_interpolation(f, *bracket, args=args, xtol=10, ytol=100, maxiter=1000, checkiter=False)
-        self._sales = sales
+            sales = flx.IQ_interpolation(f, *bracket, args=args, xtol=xtol, ytol=ytol, maxiter=maxiter, checkiter=checkiter)
+        else:
+            raise ValueError("Select one of the available methods: 'Secant' or 'Bracket and interpolation'")
+        
+        if store_guess:
+            self._sales = sales
         return sales
