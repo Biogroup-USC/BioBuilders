@@ -122,7 +122,7 @@ def simplify_labels(full_labels: list = None, keywords: list | dict = None, sep:
     # Return the list of simplified labels
     return simplified_labels
 
-def keep_multiindex_last_level(df: pd.DataFrame) -> pd.DataFrame:
+def keep_multiindex_last_level(df: pd.DataFrame,*,check_unique:bool = True) -> pd.DataFrame:
     """
 
     Keep only the last level of a Multiindex on both row index and columns.
@@ -130,7 +130,9 @@ def keep_multiindex_last_level(df: pd.DataFrame) -> pd.DataFrame:
     Parameters
     ----------
     df : pd.DataFrame
-        Input DataFrame which may have Multiindex on rows and/or columns
+        Input DataFrame which may have Multiindex on rows and/or columns.
+    check_unique : bool
+        If True, raise an error if flattening creates duplicate labels.
     
     Returns
     -------
@@ -139,21 +141,42 @@ def keep_multiindex_last_level(df: pd.DataFrame) -> pd.DataFrame:
     """
     df_copy = df.copy()
 
-    # Keep last level for columns
+    # Columns
     if isinstance(df_copy.columns, pd.MultiIndex):
         last_col = df_copy.columns.get_level_values(-1)
         last_col_name = df_copy.columns.names[-1]
         df_copy.columns = pd.Index(last_col, name = last_col_name)
-    
+
+        if check_unique and not df_copy.columns.is_unique:
+            duplicates = df_copy.columns[df_copy.columns.duplicated()].unique().tolist()
+            raise ValueError(
+                "Flattening MultiIndex columns to the last level produced duplicate labels: "
+                f"{duplicates}. Provide full MultiIndex labels upstream or rename to avoid collisions."
+            )
+
     # Keep last level for index
     if isinstance(df_copy.index, pd.MultiIndex):
         last_idx = df_copy.index.get_level_values(-1)
         last_idx_name = df_copy.index.names[-1]
         df_copy.index = pd.Index(last_idx, name = last_idx_name)
     
+        if check_unique and not df_copy.index.is_unique:
+            duplicates = df_copy.index[df_copy.index.duplicated()].unique().tolist()
+            raise ValueError(
+                "Flattening MultiIndex index to the last level produced duplicate labels: "
+                f"{duplicates}. Provide full MultiIndex labels upstream or rename to avoid collisions."
+            )
+
     return df_copy
 
-def get_dataframe_positions(df: pd.DataFrame, labels: list[str], axis: int = 1) -> list[int]:
+def get_dataframe_positions(
+        df: pd.DataFrame, 
+        labels: list[str], 
+        axis: int = 1,
+        *,
+        allow_ambiguous: bool = False,
+        preview: int = 50,
+    ) -> list[int]:
     """
 
     Get interger positions of given labels in the last level of a Multiindex (or flat index) on
@@ -164,12 +187,22 @@ def get_dataframe_positions(df: pd.DataFrame, labels: list[str], axis: int = 1) 
     df : pd.DataFrame
         DataFrame containing the data.
     labels : list[str]
-        List of label names to locate in the index or columns.
+        List of label names to locate in the index or columns. If a label is a tuple/list, its last
+        element is used (MultiIndex-friendly).
     axis : int
-        1 for columns, 0 for index.        
+        1 for columns, 0 for index.
+    allow_ambiguous : bool
+        if False, raise an error when the searched axis contains duplicates in the
+        last level (to avoid silently returning the first match).
+    preview : int
+        Number of available label to show in error messages.
     """
     # Select the axis
+    if axis not in (0, 1):
+        raise ValueError("axis must be 0 (index) or 1 (columns).")
+    
     obj = df.columns if axis == 1 else df.index
+    axis_name = "columns" if axis == 1 else "index"
 
     # Extract last level
     if isinstance(obj, pd.MultiIndex):
@@ -177,20 +210,41 @@ def get_dataframe_positions(df: pd.DataFrame, labels: list[str], axis: int = 1) 
     else:
         values = list(obj)
 
-    # Map input labels to their last-level string representation
-    mapped_labels = []
-    for lab in labels:
-        if isinstance(lab,(tuple, list)):
-            mapped_labels.append(lab[-1])
-        else:
-            mapped_labels.append(lab)
+    # Ambiguity check (duplicates)
+    if not allow_ambiguous:
+        seen = set()
+        duplicates = set()
+        for v in values:
+            if v in seen:
+                duplicates.add(v)
+            else:
+                seen.add(v)
+        if duplicates:
+            duplicates_list = sorted(list(duplicates))[:preview]
+            raise ValueError(
+                f"Ambiguous {axis_name}: duplicates found in the last level labels (showing up to {preview}): "
+                f"{duplicates_list}. Provide full MultiIndex labels upstream or ensure last-level labels are unique."
+            )
+
+    # fast lookup map
+    pos_map = {v: i for i,v in enumerate(values)}
+
+    # Map labels to last element
+    mapped_labels = [
+        lab[-1] if isinstance(lab, (tuple, list)) else labels
+        for lab in labels
+    ]
 
     positions = []
     for lab_val in mapped_labels:
-        if lab_val in values:
-            positions.append(values.index(lab_val))
+        if lab_val in pos_map:
+            positions.append(pos_map[lab_val])
         else:
-            raise KeyError("Label '{}' not found in {}. Available: {}".format(lab_val, 'columns' if axis == 1 else 'index', values))
+            available_preview = values[:preview]
+            raise KeyError(
+                f"Label '{lab_val}' not found in {axis_name}. "
+                f"First {preview} available: {available_preview} ..."
+            )
     
     return positions
 
@@ -209,25 +263,43 @@ def sanitize_filename(filename: str) -> str:
         Sanitized filename.
 
     """
-    return re.sub(r'[^A-Za-z0-9\-_]+','_',filename).strip('_')
+    if filename is None:
+        raise ValueError("filename cannot be None")
+    clean = re.sub(r"[^\w\-]+","_",str(filename))
+    clean = clean.strip("_")
 
-def filename_to_save(path: str, filename: str, default_filename: str, extension: str, create_new: bool = True):
+    return clean or "file"
+
+def filename_to_save(
+        path: str | None, 
+        filename: str | None, 
+        default_filename: str, 
+        extension: str,
+        *, 
+        create_dir: bool = True,
+        sanitise: bool = True,
+    ) -> str | None:
     """
     """
-    # Check if path exists
-    os.makedirs(path,exist_ok=create_new)
+    if path is None:
+        return None
+    
+    if extension is None:
+        raise ValueError("An extension must be provided.")
 
-    # check if filename is provided or use default
     if filename is None:
         filename = default_filename
     
-    # check if the extension was provided in the filename
-    if extension is None:
-        raise ValueError("An extension must be provided.")
-    
+    if sanitise:
+        filename = sanitize_filename(filename)
+
     if not filename.lower().endswith(extension):
         filename += extension
     
-    # Build file path
-    file_path = os.path.join(path,filename)
-    return file_path
+    if create_dir:
+        os.makedirs(path,exist_ok=True)
+    else:
+        if not os.path.isdir(path):
+            raise FileNotFoundError(f"Directory does not exist: {path}")
+
+    return os.path.join(path,filename)
