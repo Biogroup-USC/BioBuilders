@@ -14,14 +14,14 @@ __all__ = (
     "filename_to_save",
 )
 
-def build_pattern(string: str, sep: Literal["auto","underscore","space"] = "auto") -> str:
+def build_pattern(key: str, label: str, sep: Literal["auto","underscore","space"] = "auto") -> str:
     """
 
-    Build a regex pattern to match `string` inside `label`.
+    Build a regex pattern to match `key` inside `label`.
 
     Parameters
     ----------
-    string : str
+    key : str
         Keyword to search.
     label : str
         Label where keyword will be searched.
@@ -31,19 +31,19 @@ def build_pattern(string: str, sep: Literal["auto","underscore","space"] = "auto
         - "space": use word boundaries (\b).
 
     """
-    sep = sep.lower()
-    label = re.escape(string.lower())
+    key_esc = re.escape(str(key).lower())
+    label = str(label).lower()
 
     if sep == "auto":
-        if "_" in string:
+        if "_" in label:
             sep = "underscore"
         else:
             sep = "space"
 
     if sep == "underscore":
-        return rf"(^|[_\s]){label}([_\s]\$)"
+        return rf"(^|[_\s]){key_esc}([_\s]|$)"
     elif sep == "space":
-        return rf"\b{label}\b"
+        return rf"\b{key_esc}\b"
     else:
         raise ValueError("sep must be 'auto', 'underscore' or 'space'")
 
@@ -56,6 +56,23 @@ def simplify_labels(full_labels: list = None, keywords: list | dict = None, sep:
         - dict: returns "key units",
         - list: retunrs "key",
         - None: returns original labels
+    
+    Parameters
+    ----------
+    full_labels : list
+        List of original labels (Typically a `df.columns`).
+    keywords : list | dict
+        Keywords to search for within each label (case-insensitive).
+
+        - if a list is provided, the first keyword found is used as the simplified label.
+        - if a dict is provided, the simplified label is the dict key and units are appended
+        as `"key units"`.
+    sep : {'space','underscore', 'auto'}
+        Separator logic used to build the regex pattern:
+
+        - 'space': matches whole words using word boundaries.
+        - 'underscore': treats '_' and whitespaces as separators.
+        - 'auto': if the string contains '_' the function uses 'underscore' as `sep`.
 
     """
 
@@ -69,8 +86,8 @@ def simplify_labels(full_labels: list = None, keywords: list | dict = None, sep:
         lower_label = str(label).lower()
 
         # Robust matching using word boundaries
-        def match_key(key, lower_label):
-            pattern = build_pattern(key, lower_label)
+        def match_key(key):
+            pattern = build_pattern(key, lower_label, sep)
             return re.search(pattern, lower_label)
 
         if isinstance(keywords, dict):
@@ -78,14 +95,14 @@ def simplify_labels(full_labels: list = None, keywords: list | dict = None, sep:
                 (
                     f"{key} {units}"
                     for key,units in keywords.items()
-                    if match_key(key,lower_label)
+                    if match_key(key)
                 ),
                 label
             )
         else:
             match = next(
                 (
-                    key for key in keywords if match_key(key,lower_label)
+                    key for key in keywords if match_key(key)
                 ),
                 label
             )
