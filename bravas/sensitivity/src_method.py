@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from ..tools.diagramtools import simplify_labels, keep_multiindex_last_level, get_dataframe_positions, sanitize_filename
+from ..tools.diagramtools import simplify_labels, keep_multiindex_last_level, get_dataframe_positions, sanitize_filename, filename_to_save
 
 __all__ = (
     "StandRegCoeffs",
@@ -24,22 +24,38 @@ class StandRegCoeffs:
 
     """
 
-    def __init__(self, df: pd.DataFrame, parameter_cols: list[str], indicator_cols: list[str], simplified_labels: dict | list = None):
+    def __init__(
+            self, 
+            df: pd.DataFrame, 
+            parameter_cols: list[str], 
+            indicator_cols: list[str], 
+            simplified_labels: dict | list = None, 
+            label_sep: str = "auto"
+            ,*, 
+            check_unique: bool = True
+        ):
         """
 
         Initialize SRC analysis with data and column names.
 
         """
         # Get the last level if Multiindex
-        df_flatten = keep_multiindex_last_level(df = df)
+        df_flatten = keep_multiindex_last_level(df = df, check_unique = check_unique)
 
         # Compute positions based on original last-level labels
-        parameter_positions = get_dataframe_positions(df = df, labels = parameter_cols, axis = 1)
-        indicator_positions = get_dataframe_positions(df = df, labels = indicator_cols, axis = 1)
+        parameter_positions = get_dataframe_positions(df = df_flatten, labels = parameter_cols, axis = 1, allow_ambiguous = False)
+        indicator_positions = get_dataframe_positions(df = df_flatten, labels = indicator_cols, axis = 1, allow_ambiguous = False)
 
         if simplified_labels:
             df_simple = df_flatten.copy()
-            df_simple.columns = simplify_labels(full_labels = df_simple.columns.tolist(), keywords = simplified_labels)
+            try:
+                df_simple.columns = simplify_labels(
+                    full_labels = df_simple.columns.tolist(), 
+                    keywords = simplified_labels,
+                    sep = label_sep
+                )
+            except ValueError as e:
+                raise ValueError(f"simplify_labels failed for StandRegCoeffs: {e}") from e
             self.df = df_simple
     
         else:    
@@ -49,48 +65,47 @@ class StandRegCoeffs:
         self.parameters = [self.df.columns[i] for i in parameter_positions]
         self.indicators = [self.df.columns[i] for i in indicator_positions]
 
-    def calculate_src(self) -> pd.DataFrame:
+    def calculate_src(self,*,tol = 1e-12) -> pd.DataFrame:
         """
 
-        Calculates the Standardized Regression Coefficients (SRC) for
-        a set of input parameters and output indicators.
+        Calculates the Standardized Regression Coefficients (SRC) for the selected
+        input parameters and output indicators.
+
+        The method standardises each column (zero mean, unit variance; using ``ddof=0``)
+        and then fits an ordinary least-square model for each indicator to obtain standardised
+        regression coefficients.
 
         Parameters
         ----------
-        df : pd.DataFrame
-            Dataframe containing BioSTEAM results of the Monte Carlo simulation.
-        parameter_cols : list[str]
-            List of column names for input parameters.
-        indicator_cols : list[str]
-            List of column names for output metrics.
+        tol : float
+            Tolerance for detecting invalid (near-zero) standard deviations when standardising columns.
+            Columns with ``std < tol`` raise a ``ValueError``.
         
         Returns
         -------
         pd.DataFrame
-            DataFrame of SRC values: rows correspond to input parameters, columns
+            DSRC values, rows correspond to input parameters and columns
             correspond to output metrics.
 
         """
         # Standarize all variables (mean = 0, std = 1)
-        df_std = (self.df - self.df.mean()) / self.df.std(ddof = 0)
+        std = self.df.std(ddof=0)
+        invalid_values = std[std < tol]
+        if not invalid_values.empty:
+            raise ValueError(f"Columns with zero std (cannot standardise): {invalid_values.index.tolist()}")
+        
+        df_std = (self.df - self.df.mean()) / std
 
         # Build design matrix X (n samples x p parameters)
         X = df_std[self.parameters].values
-
-        # Compute inverse of (X^T X)
-        XTX = X.T @ X               
-        XTX_inv = np.linalg.inv(XTX)
 
         results = {}
         for out in self.indicators:
             # Extract standardized output vector y
             y = df_std[out].values
 
-            # Compute X^T y
-            XTy = X.T @ y
-
-            # Compute B = (X^T X)^{-1} X^T y
-            beta = XTX_inv @ XTy
+            # Solve least-squares without explicitly inverting (X^T X)
+            beta,*_ = np.linalg.lstsq(X, y,rcond=None)
             results[out] = beta
         
         # Return SRC DataFrame
@@ -115,7 +130,8 @@ class StandRegCoeffs:
             
         """
         # Ensure output directory exists
-        os.makedirs(path, exist_ok = True)
+        if path:
+            os.makedirs(path, exist_ok = True)
 
         for indicator in self.indicators:
             # Sort by absolute value descending
@@ -123,7 +139,7 @@ class StandRegCoeffs:
             coeffs = coeffs.reindex(coeffs.abs().sort_values(ascending = True).index)
             
             # Plot
-            N_var = src[indicator].shape[0]
+            N_var = len(coeffs)
             fig, ax = plt.subplots(figsize = (6, N_var * 0.5), constrained_layout = True)
             
             # Plot a bar chart for this indicator
@@ -139,10 +155,11 @@ class StandRegCoeffs:
 
             # Save the figure
             if path:
-                safe_ind = sanitize_filename(indicator)
-                file_path = os.path.join(path, 'src_{}.png'.format(safe_ind))
-                fig.savefig(file_path, bbox_inches = 'tight', pad_inches = 0.2)
-                print("")
-                print("Plot {} saved to {}".format(safe_ind,path))
-                print("")
-                plt.close(fig)
+                file_path = filename_to_save(
+                    path=path,
+                    filename=f"src_{indicator}",
+                    default_filename="src",
+                    extension=".png"
+                )
+                if file_path:
+                    fig.savefig(file_path,bbox_inches="tight",pad_inches=0.2)
