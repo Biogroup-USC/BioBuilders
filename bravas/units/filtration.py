@@ -571,13 +571,13 @@ class RotaryVacuumDrumFilter(bst.Unit):
         CE_base = self.CE_base_filter
         self.baseline_purchase_costs['Rotatory Vacuum Drum Filter'] *= bst.CE/CE_base
 
-membrane_LMH = {
+MEMBRANE_LMH = {
     "UF_hollow_fibers": (0.005, 0.016),     # L/s*m2
     "UF_Spiral_Wound": (0.08, 0.14),        # L/s*m2
     "UF_Tubes": (0.06, 0.2),                # L/s*m2
     "MF": (0.001, 0.2)
 }
-membrane_capacity = {
+MEMBRANE_CAPACITY = {
     "UF_hollow_fibers": (0.1, 25),  # L/s
     "UF_Spiral_Wound": (0.1, 25),   # L/s
     "UF_Tubes": (0.1, 25),          # L/s
@@ -595,6 +595,15 @@ class MembraneFiltration(bst.Unit):
 
     Parameters
     ----------
+    ID : str
+        Unit name.
+    ins : tuple
+        Inlet streams.
+        * [0] feed.
+    outs : tuple
+        Outlet streams.
+        * [0] permeate.
+        * [1] retentate.
     type : float
         * [0] Ultrafiltration using polysulfone hollow fibers.
         * [1] Ultrafiltration using polysulfone spiral wounds.
@@ -696,7 +705,7 @@ class MembraneFiltration(bst.Unit):
         feed = self.ins[0]
         permeate = self.outs[0]
         
-        LMH = membrane_LMH[self.type][1] * 10**-3 * 3600 * permeate.rho  # kg/h         #TODO Use a conservative value (mean for example)S
+        LMH = MEMBRANE_LMH[self.type][1] * 10**-3 * 3600 * permeate.rho  # kg/h         #TODO Use a conservative value (mean for example)S
         
         A = permeate.F_mass / LMH
 
@@ -706,7 +715,7 @@ class MembraneFiltration(bst.Unit):
 
         # Number of modules needed
         volumetric_flow = permeate.F_vol/3600                   # m3/s
-        capacity = membrane_capacity[self.type][1]              # m3/s
+        capacity = MEMBRANE_CAPACITY[self.type][1]              # m3/s
         self.parallel["Modules"] = volumetric_flow/capacity
 
         # Utilities
