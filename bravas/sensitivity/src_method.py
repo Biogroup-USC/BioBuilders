@@ -3,6 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from ..tools.diagramtools import simplify_labels, keep_multiindex_last_level, get_dataframe_positions, sanitize_filename, filename_to_save
+from warnings import warn
+from pathlib import Path
 
 __all__ = (
     "StandRegCoeffs",
@@ -29,7 +31,7 @@ class StandRegCoeffs:
             df: pd.DataFrame, 
             parameter_cols: list[str], 
             indicator_cols: list[str], 
-            simplified_labels: dict | list = None, 
+            simplified_labels: dict | list = None,
             label_sep: str = "auto"
             ,*, 
             check_unique: bool = True
@@ -113,20 +115,30 @@ class StandRegCoeffs:
         
         return src_df
     
-    def plot_src(self, src: pd.DataFrame, path : str = None, show_plot: bool = False) -> None:
+    def plot_src(
+            self, 
+            src: pd.DataFrame, 
+            path : str | Path = None,
+            filename_tag: str = None,
+            show_plot: bool = False
+        ) -> None:
         """
 
-        Plot a separate bar chart of SRC for each output indicator.
+        Plot a separate SRC bar chart for each output indicator.
 
         Parameters
         ----------
-        src : pd.DataFrame
-            DataFrame returned by calculate_src, with parameters as index
-            and indicators as columns.
+        src : pandas.Dataframe
+            DataFrame returned by ``calculate_src``, with parameters as the index
+            and indicators as columns. Values should be SRC coefficients.
         path : str
-            Path to the folder where plot images will be saved
+            Directory where figures will be saved as PNG files. If `None`, figures
+            are not saved.
+        filename_tag : str
+            Optional tag prepended to the saved filename. When provided, the filename pattern
+            is `{filename_tag}_src_{indicator}.png`. If `None`, the filename pattern is `src_{indicator}.png`.
         show_plot : bool
-            True for displaying the plot. False for not.
+            If `True`, display the figures. If `False`, figures are generated but not displayed.
             
         """
         # Ensure output directory exists
@@ -155,11 +167,23 @@ class StandRegCoeffs:
 
             # Save the figure
             if path:
+                filename = f"src_{indicator}"
+                if filename_tag is not None:
+                    if isinstance(filename_tag,str):
+                        filename = f"{filename_tag}_{filename}"
+                    else:
+                        warn(f"{filename_tag} is not a valid tag. Will be excluded from the filename.")
+
                 file_path = filename_to_save(
                     path=path,
-                    filename=f"src_{indicator}",
+                    filename=filename,
                     default_filename="src",
                     extension=".png"
                 )
                 if file_path:
-                    fig.savefig(file_path,bbox_inches="tight",pad_inches=0.2)
+                    fig.savefig(
+                        file_path,
+                        dpi=300,
+                        bbox_inches="tight",
+                        pad_inches=0.2
+                    )
