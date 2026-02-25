@@ -67,12 +67,8 @@ class FlpModel:
         for h in self.suppliers:
             for p in self.plants:
                 t = TransportationCost(
-                    name_origin=h,
-                    lat_origin=self.suppliers[h]["Latitude"],
-                    lon_origin=self.suppliers[h]["Longitude"],
-                    name_destination=p,
-                    lat_destination=self.plants[p]["Latitude"],
-                    lon_destination=self.plants[p]["Longitude"],
+                    self.suppliers[h]["Latitude"], self.suppliers[h]["Longitude"],
+                    self.plants[p]["Latitude"], self.plants[p]["Longitude"],
                     distance_method=self.distance_method,
                     fuel_price=self.fuel_price,
                     fuel_consumption=self.fuel_consumption,
@@ -86,12 +82,8 @@ class FlpModel:
         for p in self.plants:
             for k in self.customers:
                 t = TransportationCost(
-                    name_origin=p,
-                    lat_origin=self.plants[p]["Latitude"],
-                    lon_origin=self.plants[p]["Longitude"],
-                    name_destination=k,
-                    lat_destination=self.customers[k]["Latitude"],
-                    lon_destination=self.customers[k]["Longitude"],
+                    self.plants[p]["Latitude"], self.plants[p]["Longitude"],
+                    self.customers[k]["Latitude"], self.customers[k]["Longitude"],
                     distance_method=self.distance_method,
                     fuel_price=self.fuel_price,
                     fuel_consumption=self.fuel_consumption,
