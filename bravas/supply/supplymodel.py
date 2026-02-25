@@ -67,11 +67,17 @@ class FlpModel:
         for h in self.suppliers:
             for p in self.plants:
                 t = TransportationCost(
-                    self.suppliers[h]["Latitude"], self.suppliers[h]["Longitude"],
-                    self.plants[p]["Latitude"], self.plants[p]["Longitude"],
-                    name_origin=h, name_destiny=p, distance_method=self.distance_method,
-                    fuel_price=self.fuel_price, fuel_consumption=self.fuel_consumption,
-                    cargo_tons=self.cargo_tons, return_factor=self.return_factor
+                    name_origin=h,
+                    lat_origin=self.suppliers[h]["Latitude"],
+                    lon_origin=self.suppliers[h]["Longitude"],
+                    name_destination=p,
+                    lat_destination=self.plants[p]["Latitude"],
+                    lon_destination=self.plants[p]["Longitude"],
+                    distance_method=self.distance_method,
+                    fuel_price=self.fuel_price,
+                    fuel_consumption=self.fuel_consumption,
+                    cargo_tons=self.cargo_tons,
+                    return_factor=self.return_factor
                 )
                 self.transport_objs_h_p[(h, p)] = t
                 transport_cost_h_p[(h, p)] = t.cost_per_trip()
@@ -80,11 +86,17 @@ class FlpModel:
         for p in self.plants:
             for k in self.customers:
                 t = TransportationCost(
-                    self.plants[p]["Latitude"], self.plants[p]["Longitude"],
-                    self.customers[k]["Latitude"], self.customers[k]["Longitude"],
-                    name_origin=p, name_destiny=k, distance_method=self.distance_method,
-                    fuel_price=self.fuel_price, fuel_consumption=self.fuel_consumption,
-                    cargo_tons=self.cargo_tons, return_factor=self.return_factor
+                    name_origin=p,
+                    lat_origin=self.plants[p]["Latitude"],
+                    lon_origin=self.plants[p]["Longitude"],
+                    name_destination=k,
+                    lat_destination=self.customers[k]["Latitude"],
+                    lon_destination=self.customers[k]["Longitude"],
+                    distance_method=self.distance_method,
+                    fuel_price=self.fuel_price,
+                    fuel_consumption=self.fuel_consumption,
+                    cargo_tons=self.cargo_tons,
+                    return_factor=self.return_factor
                 )
                 self.transport_objs_p_k[(p, k)] = t
                 transport_cost_p_k[(p, k)] = t.cost_per_trip()
