@@ -76,6 +76,10 @@ from .tools import (
     euclidean_distance,
 )
 
+from .supply import (
+    FlpModel,
+)
+
 __all__ = (
     # Chemicals
     'ChemDataBase',
@@ -142,5 +146,8 @@ __all__ = (
     'calculate_impeller_diameter',
     'geodesic_distance',
     'haversine_distance',
-    'euclidean_distance',            
+    'euclidean_distance',  
+
+    # Supply    
+    'FlpModel',      
 )
