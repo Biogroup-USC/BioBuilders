@@ -80,32 +80,42 @@ DB.insert_data_into_db(
     Hf = -285830        # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
 
-# Phenolic_Compounds
+# Naringenin
 DB.insert_data_into_db(
-    ID = "Phenolic_Compounds", 
-    CAS = "502-65-8", 
-    formula = "C40H56",     # https://pubchem.ncbi.nlm.nih.gov/compound/lycopene
-    MW = 536.9,             # https://pubchem.ncbi.nlm.nih.gov/compound/lycopene
-    description = "Phenolic_Compounds embedded into the Tomato Peel using Lycopene as reference",
+    ID = "Naringenin", 
+    CAS = "480-41-1", 
+    formula = "C15H12O5",       # https://pubchem.ncbi.nlm.nih.gov/compound/S_-Naringenin#section=SMILES
+    MW = 272.25,                # https://pubchem.ncbi.nlm.nih.gov/compound/S_-Naringenin#section=SMILES
+    description = "Naringenin to use as reference for phenolic compounds in tomato peel",
     Phase = 's',
-    V = (536.9/1000)*(1/899),    # m3/mol
-    Rho = 899,              # https://doi.org/10.1155/2024/6252426 from lycopene
-    Cp = 2.1,               # Similar to cutin
-    Hf = -285830            # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
+    V = (272.25/1000)*(1/1500), # m3/mol
+    Rho = 1500,                 # https://www.chemspider.com/Chemical-Structure.388383.html
+    Cp = 2.1,                   # Similar to cutin
     )
 
-# Free_Phenolic_Compounds
+# Naringenin soluble
 DB.insert_data_into_db(
-    ID = "Free_Phenolic_Compounds", 
-    formula = "C40H56",     # https://pubchem.ncbi.nlm.nih.gov/compound/lycopene
-    MW = 536.9,             # https://pubchem.ncbi.nlm.nih.gov/compound/lycopene
-    description = "Phenolic compounds extracted",
+    ID = "Naringenin_Soluble",
+    formula = "C15H12O5",       # https://pubchem.ncbi.nlm.nih.gov/compound/S_-Naringenin#section=SMILES
+    MW = 272.25,                # https://pubchem.ncbi.nlm.nih.gov/compound/S_-Naringenin#section=SMILES
+    description = "Naringenin to use as reference for phenolic compounds in tomato peel",
     Phase = 's',
-    V = (536.9/1000)*(1/899),    # m3/mol
-    Rho = 899,              # https://doi.org/10.1155/2024/6252426 from lycopene
-    Cp = 2.1,               # Similar to cutin
-    Hf = -285830            # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
+    V = (272.25/1000)*(1/1500), # m3/mol
+    Rho = 1500,                 # https://www.chemspider.com/Chemical-Structure.388383.html
+    Cp = 2.1,                   # Similar to cutin
     )
+
+# Lycopene
+DB.insert_data_into_db(
+    ID = "Lycopene",
+    CAS = "502-65-8",
+    formula = "C40H56",
+    MW = 536.87,
+    Phase = "s",
+    Cp = 2.1,
+    Rho = 938,              # https://www.chemicalbook.com/ChemicalProductProperty_EN_CB5213951.htm
+    V=(536/1000) * (1/938)
+)
 
 # n-hentriacontane
 DB.insert_data_into_db(
@@ -210,7 +220,7 @@ DB.insert_data_into_db(
 
 # NADES (Choline lactate [1:2])
 DB.insert_data_into_db(
-    ID = 'NADES_ChCl_LA_1_2',
+    ID = 'Choline_Lactate',
     formula = 'C11H26NO6Cl',
     MW = 319.77964,                 # Ch:LA [1:2]
     Phase = 'l',
