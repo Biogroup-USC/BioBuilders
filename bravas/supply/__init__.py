@@ -1,4 +1,4 @@
-from supplymodel import FlpModel
+from .supplymodel import FlpModel
 
 __all__ = (
     "FlpModel",
