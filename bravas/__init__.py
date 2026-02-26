@@ -80,6 +80,10 @@ from .supply import (
     FlpModel,
 )
 
+from .maps import(
+    ImprovedMap,
+)
+
 __all__ = (
     # Chemicals
     'ChemDataBase',
@@ -149,5 +153,8 @@ __all__ = (
     'euclidean_distance',  
 
     # Supply    
-    'FlpModel',      
+    'FlpModel',  
+
+    # Maps
+    'ImprovedMap',
 )

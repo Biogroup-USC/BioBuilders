@@ -4,19 +4,38 @@ from ..tea import TEA, TransportationCost  # ajusta según tu estructura de paqu
 
 class FlpModel:
     """
-    Generalized Facility Location Problem (FLP) model.
-    - suppliers, plants, customers: dict con info de lat, lon, producción/demanda
-    - sizes: dict de capacidades posibles por planta {size_name: capacity}
-    - cargo_tons: flujo de materia prima a transportar (puede ser cualquier stream de BioSTEAM)
+    Generalized Facility Location Problem (FLP) model with multiple sizes per plant.
+
+    Parameters
+    ----------
+    suppliers : dict
+
+    plants : dict
+
+    customers : dict
+
+    sizes : dict
+
+    base_CAPEX : float
+
+    base_OPEX : float
+
+    op_hrs : float
+
+    cargo_tons : float
+
     """
-    def __init__(self, suppliers, plants, customers, sizes, op_hrs, cargo_tons,
+
+    def __init__(self, suppliers, plants, customers, sizes, base_CAPEX, base_OPEX, op_hrs, cargo_tons,
                  distance_method='geodesic', fuel_price=1.0, fuel_consumption=0.3,
                  return_factor=1.2, solver_name=None):
-        
+
         self.suppliers = suppliers
         self.plants = plants
         self.customers = customers
-        self.sizes = sizes
+        self.sizes = sizes  
+        self.base_CAPEX = base_CAPEX
+        self.base_OPEX = base_OPEX
         self.op_hrs = op_hrs
         self.cargo_tons = cargo_tons
         self.distance_method = distance_method
@@ -32,43 +51,46 @@ class FlpModel:
         self.model = None
         self.variables = {}
 
-    def _get_capex_opex(self):
-        """Calcula CAPEX/OPEX de cada planta y tamaño usando BioSTEAM/TEA"""
-        for p, plant_info in self.plants.items():
-            units = plant_info.get("units", [])
-            if not isinstance(units, list):
-                units = [units]
+        # 
+        self.plant_sizes = {}
+        for p, info in self.plants.items():
+            max_cap = info["Capacity"]
+            possible_sizes = [s for s, cap in self.sizes.items() if cap <= max_cap]
+            self.plant_sizes[p] = possible_sizes
 
-            for idx, unit in enumerate(units):
-                system = bst.System(f'Plant_{p}_{idx}', unit)
-                tea = TEA(system, operating_days=self.op_hrs / 24)
-                total_CAPEX = tea.TCI
-                total_OPEX = tea._FOC(tea._FCI(tea.TDC))
+        # 
+        self._scale_capex_opex()
 
-                # asociamos CAPEX/OPEX a cada tamaño disponible
-                for s_name, s_capacity in self.sizes.items():
-                    self.capex_dict[(p, s_name)] = total_CAPEX
-                    self.opex_dict[(p, s_name)] = total_OPEX
+    def _scale_capex_opex(self):
+        """
+        """
+        for p in self.plants:
+            for s in self.plant_sizes[p]:
+                cap_ratio = self.sizes[s] / self.sizes["S1"]  
+                # 
+                self.capex_dict[(p, s)] = self.base_CAPEX * cap_ratio**0.6
+                # 
+                self.opex_dict[(p, s)] = self.base_OPEX * cap_ratio
 
     def build_model(self):
-        """Construye el modelo de optimización"""
-        if not self.capex_dict or not self.opex_dict:
-            self._get_capex_opex()
-
+        """
+        """
         model = pulp.LpProblem("FLP_Optimization", pulp.LpMinimize)
 
-        # Variables
-        y = pulp.LpVariable.dicts("y", [(p, s) for p in self.plants for s in self.sizes], cat=pulp.LpBinary)
+        # 
+        y = pulp.LpVariable.dicts("y", [(p, s) for p in self.plants for s in self.plant_sizes[p]], cat=pulp.LpBinary)
         x = pulp.LpVariable.dicts("x", [(h, p) for h in self.suppliers for p in self.plants], lowBound=0)
         f = pulp.LpVariable.dicts("f", [(p, k) for p in self.plants for k in self.customers], lowBound=0)
 
-        # Costes de transporte
+        # 
         transport_cost_h_p = {}
         for h in self.suppliers:
             for p in self.plants:
                 t = TransportationCost(
-                    self.suppliers[h]["Latitude"], self.suppliers[h]["Longitude"],
-                    self.plants[p]["Latitude"], self.plants[p]["Longitude"],
+                    origin_coords=(self.suppliers[h]["Latitude"], self.suppliers[h]["Longitude"]),
+                    destiny_coords=(self.plants[p]["Latitude"], self.plants[p]["Longitude"]),
+                    name_origin=h,
+                    name_destiny=p,
                     distance_method=self.distance_method,
                     fuel_price=self.fuel_price,
                     fuel_consumption=self.fuel_consumption,
@@ -78,12 +100,15 @@ class FlpModel:
                 self.transport_objs_h_p[(h, p)] = t
                 transport_cost_h_p[(h, p)] = t.cost_per_trip()
 
+        # 
         transport_cost_p_k = {}
         for p in self.plants:
             for k in self.customers:
                 t = TransportationCost(
-                    self.plants[p]["Latitude"], self.plants[p]["Longitude"],
-                    self.customers[k]["Latitude"], self.customers[k]["Longitude"],
+                    origin_coords=(self.plants[p]["Latitude"], self.plants[p]["Longitude"]),
+                    destiny_coords=(self.customers[k]["Latitude"], self.customers[k]["Longitude"]),
+                    name_origin=p,
+                    name_destiny=k,
                     distance_method=self.distance_method,
                     fuel_price=self.fuel_price,
                     fuel_consumption=self.fuel_consumption,
@@ -93,35 +118,31 @@ class FlpModel:
                 self.transport_objs_p_k[(p, k)] = t
                 transport_cost_p_k[(p, k)] = t.cost_per_trip()
 
+        # 
         transport_h_p_term = pulp.lpSum([transport_cost_h_p[(h, p)] * x[(h, p)]
                                          for h in self.suppliers for p in self.plants])
         transport_p_k_term = pulp.lpSum([transport_cost_p_k[(p, k)] * f[(p, k)]
                                          for p in self.plants for k in self.customers])
-
-        # CAPEX/OPEX
         CAPEX_term = pulp.lpSum([self.capex_dict[(p, s)] * y[(p, s)]
-                                 for p in self.plants for s in self.sizes])
+                                 for p in self.plants for s in self.plant_sizes[p]])
         OPEX_term = pulp.lpSum([self.opex_dict[(p, s)] * y[(p, s)]
-                                for p in self.plants for s in self.sizes])
+                                for p in self.plants for s in self.plant_sizes[p]])
 
-        # Función objetivo
+        # o
         model += CAPEX_term + OPEX_term + transport_h_p_term + transport_p_k_term
 
-        # Restricciones
-        # No enviar más que la producción de proveedores
+        # 
+        # 
         for h in self.suppliers:
             model += pulp.lpSum([x[(h, p)] for p in self.plants]) == self.suppliers[h].get("Production", 0)
 
-        # Capacidad de planta
+        # 
         for p in self.plants:
-            installed_capacity = pulp.lpSum([y[(p, s)] * self.sizes[s] for s in self.sizes])
+            installed_capacity = pulp.lpSum([y[(p, s)] * self.sizes[s] for s in self.plant_sizes[p]])
             model += pulp.lpSum([x[(h, p)] for h in self.suppliers]) <= installed_capacity
-
-        # No enviar más producto del que se puede producir
-        for p in self.plants:
             model += pulp.lpSum([f[(p, k)] for k in self.customers]) <= installed_capacity
 
-        # Satisfacer la demanda de clientes
+        # 
         for k in self.customers:
             model += pulp.lpSum([f[(p, k)] for p in self.plants]) == self.customers[k].get("Demand", 0)
 
