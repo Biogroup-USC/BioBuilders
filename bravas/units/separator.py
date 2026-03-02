@@ -71,8 +71,8 @@ class SeparationUnit(bst.Unit):
             ID = chem.ID
             
             # Get the separation factor
-            if ID in self.sfi:
-                sfi = self.sfi[ID]
+            if ID in self.split:
+                sfi = self.split[ID]
             else:
                 sfi = 0
             
