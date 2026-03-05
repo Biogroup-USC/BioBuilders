@@ -270,7 +270,7 @@ class RotaryVacuumDrumFilter(bst.Unit):
     _N_outs = 2
 
     def _init(self,
-              sfi: dict = None,
+              split: dict = None,
               moisture_content: float = 0.40,
               washing_chem: list = None,
               submergence = 0.35,
@@ -282,7 +282,7 @@ class RotaryVacuumDrumFilter(bst.Unit):
               ):
         """
         """
-        self.sfi = sfi
+        self.split = split
         self.moisture = moisture_content
         self.wash_chems = washing_chem
         self.submergence = submergence
@@ -328,9 +328,9 @@ class RotaryVacuumDrumFilter(bst.Unit):
             load = feed
             filtrate.copy_flow(feed)
         
-        for chem,sfi in self.sfi.items():
-            filtrate.imass[chem] = (1-sfi) * load.imass[chem]
-            retentate.imass[chem] = (sfi) * load.imass[chem]
+        for chem,split in self.split.items():
+            filtrate.imass[chem] = (1-split) * load.imass[chem]
+            retentate.imass[chem] = (split) * load.imass[chem]
 
         # Calculate the moisture
         if self.solids is None or not isinstance(self.solids, list) or not all(isinstance(s, str) for s in self.solids):
