@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import biosteam as bst
 from ..tea import TEA, InflationTEA
-from ..tools.diagramtools import simplify_labels
+from ..tools.diagramtools import simplify_labels, filename_to_save
 import matplotlib.pyplot as plt
 import os
 from typing import Literal
@@ -281,13 +281,19 @@ class ResultsTEA:
         # Create list for every key in the dictionaries
         labour = []; maintenance = []; property_related = []; supplies = []; power = []
 
-        # Create a list for every key inside heat_utilities and raw_materials
-        raw_materials = {}; heat_utilities = {}
-        for key in costs_list[0]["VOC"].keys():
-            raw_materials[key] = []
+        # Union of keys across all scenarios
+        raw_material_keys = set()
+        heat_utility_keys = set()
+
+        for costs in costs_list:
+            raw_material_keys.update(costs.get("VOC",{}).keys())
+            heat_utility_keys.update(costs.get("Heat utilities",{}).keys())
         
-        for key in costs_list[0]["Heat utilities"].keys():
-            heat_utilities[key] = []
+        raw_material_keys = sorted(raw_material_keys)
+        heat_utility_keys = sorted(heat_utility_keys)
+
+        raw_materials = {key: [] for key in raw_material_keys}
+        heat_utilities = {key: [] for key in heat_utility_keys}
 
         for costs in costs_list:
             labour.append(costs["FOC"]["Labour"])
@@ -296,13 +302,11 @@ class ResultsTEA:
             supplies.append(costs["FOC"]["Supplies"])
             power.append(costs["Power utility"])
             
-            for key in raw_materials.keys():
-                material_list = raw_materials[key]
-                material_list.append(costs["VOC"][key])
+            for key in raw_material_keys:
+                raw_materials[key].append(costs.get("VOC",{}).get(key,0.0))
             
             for key in heat_utilities.keys():
-                utility_list = heat_utilities[key]
-                utility_list.append(costs["Heat utilities"][key])
+                heat_utilities[key].append(costs.get("Heat utilities",{}).get(key,0.0))
         
         # Create a dictionary with all lists as np.array
         bar_arrays = {
@@ -314,11 +318,12 @@ class ResultsTEA:
         }
 
         # Add raw materials and heat utilities dictionaries
-        materials_utilities = heat_utilities
-        materials_utilities.update(raw_materials)
-        for key in materials_utilities.keys():
-            bar_arrays[key] = np.array(materials_utilities[key])
+        for key,values in raw_materials.items():
+            bar_arrays[key] = np.array(values)
         
+        for key,values in heat_utilities.items():
+            bar_arrays[key] = np.array(values)
+
         return bar_arrays
 
     @property
@@ -354,20 +359,26 @@ class ResultsTEA:
             basis: Literal['USD/kg','USD','EUR/kg','EUR'] = 'USD',
             basis_flow: dict[str,str] = None,
             title: str = "Breakdown of production costs",
-            simplify_legend: dict = {},
+            simplify_legend: dict = None,
             y_label: str = "Production costs",
             y_lim: tuple[float] = None,
+#            y_breaks: list[tuple] = None,
             xlabel_font: float = 6,
             legend_font: float = 4,
             legend_title: str = 'Production costs',
             legend_title_font: float = 4,
             legend_loc: str = 'upper right',
             save_path: str = None,
+            filename: str = None,
+            file_extension: str = ".png",
             show: bool = True,
             width: float = 0.20
         ):
         """
         """
+        simplify_legend = simplify_legend or {}
+        y_breaks = None
+
         # Get the production cost of each case
         scenarios = []
         scenarios_costs = []
@@ -407,66 +418,208 @@ class ResultsTEA:
         else:
             raise ValueError("You must provide basis for production cost calculation")
 
-        # Create bar chart
-        fig, ax  = plt.subplots(figsize = (6,4), layout = 'constrained')
-
-        bottom = np.zeros(len(scenarios))
-
+        # Build bar arrays
         bar_arrays = self._create_bar_arrays(scenarios_costs)
-        
-        # Dinamically size X axis
         x = np.arange(len(scenarios))
 
-        for cost, value in bar_arrays.items():
-            updated_value = currency_factor * value
+        # Precompute stacked values to reuse in all axes
+        stacked_data = []
+        bottom = np.zeros(len(scenarios),dtype=float)
 
-            if cost in simplify_legend:
-                cost = simplify_legend[cost]
-            
-            if basis == 'EUR/kg' or basis == 'USD/kg':
-                flows = np.array([flow_factor[case] for case in scenarios], dtype=float)
+        for cost, value in bar_arrays.items():
+            updated_value = currency_factor * np.asarray(value, dtype=float)
+
+            label = simplify_legend.get(cost, cost)
+
+            if basis in ('EUR/kg','USD/kg'):
+                flows = np.array([float(flow_factor[case]) for case in scenarios], dtype=float)
+                if updated_value.shape != flows.shape:
+                    raise ValueError(
+                        f"Shape mismatch in normalisation: updated_value.shape={updated_value.shape}",
+                        f"flows.shape={flows.shape}, cost={cost}, scenarios={scenarios}"
+                    )
                 updated_value = updated_value / flows
             
             if np.any(updated_value != 0):
-                plot = ax.bar(x,updated_value,width,label=cost,bottom=bottom)
+                stacked_data.append({
+                    "label": label,
+                    "height": updated_value.copy(),
+                    "bottom": bottom.copy()
+                })
                 bottom += updated_value
-            else:
-                continue
+        
+        totals = bottom.copy()
 
-        # Display only the total of costs
-        for element,total in enumerate(bottom):
-            ax.text(
-                element,
-                total,
-                f"{total:.1f}",
-                ha = "center", 
-                va = "bottom"
+        if not y_breaks:
+            fig, ax = plt.subplots(figsize=(6,4), layout='constrained')
+
+            for item in stacked_data:
+                ax.bar(
+                    x,
+                    item["height"],
+                    width,
+                    label=item["label"],
+                    bottom=item["bottom"]
+                )
+            
+            for element, total in enumerate(totals):
+                ax.text(
+                    element,
+                    total,
+                    f"{total:.1f}",
+                    ha ='center',
+                    va='bottom'
+                )
+            
+            if y_lim is not None:
+                y_limits = y_lim
+            else:
+                y_limits = (0.0, float(np.max(totals)) * 1.1 if len(totals) else 1.0)
+            
+            ax.set(ylabel=y_label + f" ({basis})", ylim=y_lim)
+            ax.set_xlim(-0.5, x[-1] + 0.5)
+            ax.set_title(title)
+            ax.set_xticks(x)
+            ax.set_xticklabels(scenarios, fontsize=xlabel_font)
+            ax.legend(
+                fontsize = legend_font,
+                title = legend_title,
+                title_fontsize = legend_title_font,
+                loc = legend_loc
             )
 
-        # Set y limits
-        if y_lim is not None:
-            y_limits = y_lim
-        else:
-            y_limits = (0.0, bottom[0]*1.1)
+            plt.tight_layout()
 
-        # Axis options
-        ax.set(ylabel = y_label+f" ({basis})", ylim = y_limits)
-        ax.set_xlim(-0.5,x[-1]+0.5)
-        ax.set_title(title)
-        ax.set_xticks(x)
-        ax.set_xticklabels(scenarios, fontsize = xlabel_font)
-        ax.legend(
-            fontsize = legend_font,
-            title = legend_title,
-            title_fontsize = legend_title_font,
-            loc = legend_loc
-        )
-        
-        # Plot options
-        plt.tight_layout()
+            if save_path:
+                default_filename = "production_costs"
+                file_path = filename_to_save(save_path, filename, default_filename, file_extension)
+                fig.savefig(file_path)
 
-        # Display
-        if show: plt.show()
+            if show:
+                plt.show()
+            else:
+                plt.close(fig)
+            return
         
-        # Save the figure
-        if save_path: fig.savefig(save_path)
+#        # Multi broken axis
+#        if not isinstance(y_breaks, (list, tuple) or len(y_breaks)==0):
+#            raise ValueError("y_breaks must be a non-empty list of (ymin,ymax) tuples")
+#        
+#        clean_breaks = []
+#        for bk in y_breaks:
+#            if not isinstance(bk,(list,tuple) or len(bk)!=2):
+#                raise ValueError(f"Invalid y_break entry: {bk}. Each entry must be (ymin,ymax)")
+#            ymin,ymax = bk
+#            if ymax <= ymin:
+#                raise ValueError(f"Invalid y_break range: {bk}. Must satisfy ymax > ymin")
+#            clean_breaks.append(bk)
+#        
+#        # bottom-top order
+#        heights = [ymax - ymin for ymin,ymax in clean_breaks]
+#
+#        fig, axes = plt.subplots(
+#            nrows = len(clean_breaks),
+#            ncols = 1,
+#            sharex = True,
+#            figsize = (6, max(4, 1.8 * len(clean_breaks))),
+#            gridspec_kw={"height_ratios": heights, "hspace": 0.05},
+#            layout = 'constrained'
+#        )
+#
+#        if len(clean_breaks) == 1:
+#            axes = [axes]
+#        
+#        plot_axes = axes[::-1]
+#        plot_breaks = clean_breaks[::-1]
+#
+#        legend_handles = None
+#        legend_labels = None
+#
+#        for ax, (ymin, ymax) in zip(plot_axes, plot_breaks):
+#            for item in stacked_data:
+#                container = ax.bar(
+#                    x,
+#                    item["height"],
+#                    width,
+#                    label=item["label"],
+#                    bottom=item["bottom"]
+#                )
+#                if legend_handles is None:
+#                    legend_handles, legend_labels = ax.get_legend_handles_labels()
+#            
+#            ax.set_ylim(ymin, ymax)
+#            ax.set_xlim(-0.5,x[-1]+0.5)
+#        
+#        for element,total in enumerate(totals):
+#            for ax, (ymin,ymax) in zip(plot_axes, plot_breaks):
+#                if ymin <= total <= ymax:
+#                    ax.text(
+#                        element,
+#                        total,
+#                        f"{total:.1f}",
+#                        ha="center",
+#                        va="bottom",
+#                        fontsize=max(5,xlabel_font)
+#                    )
+#                    break
+#        
+#        n_axes = len(axes)
+#        d = 0.008
+#
+#        for i, ax in enumerate(axes):
+#            # Label only once, on central axis if possible
+#            if i == n_axes // 2:
+#                ax.set_ylabel(y_label + f" ({basis})")
+#
+#            # Hide inner spines
+#            if i != 0:
+#                ax.spines['top'].set_visible(False)
+#            if i != n_axes - 1:
+#                ax.spines['bottom'].set_visible(False)
+#
+#            # Tick labels only on bottom axis
+#            if i != n_axes - 1:
+#                ax.tick_params(labelbottom=False, bottom=False)
+#            else:
+#                ax.set_xticks(x)
+#                ax.set_xticklabels(scenarios, fontsize=xlabel_font)
+#
+#        # Draw diagonal break marks between adjacent axes
+#        for i in range(n_axes - 1):
+#            ax_top = axes[i]
+#            ax_bottom = axes[i + 1]
+#
+#            kwargs_top = dict(transform=ax_top.transAxes, color='k', clip_on=False, linewidth=0.8)
+#            ax_top.plot((-d, +d), (-d, +d), **kwargs_top)
+#            ax_top.plot((1 - d, 1 + d), (-d, +d), **kwargs_top)
+#
+#            kwargs_bottom = dict(transform=ax_bottom.transAxes, color='k', clip_on=False, linewidth=0.8)
+#            ax_bottom.plot((-d, +d), (1 - d, 1 + d), **kwargs_bottom)
+#            ax_bottom.plot((1 - d, 1 + d), (1 - d, 1 + d), **kwargs_bottom)
+#
+#        # Title on top axis
+#        axes[0].set_title(title)
+#
+#        # Legend only once
+#        if legend_handles is not None:
+#            axes[0].legend(
+#                legend_handles,
+#                legend_labels,
+#                fontsize=legend_font,
+#                title=legend_title,
+#                title_fontsize=legend_title_font,
+#                loc=legend_loc
+#            )
+#
+#        plt.tight_layout()
+#
+#        if save_path:
+#                default_filename = "production_costs"
+#                file_path = filename_to_save(save_path, filename, default_filename, file_extension)
+#                fig.savefig(file_path)
+#        if show:
+#            plt.show()
+#        else:
+#            plt.close(fig)
+#        return
+        
