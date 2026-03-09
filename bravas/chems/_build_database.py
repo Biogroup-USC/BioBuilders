@@ -247,3 +247,45 @@ DB.insert_data_into_db(
     Rho = 1500,                 # 1500 kg/m3 is the mean of the generic reference value (1.4 - 1.6 g/cm3)
     Cp = 1.75,                  # kJ/(kg·K) generic reference value for polysaccharides: https://doi.org/10.1080/10942910701444705
 )
+
+# Grape pomace
+DB.insert_data_into_db(
+    ID = "Grape_Pomace",
+    Rho = 1100,                 # https://doi.org/10.1051/e3sconf/202128505019 
+    Cp = 1.364,                 # kJ/(kg·K) same as cellulose: https://link.springer.com/article/10.1007/s10853-013-7815-6
+    MW = 1.,
+    Phase = 's',
+)
+
+# lignocellulosic residue
+DB.insert_data_into_db(
+    ID = "Lignocellulosic_Residue",
+    Rho = 1100,                 # https://doi.org/10.1051/e3sconf/202128505019 
+    Cp = 1.364,                 # kJ/(kg·K) same as cellulose: https://link.springer.com/article/10.1007/s10853-013-7815-6
+    MW = 1.,
+    Phase = 's',
+)
+
+# Phenolics extract
+DB.insert_data_into_db(
+    ID = "Phenolics_Extract",
+    formula = "C15H12O5",       # https://pubchem.ncbi.nlm.nih.gov/compound/S_-Naringenin#section=SMILES
+    MW = 272.25,                # https://pubchem.ncbi.nlm.nih.gov/compound/S_-Naringenin#section=SMILES
+    description = "Naringenin to use as reference for phenolic compounds in tomato peel",
+    Phase = 's',
+    V = (272.25/1000)*(1/1500), # m3/mol
+    Rho = 1500,                 # https://www.chemspider.com/Chemical-Structure.388383.html
+    Cp = 2.1,                   # Similar to cutin
+)
+
+# Phenolics extract
+DB.insert_data_into_db(
+    ID = "Phenolics_Precipitate",
+    formula = "C15H12O5",       # https://pubchem.ncbi.nlm.nih.gov/compound/S_-Naringenin#section=SMILES
+    MW = 272.25,                # https://pubchem.ncbi.nlm.nih.gov/compound/S_-Naringenin#section=SMILES
+    description = "Naringenin to use as reference for phenolic compounds in tomato peel",
+    Phase = 's',
+    V = (272.25/1000)*(1/1500), # m3/mol
+    Rho = 1500,                 # https://www.chemspider.com/Chemical-Structure.388383.html
+    Cp = 2.1,                   # Similar to cutin
+)
