@@ -221,11 +221,10 @@ DB.insert_data_into_db(
 # NADES (Choline lactate [1:2])
 DB.insert_data_into_db(
     ID = 'Choline_Lactate',
-    formula = 'C11H26NO6Cl',
     MW = 319.77964,                 # Ch:LA [1:2]
     Phase = 'l',
-    Rho = 1138.0,                   # kg/m3 https://pmc.ncbi.nlm.nih.gov/articles/PMC9655353/pdf/molecules-27-07429.pdf
-    Cp = 4.18,
+    Rho = 1175.0,                   # kg/m3 https://doi.org/10.1016/j.chemosphere.2023.139485
+    Cp = (2.173+2.341)/2,           # J / (g * k) https://doi.org/10.1021/acs.jced.7b00102
     V = ((139.62 + 2 * 90.07794)/1000)*(1/1138.0)
 )
 
