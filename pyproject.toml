@@ -24,3 +24,6 @@ dependencies = [
   "seaborn>=0.13.0",
   "tqdm>=4.67.1"
 ]
+
+[tool.setuptools.package-data]
+bravas = ["data/chemicals_db/*.json"]

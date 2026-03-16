@@ -7,7 +7,10 @@ from .exceptions import DuplicateChemicalError, ChemicalNotFoundError
 class UserChemicalStorage:
     """
     """
-    def __init__(self, root: str = 'data'):
+    def __init__(self, root: str | Path | None = None):
+        if root is None:
+            package_dir = Path(__file__).resolve().parents[1]
+            root = package_dir / "data"
         self.root = Path(root)
         self.chemicals_db_dir = self.root / "chemicals_db"
         self.chemicals_db_dir.mkdir(parents=True, exist_ok=True)
@@ -15,7 +18,7 @@ class UserChemicalStorage:
     def _get_chemical_path(self, name: str) -> Path:
         if not isinstance(name,str):
             raise TypeError("chemical name must be a string.")
-        return self.chemicals_db_dir / f"{name}.json"
+        return self.chemicals_db_dir / f"{name.lower()}.json"
 
     def save_chemical_record(
             self, 
