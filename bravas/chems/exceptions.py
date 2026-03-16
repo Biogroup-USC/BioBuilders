@@ -27,11 +27,12 @@ class DuplicateChemicalError(BRAVASChemError):
 class ChemicalNotFoundError(BRAVASChemError):
     """
     
-    Raised when a chemical does not exist in the user chemical database.
+    Raised when a chemical does not exist in the chemical database.
 
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, database: str = 'user'):
         self.name = name
-        msg = f"Chemical '{name}' not found in the user chemical database."
+        self.database = database
+        msg = f"Chemical '{name}' not found in the {database} chemical database."
         super().__init__(msg)
