@@ -18,6 +18,11 @@ class ChemicalsManager:
         
         record = self.db.load_chemical_record(chemical_id)
         
+        if record.aliases is None:
+            aliases = None
+        else:
+            aliases = sorted(record.aliases)
+
         chemical = Chemical(
             ID = record.name,
             CAS = record.CAS,
@@ -25,7 +30,7 @@ class ChemicalsManager:
             search_db = False,
             MW = record.MW,
             formula = record.formula,
-            aliases = sorted(record.aliases),
+            aliases = aliases,
             phase = record.phase,
             phase_ref = record.phase_ref,
             Cp = record.Cp,
