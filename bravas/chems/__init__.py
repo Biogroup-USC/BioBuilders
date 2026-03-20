@@ -1,7 +1,13 @@
-from .chem_db import ChemDataBase
-from .newchem import ChemicalsManager
+from .manager import ChemicalsManager
+from .storage import UserChemicalStorage
+from .record import ChemicalRecord
+from .exceptions import BRAVASChemError, ChemicalNotFoundError, DuplicateChemicalError
 
-__all__ = (                         
-    'ChemDataBase',
+__all__ = (
     'ChemicalsManager',
+    'UserChemicalStorage',
+    'ChemicalRecord',
+    'BRAVASChemError',
+    'ChemicalNotFoundError',
+    'DuplicateChemicalError',
 )

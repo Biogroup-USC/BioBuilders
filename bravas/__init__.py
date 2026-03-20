@@ -1,6 +1,7 @@
 from .chems import (
-    ChemDataBase,
     ChemicalsManager,
+    ChemicalRecord,
+    UserChemicalStorage,
 )
 
 from .parameters import (
@@ -74,8 +75,9 @@ from .tools import (
 
 __all__ = (
     # Chemicals
-    'ChemDataBase',
     'ChemicalsManager',
+    'UserChemicalStorage',
+    'ChemicalRecord',
 
     # Parameters
     'parse_case_spec',

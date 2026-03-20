@@ -1,0 +1,23 @@
+{
+    "name": "Choline_Hexanoate",
+    "source": {
+        "origin": "user defined",
+        "identifier": "",
+        "notes": "Built from different papers"
+    },
+    "CAS": null,
+    "formula": "C11H25NO3",
+    "MW": 219.32,
+    "aliases": null,
+    "phase": "l",
+    "phase_ref": "l",
+    "Cp": 2.05,
+    "rho": 1010,
+    "V": null,
+    "properties":{
+
+    },
+    "copy_missing_from": "Water",
+    "notes": "",
+    "is_pseudochemical": null
+}

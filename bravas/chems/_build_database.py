@@ -7,11 +7,11 @@ create new chemicals.
 from chem_db import ChemDataBase
 
 # Create the database
-DB = ChemDataBase("bravas/chems/database/multimodelling_chems.db")
-DB.create_table_chemical_properties()
+db = ChemDataBase("./bravas/data/bravas_chemical_database.db")
+db.create_table_chemical_properties()
 
 # Viscozyme
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Viscozyme", 
     MW = 1, 
     Phase = 's', 
@@ -23,7 +23,7 @@ DB.insert_data_into_db(
     )
 
 # Protein
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Protein", 
     MW = 1, 
     Phase = 's', 
@@ -34,7 +34,7 @@ DB.insert_data_into_db(
     )
 
 # Peptides
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Peptides", 
     MW = 1, 
     Phase = 's', 
@@ -45,8 +45,8 @@ DB.insert_data_into_db(
     )
 
 # Structural_Protein
-DB.insert_data_into_db(
-    ID="Protein_Soluble", 
+db.insert_data_into_db(
+    ID="Structural_Protein", 
     MW = 1, 
     Phase = 's', 
     V = (1/1000)*(1/1350),     # m3/mol 
@@ -57,7 +57,7 @@ DB.insert_data_into_db(
     )
 
 # Trypsin 
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Trypsin", 
     MW = 1, 
     Phase = 's', 
@@ -69,7 +69,7 @@ DB.insert_data_into_db(
     )
 
 # Non_Protein
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Non_Protein", 
     MW = 1, 
     Phase = 's', 
@@ -80,45 +80,34 @@ DB.insert_data_into_db(
     Hf = -285830        # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
 
-# Naringenin
-DB.insert_data_into_db(
-    ID = "Naringenin", 
-    CAS = "480-41-1", 
-    formula = "C15H12O5",       # https://pubchem.ncbi.nlm.nih.gov/compound/S_-Naringenin#section=SMILES
-    MW = 272.25,                # https://pubchem.ncbi.nlm.nih.gov/compound/S_-Naringenin#section=SMILES
-    description = "Naringenin to use as reference for phenolic compounds in tomato peel",
+# Phenolic_Compounds
+db.insert_data_into_db(
+    ID = "Phenolic_Compounds", 
+    CAS = "502-65-8", 
+    formula = "C40H56",     # https://pubchem.ncbi.nlm.nih.gov/compound/lycopene
+    MW = 536.9,             # https://pubchem.ncbi.nlm.nih.gov/compound/lycopene
+    description = "Phenolic_Compounds embedded into the Tomato Peel using Lycopene as reference",
     Phase = 's',
     V = (272.25/1000)*(1/1500), # m3/mol
     Rho = 1500,                 # https://www.chemspider.com/Chemical-Structure.388383.html
     Cp = 2.1,                   # Similar to cutin
     )
 
-# Naringenin soluble
-DB.insert_data_into_db(
-    ID = "Naringenin_Soluble",
-    formula = "C15H12O5",       # https://pubchem.ncbi.nlm.nih.gov/compound/S_-Naringenin#section=SMILES
-    MW = 272.25,                # https://pubchem.ncbi.nlm.nih.gov/compound/S_-Naringenin#section=SMILES
-    description = "Naringenin to use as reference for phenolic compounds in tomato peel",
+# Free_Phenolic_Compounds
+db.insert_data_into_db(
+    ID = "Free_Phenolic_Compounds", 
+    formula = "C40H56",     # https://pubchem.ncbi.nlm.nih.gov/compound/lycopene
+    MW = 536.9,             # https://pubchem.ncbi.nlm.nih.gov/compound/lycopene
+    description = "Phenolic compounds extracted",
     Phase = 's',
-    V = (272.25/1000)*(1/1500), # m3/mol
-    Rho = 1500,                 # https://www.chemspider.com/Chemical-Structure.388383.html
-    Cp = 2.1,                   # Similar to cutin
+    V = (536.9/1000)*(1/899),    # m3/mol
+    Rho = 899,              # https://doi.org/10.1155/2024/6252426 from lycopene
+    Cp = 2.1,               # Similar to cutin
+    Hf = -285830            # J/mol Water from https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2 
     )
-
-# Lycopene
-DB.insert_data_into_db(
-    ID = "Lycopene",
-    CAS = "502-65-8",
-    formula = "C40H56",
-    MW = 536.87,
-    Phase = "s",
-    Cp = 2.1,
-    Rho = 938,              # https://www.chemicalbook.com/ChemicalProductProperty_EN_CB5213951.htm
-    V=(536/1000) * (1/938)
-)
 
 # n-hentriacontane
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Hentriacontane",
     CAS = "630-04-6",       #               https://webbook.nist.gov/cgi/cbook.cgi?ID=C630046&Mask=200
     MW = 436.84,            # g/mol         https://webbook.nist.gov/cgi/cbook.cgi?ID=C630046&Mask=200
@@ -130,7 +119,7 @@ DB.insert_data_into_db(
 )
 
 # Amyrin
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Alpha_Amyrin",    #               https://webbook.nist.gov/cgi/cbook.cgi?ID=638-95-9
     MW = 426.72,            # g/mol         https://webbook.nist.gov/cgi/cbook.cgi?ID=638-95-9
     CAS = "638-95-9",       #               https://webbook.nist.gov/cgi/cbook.cgi?ID=638-95-9
@@ -141,7 +130,7 @@ DB.insert_data_into_db(
 )
 
 # Pectin
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Pectin",
     MW = 1.0,               # g/mol
     Phase = 's',             
@@ -150,7 +139,7 @@ DB.insert_data_into_db(
 )
 
 # Lignin Fiber
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Lignin_Fiber",
     MW = 1.0,               # g/mol
     Phase = 's',             
@@ -159,7 +148,7 @@ DB.insert_data_into_db(
 )
 
 # Cutin
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Cutin", 
     MW = 1, 
     CAS = "54990-88-4",
@@ -170,7 +159,7 @@ DB.insert_data_into_db(
     )
 
 # Cutin Oligomers
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Cutin_Olig", 
     MW = 1,
     Phase = 's',
@@ -179,7 +168,7 @@ DB.insert_data_into_db(
     V = (1/1000)*(1/1364),     # m3/mol 
     )
 
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Cutin_Olig_Sol", 
     MW = 1,
     Phase = 's',
@@ -188,7 +177,7 @@ DB.insert_data_into_db(
     V = (1/1000)*(1/1364),     # m3/mol 
     )
 
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Cutin_Olig_Insol", 
     MW = 1,
     Phase = 's',
@@ -198,7 +187,7 @@ DB.insert_data_into_db(
     )
 
 # Free Cutin
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = "Free_Cutin", 
     MW = 1,
     Phase = 's',
@@ -208,7 +197,7 @@ DB.insert_data_into_db(
     )
 
 # Cholinium Hexanoate
-DB.insert_data_into_db(
+db.insert_data_into_db(
     ID = 'Cholinium_Hexanoate',
     formula = 'C11H25NO3',              # The sum of Choline    https://pubchem.ncbi.nlm.nih.gov/compound/choline#section=SMILES and Hexanoate https://pubchem.ncbi.nlm.nih.gov/compound/hexanoate
     MW = 104.17 + 115.15,               # The sum of both
@@ -219,8 +208,9 @@ DB.insert_data_into_db(
 )
 
 # NADES (Choline lactate [1:2])
-DB.insert_data_into_db(
-    ID = 'Choline_Lactate',
+db.insert_data_into_db(
+    ID = 'NADES_ChCl_LA_1_2',
+    formula = 'C11H26NO6Cl',
     MW = 319.77964,                 # Ch:LA [1:2]
     Phase = 'l',
     Rho = 1175.0,                   # kg/m3 https://doi.org/10.1016/j.chemosphere.2023.139485
