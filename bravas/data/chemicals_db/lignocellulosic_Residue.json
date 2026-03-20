@@ -1,0 +1,23 @@
+{
+    "name": "Lignocellulosic_Residue",
+    "source": {
+        "origin": "user defined",
+        "identifier": "",
+        "notes": "Built from different papers"
+    },
+    "CAS": null,
+    "formula": null,
+    "MW": 1.0,
+    "aliases": null,
+    "phase": "s",
+    "phase_ref": "s",
+    "Cp": 1.364,
+    "rho": 1100,
+    "V": null,
+    "properties":{
+
+    },
+    "copy_missing_from": "Water",
+    "notes": "",
+    "is_pseudochemical": null
+}

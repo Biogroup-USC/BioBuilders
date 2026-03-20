@@ -1,0 +1,23 @@
+{
+    "name": "Phenolics_Precipitate",
+    "source": {
+        "origin": "user defined",
+        "identifier": "",
+        "notes": "Built from different papers"
+    },
+    "CAS": "480-41-1",
+    "formula": "C15H1205",
+    "MW": 272.25,
+    "aliases": null,
+    "phase": "s",
+    "phase_ref": "s",
+    "Cp": 1.364,
+    "rho": 1485,
+    "V": null,
+    "properties":{
+
+    },
+    "copy_missing_from": "Water",
+    "notes": "",
+    "is_pseudochemical": null
+}
