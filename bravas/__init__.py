@@ -1,6 +1,7 @@
 from .chems import (
-    ChemDataBase,
     ChemicalsManager,
+    ChemicalRecord,
+    UserChemicalStorage,
 )
 
 from .parameters import (
@@ -72,8 +73,9 @@ from .tools import (
 
 __all__ = (
     # Chemicals
-    'ChemDataBase',
     'ChemicalsManager',
+    'UserChemicalStorage',
+    'ChemicalRecord',
 
     # Parameters
     'get_parameters_from_CSV',
