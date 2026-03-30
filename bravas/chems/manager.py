@@ -1,6 +1,6 @@
-from biosteam import Chemical, Chemicals, settings, Mixture, IdealMixture
+from biosteam import Chemical, Chemicals, settings, Mixture, IdealMixture, ActivityCoefficients, FugacityCoefficients, PoyintingCorrectionFactors
 from .storage import UserChemicalStorage
-from typing import Iterable
+from typing import Iterable, Literal
 from .exceptions import ChemicalNotFoundError
 
 class ChemicalsManager:
@@ -73,11 +73,23 @@ class ChemicalsManager:
         chemicals.compile(skip_checks=skip_checks)
         return chemicals
 
-    def set_thermodynamics(self, skip_checks: bool = False, mixture_class: Mixture = IdealMixture):
+    def set_thermodynamics(
+            self, 
+            skip_checks: bool = False, 
+            mixture_class: Mixture = IdealMixture, 
+            activity_coeff: ActivityCoefficients  = None,
+            fugacity_coeff: FugacityCoefficients = None,
+            poyinting_coeff: PoyintingCorrectionFactors = None,
+            package: Literal['ideal gas','Peng Robinson', 'Dortmund-UNIFAC', 'Peng Robinson | Dortmund-UNIFAC'] = None
+        ):
         chemicals = self.compile_chemicals(skip_checks=skip_checks)
         settings.set_thermo(
             thermo = chemicals,
-            mixture = mixture_class.from_chemicals(chemicals)
+            mixture = mixture_class.from_chemicals(chemicals),
+            Gamma = activity_coeff,
+            Phi = fugacity_coeff,
+            PCF = poyinting_coeff,
+            pkg = package,
         )
         settings.thermo.show()
         return chemicals
