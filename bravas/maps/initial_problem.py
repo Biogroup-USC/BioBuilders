@@ -260,48 +260,6 @@ class ImprovedMap:
 
         return scope
 
-# 
-m = ImprovedMap(shp_dir=r"C:\Users\acer\Desktop\BRAVAS\bravas\maps\SHP_ETRS89", epsg=3035)
-
-# 
-suppliers = {
-    "La Granadella": {"lat": 41.356423, "lon": 0.662246},
-    "Oli Les Cabanes": {"lat": 41.377411, "lon": 0.77089},
-    "Camp La Fraternal d'Albagés": {"lat": 41.448169, "lon":  0.739855}
-}
-
-# 
-plants = {
-    "Cooperativa de Maials": {"lat": 41.365239, "lon": 0.507272},
-    "El Soleràs": {"lat": 41.412371, "lon": 0.685434},
-    "Cooperativa Camp de Cervià": {"lat": 41.42368, "lon": 0.863094},
-    "Cooperativa Vinaixa": {"lat": 41.427377, "lon": 0.974396}
-}
-
-# 
-customers = {
-    "Cooperativa Espluguenca": {"lat": 41.496662, "lon": 1.003785},
-    "Cooperativa Arbequina": {"lat": 41.542233, "lon": 0.920915},
-    "Terral de Sant Isidre": {"lat": 41.523844, "lon": 0.860315}
-}
-
-# 
-scope = m.plot_map(
-    suppliers=suppliers,
-    plants=plants,
-    customers=customers,
-    regions=["Garrigues", "Segrià", "Urgell"],     
-    target_level="regions",      
-    plot_layers={"municipalities": True},
-    figsize=(10, 10),
-    show=True
-)
-
-# 
-print("Columnas de gdf_reg:", m.gdf_reg.columns)
-print("Comarcas disponibles:", m.gdf_reg["REGION"].unique())
-print("Nivel administrativo:", m.gdf_reg["NATLEVNAME"].unique())
-print("Scope devuelto por plot_map:", scope)
 
 
 
