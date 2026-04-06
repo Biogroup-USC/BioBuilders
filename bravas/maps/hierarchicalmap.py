@@ -5,10 +5,54 @@ from shapely.geometry import Point
 import matplotlib.pyplot as plt
 import networkx as nx
 
-class ImprovedMap:
+__all__ = ('HierarchicalMapPlotter',)
+
+class HierarchicalMapPlotter:
     """
+    Hierarchical geographic map loader and plotting tool.
+
+    This clas loads and manages geographic boundaries at different administrative levels for Spain (autonomous
+    comunities, provinces, regions and municipalities).
+
+    It supports spatial filtering, continuity checks, overlay visualization, and plotting of additional point-based
+    datasets sucha s suppliers, plants, and customers.
+
+    Parameters
+    ----------
+    shp_dir: str, optional
+        Directory containing the shapefiles:
+        * Autonomics.shp
+        * Provinces.shp
+        * Regions.shp
+        * Municipalities.shp
+    
+    epsg: int, optional
+        EPSG coordinate reference system to which all layers will be projected.
+    
+    gdf_aut: GeoDataFrame, optional
+        Autonomous communities layer, provided directly instead of from file.
+    
+    gdf_prov: GeoDataFrame, optional
+        Provinces layer, provided directly instead of from file.
+    
+    gdf_reg: GeoDataFrame, optional
+        Regions layer, provided directly instead of from file.
+    
+    gdf_muni: GeoDataFrame, optional
+        MUnicipalities layer, provided directly instead of from file.
+    
+    Attributes
+    ----------
+    seleted: GeoDataFrame or None
+        Most recent user selection of geographic features.
+    
+    filtered_muni: GeoDataFrame or None
+        Selection of municipalities used for text annotation.
+    
+    valid: dict
+        Dicionary containing list of valid region names for each administrative level.
     """
-    # order of geographic levels 
+    # Order of geographic levels 
     level_order = ["autonomics", "provinces", "regions", "municipalities"]
 
     def __init__(self, shp_dir=None, epsg=None, gdf_aut=None, gdf_prov=None, gdf_reg=None, gdf_muni=None):
@@ -17,13 +61,13 @@ class ImprovedMap:
         self.shp_dir = shp_dir
         self.epsg = epsg
 
-        # load shapefiles or use provided GeoDataFrames
+        # Load shapefiles or use provided GeoDataFrames
         self.gdf_aut = gdf_aut if gdf_aut is not None else self._maybe_read("Autonomics")
         self.gdf_prov = gdf_prov if gdf_prov is not None else self._maybe_read("Provinces")
         self.gdf_reg = gdf_reg if gdf_reg is not None else self._maybe_read("Regions")
         self.gdf_muni = gdf_muni if gdf_muni is not None else self._maybe_read("Municipalities")
 
-        # reproject to desired EPSG
+        # Reproject to desired EPSG
         if self.epsg is not None:
             for attr in ("gdf_aut","gdf_prov","gdf_reg","gdf_muni"):
                 g = getattr(self, attr)
@@ -34,11 +78,11 @@ class ImprovedMap:
                     except Exception:
                         pass
 
-        # store last selection
+        # Store last selection
         self.selected = None
         self.filtered_muni = None
 
-        # list of valid names for each level
+        # List of valid names for each level
         self.valid = {
             "autonomics": sorted(self.gdf_aut["CCAA"].dropna().unique().tolist()) if self.gdf_aut is not None else [],
             "provinces": sorted(self.gdf_prov["PROVINCE"].dropna().unique().tolist()) if self.gdf_prov is not None else [],
@@ -200,14 +244,14 @@ class ImprovedMap:
             print("No data to plot for the selection provided.")
             return scope
 
-        # create figure
+        # Create figure
         fig, ax = plt.subplots(figsize=figsize)
 
-        # plot the base selection with no fill
+        # Plot the base selection with no fill
         base_gdf = gdf_used.copy()
         base_gdf.plot(ax=ax, facecolor="none", edgecolor="black", linewidth=1.2)
 
-        # plot optional layers intersecting the base
+        # Plot optional layers intersecting the base
         if plot_layers is None:
             plot_layers = {}
 
@@ -220,12 +264,12 @@ class ImprovedMap:
 
         for layer_name, gdf_layer, width, color in layer_info:
             if plot_layers.get(layer_name, False) and gdf_layer is not None:
-                # only plot intersection with selected area
+                # Only plot intersection with selected area
                 sub = gpd.overlay(gdf_layer, base_gdf, how='intersection')
                 if not sub.empty:
                     sub.boundary.plot(ax=ax, linewidth=width, color=color)
 
-        # add points (suppliers, plants, customers)
+        # Add points (suppliers, plants, customers)
         for pts in (suppliers, plants, customers):
             if pts:
                 try:
@@ -234,7 +278,7 @@ class ImprovedMap:
                 except Exception:
                     pass
 
-        # annotate municipalities if desired
+        # Annotate municipalities if desired
         if annotate_municipalities and self.filtered_muni is not None and len(self.filtered_muni) > 0:
             name_col = "NAMEUNIT" if "NAMEUNIT" in self.filtered_muni.columns else (
                         "MUNICIPIO" if "MUNICIPIO" in self.filtered_muni.columns else None
@@ -248,10 +292,10 @@ class ImprovedMap:
                     except Exception:
                         pass
 
-        # remove axes
+        # Remove axes
         ax.set_xticks([]); ax.set_yticks([])
 
-        # save or show
+        # Save or show
         if savepath:
             plt.savefig(savepath, bbox_inches="tight")
         if show:
@@ -259,109 +303,3 @@ class ImprovedMap:
         plt.close(fig)
 
         return scope
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# comunidades limitrofes: pintar solo esas dos con posibilidad de activar diferentes capas
-#map.plot_map(autonomics=["Galicia", "Asturias"], target_level="autonomics") # solo autonomica
-#map.plot_map(autonomics=["Galicia", "Asturias"], plot_layers={'provinces':True, 'regions': True, 'municipalities': True}) #solo con capas
-#map.plot_map(autonomics=["Galicia", "Asturias"],  plot_layers={'regions': True, 'municipalities': True}) #solo con capas
-#map.plot_map(autonomics=["Galicia", "Asturias"],  plot_layers={'provinces':True}) #solo con capas
-#map.plot_map(autonomics=["Galicia", "Asturias"],  plot_layers={'regions': True}) #solo con capas 
-#map.plot_map(autonomics=["Galicia", "Asturias"],  plot_layers={'municipalities': True}) #solo con capas 
-
-# provincias limitrofes: pintar solo esas con posibilidad de activar diferentes capas
-#map.plot_map(province=["A Coruña", "Lugo"], target_level="provinces") # solo provincia
-#map.plot_map(province=["A Coruña", "Lugo"], plot_layers={'regions': True, 'municipalities': True}) #solo con capas
-#map.plot_map(province=["A Coruña", "Lugo"],  plot_layers={'regions': True}) #solo con capas
-#map.plot_map(province=["A Coruña", "Lugo"],  plot_layers={'municipalities': True}) #solo con capas
-
-# comarcas limítrofes: pintar solo esas con posibilidad de activar diferentes capas
-#map.plot_map(regions=["Ferrol", "Ortegal"], target_level="regions") # solo comarca
-#map.plot_map(regions=["Ferrol", "Ortegal"], plot_layers={'municipalities': True}) #solo con capas
-
-# municipios limitrofes: pintar solo eses
-#map.plot_map(regions=["Pontedeume", "Miño"], target_level="municipalities") # solo comarca
-
-
-
-# comunidades no limitrofes: pintar el mapa de españa completo (todas los datos para cada nivel) con posibilidad de activar diferentes capas
-#map.plot_map(autonomics=["Galicia", "Andalucía"], target_level="autonomics") # solo autonomica
-#map.plot_map(autonomics=["Galicia", "Andalucía"], plot_layers={'provinces':True, 'regions': True, 'municipalities': True}) #solo con capas
-#map.plot_map(autonomics=["Galicia", "Andalucía"],  plot_layers={'regions': True, 'municipalities': True}) #solo con capas
-#map.plot_map(autonomics=["Galicia", "Andalucía"],  plot_layers={'provinces':True}) #solo con capas
-#map.plot_map(autonomics=["Galicia", "Andalucía"],  plot_layers={'regions': True}) #solo con capas 
-#map.plot_map(autonomics=["Galicia", "Andalucía"],  plot_layers={'municipalities': True}) #solo con capas 
-
-# provincias no limitrofes de la misma comunidad: pintar solo esa comunidad con posibilidad de activar diferentes capas
-#map.plot_map(province=["A Coruña", "Ourense"], target_level="provinces") # solo provincia
-#map.plot_map(province=["A Coruña", "Ourense"], plot_layers={'regions': True, 'municipalities': True}) #solo con capas
-#map.plot_map(province=["A Coruña", "Ourense"],  plot_layers={'regions': True}) #solo con capas
-#map.plot_map(province=["A Coruña", "Ourense"],  plot_layers={'municipalities': True}) #solo con capas
-
-# provincias no limitrofes de diferentes comunidades, pero comunidades limitrofes: pintar solo esas comunidades con posibilidad de activar diferentes capas
-#map.plot_map(province=["A Coruña", "Asturias"], target_level="provinces") # solo provincia
-#map.plot_map(province=["A Coruña", "Asturias"], plot_layers={'regions': True, 'municipalities': True}) #solo con capas
-#map.plot_map(province=["A Coruña", "Asturias"],  plot_layers={'regions': True}) #solo con capas
-#map.plot_map(province=["A Coruña", "Asturias"],  plot_layers={'municipalities': True}) #solo con capas
-
-# provincias no limitrofes de diferentes comunidades y comunidades no limítrofes: pintar el mapa de españa completo (todas los datos para cada nivel) con posibilidad de activar diferentes capas
-#map.plot_map(province=["A Coruña", "Cantabria"], target_level="provinces") # solo provincia
-#map.plot_map(province=["A Coruña", "Cantabria"], plot_layers={'regions': True, 'municipalities': True}) #solo con capas
-#map.plot_map(province=["A Coruña", "Cantabria"],  plot_layers={'regions': True}) #solo con capas
-#map.plot_map(province=["A Coruña", "Cantabria"],  plot_layers={'municipalities': True}) #solo con capas
-
-
-
-# comarcas no limítrofes de la misma provincia: pintar solo esa provincia con posibilidad de activar diferentes capas
-#map.plot_map(regions=["Ferrol", "A Coruña"], target_level="regions") # solo comarca
-#map.plot_map(regions=["Ferrol", "A Coruña"], plot_layers={'municipalities': True}) #solo con capas
-
-# comarcas no limítrofes de distintas provincias, pero estas son limitrofes: pintar solo esas provincias con posibilidad de activar diferentes capas
-#map.plot_map(regions=["Ferrol", "Lugo"], target_level="regions") # solo comarca
-#map.plot_map(regions=["Ferrol", "Luego"], plot_layers={'municipalities': True}) #solo con capas
-
-# comarcas no limítrofes de provincias no limitrofes, pero misma comunidad: pintar solo esa comunidad con posibilidad de activar diferentes capas
-#map.plot_map(regions=["Ferrol", "Ourense"], target_level="regions") # solo comarca
-#map.plot_map(regions=["Ferrol", "Ourense"], plot_layers={'municipalities': True}) #solo con capas
-
-# comarcas no limítrofes de distintas comunidades, pero comunidades limitrofes: pintar solo esas comunidades con posibilidad de activar diferentes capas
-#map.plot_map(regions=["Ferrol", "Oviedo"], target_level="regions") # solo comarca
-#map.plot_map(regions=["Ferrol", "Oviedo"], plot_layers={'municipalities': True}) #solo con capas
-
-# comarcas no limítrofes de distintas comunidades, pero comunidades no limitrofes: pintar el mapa de españa completo (todas los datos para cada nivel) con posibilidad de activar diferentes capas
-#map.plot_map(regions=["Ferrol", "Terra Alta"], target_level="regions") # solo comarca
-#map.plot_map(regions=["Ferrol", "Terra Alta"], plot_layers={'municipalities': True}) #solo con capas
-
-
-
-# municipios no limitrofes de la misma provincia: pintar solo esa provincia
-#map.plot_map(regions=["Pontedeume", "Cerceda"], target_level="municipalities") # solo comarca
-
-# municipios no limítrofes de distintas provincias, pero estas son limitrofes: pintar solo esas provincias 
-#map.plot_map(regions=["Pontedeume", "Lugo"], target_level="municipalities") # solo comarca
-
-# municipios no limítrofes de provincias no limitrofes, pero misma comunidad: pintar solo esa comunidad 
-#map.plot_map(regions=["Pontedeume", "Allariz"], target_level="municipalities") # solo comarca
-
-# municipios no limitrofes de distintas comunidades, pero comunidades limitrofes: pintar solo esas comunidades 
-#map.plot_map(regions=["Pontedeume", "Llaneras"], target_level="municipalities") # solo comarca
-
-# municipios no limitrofes de distintas comunidades, pero comunidades no limitrofes: pintar el mapa de españa completo (todas los datos para cada nivel) con posibilidad de activar diferentes capas
-#map.plot_map(regions=["Pontedeume", "Terrasa"], target_level="municipalities") # solo comarca

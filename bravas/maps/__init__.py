@@ -1,7 +1,7 @@
 # __init__.py
 
-from .initial_problem import ImprovedMap
+from .hierarchicalmap import HierarchicalMapPlotter
 
 all = (
-    'ImprovedMap',
+    'HierarchicalMapPlotter',
 )

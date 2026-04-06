@@ -81,7 +81,7 @@ from .supply import (
 )
 
 from .maps import(
-    ImprovedMap,
+    HierarchicalMapPlotter,
 )
 
 __all__ = (
@@ -156,5 +156,5 @@ __all__ = (
     'FlpModel',  
 
     # Maps
-    'ImprovedMap',
+    'HierarchicalMapPlotter',
 )
