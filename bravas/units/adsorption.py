@@ -189,9 +189,6 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
         self.vessel_material = vessel_material
         self.vessel_type = vessel_type
 
-        self._p0 = None
-        self._T0 = None
-
     def _run(self):
         feed, regeneration_fluid, adsorbent = self.ins
         outlet, spent_fluid, spent_adsorbent = self.outs
@@ -209,26 +206,22 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
         outlet.imass[adsorbate] = adsorbate_out
 
     @staticmethod
-    def _calculate(ni, nT, P):
+    def _calculate_pi(ni, nT, P):
         if nT <= 0.0:
             return 0.0
         return (ni/nT)*P
 
     @property
     def T0(self):
-        if self._T0 is None:
-            self._T0 = self.ins[0].T
-        return self._T0
+        return self.ins[0].T
 
     @property
     def p0(self):
-        if self._p0 is None:
-            self._p0 = self._calculate(
+        return self._calculate_pi(
                 self.ins[0].imol[self.adsorbate],
                 self.ins[0].F_mol,
                 self.ins[0].P
             )
-        return self._p0
 
     def _PL_to_mass_concentration(self, PL):
         p = PL * self.p0
