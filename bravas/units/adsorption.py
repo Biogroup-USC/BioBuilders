@@ -18,6 +18,7 @@ from biosteam.units.design_tools import PressureVessel
 from numba import njit
 import numpy as np
 import math
+from warnings import warn
 
 @njit(cache=True)
 def equilibrium_loading_Langmuir_isotherm_gas(
@@ -82,8 +83,21 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
     _N_outs = 3
 
     _units = {
+        'Vessel length': 'm',
+        'Vessel diameter': 'm',
+        'Vessel weight': 'kg',
+        'Vessel wall thickness': 'mm',
+        'Adsorbent per column': 'kg adsorbent',
+        'Total adsorbent': 'kg adsorbent',
+        'Working capacity': 'kg adsorbate/kg adsorbent',
+        'Cycle time': 'h',
+        'Bed volume per column': 'm3',
+        'Bed length per column': 'm',
+        'Superficial gas velocity': 'm/s',
+        'Pressure drop per bed length': 'Pa/m',
         'Pressure drop': 'Pa',
-        **PressureVessel._units
+        'Pressure': 'Pa',
+        **PressureVessel._units,  
     }
 
     # Default lifetime for component
@@ -91,12 +105,9 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
         'Zeolite 3A': 3,    # years [6]
     }
 
-    # default gas velocity
-    default_gas_velocity = (0.20+1.32)/2  # m/s [8]
-
-    # Cost of regeneration $/m3
-    absorbent_cost = {
-
+    # Cost of regeneration $/kg
+    adsorbent_cost = {
+        'Zeolite 3A': (1.5+6.5)/2   # https://spanish.alibaba.com/g/zeolite-cost-per-kg.html
     }
 
     # Adsorbent properties
@@ -119,7 +130,6 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
     def _init(
         self,
         adsorbed_fraction: float = 1.,
-        u_superficial: float = None,
         t_ads: float = None,
         t_regen: float = None,
         isotherm_args: tuple = None,
@@ -166,9 +176,6 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
                 raise ValueError(
                     f"void_fraction must be provided for adsorbent '{adsorbent}'"
                 )
-        
-        if u_superficial is None:
-            u_superficial = self.default_gas_velocity
 
         # Auxiliary equipment
         self.auxiliary('pump', bst.Pump, ins = self.ins[0])
@@ -193,7 +200,6 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
         self.void_fraction = void_fraction
         self.rho_adsorbent = rho_adsorbent
         self.f_L = f_L
-        self.u_superficial = u_superficial
 
         self.regeneration_fluid = regeneration_fluid
 
@@ -226,6 +232,7 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
         self._adsorbate_chemical = None
         self._regeneration = None
         self._fraction_inert_packed = None
+        self._L_D_ratio = None
 
     @property
     def adsorbate_chemical(self):
@@ -248,9 +255,18 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
             and self.t_regen > 0
         )
 
+    @property
+    def L_D_ratio(self):
+        if self._L_D_ratio is None:
+            self._L_D_ratio = 3.    # - [1]
+        return self._L_D_ratio
+    
+    @L_D_ratio.setter
+    def L_D_ratio(self,value):
+        self._L_D_ratio = value
+
     def _calculate_bed_geometry_and_pressure_drop(self, feed, M_ads_col):
         rho_bulk = self.rho_adsorbent
-        u = self.u_superficial
         eps = self.void_fraction
         dp = self.particle_diameter
 
@@ -258,13 +274,20 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
         if Q_feed <= 0.:
             raise ValueError("Feed volumetric flow must be > 0")
         
+        # Bed volume from adsorbent
         V_bed_col = M_ads_col / rho_bulk
-        A_col = Q_feed / u
-        D_col = math.sqrt(4.0 * A_col / math.pi)
-        L_bed = V_bed_col / A_col
+        
+        # Geometric design [1]
+        L_D_ratio = self.L_D_ratio
+        D_col = (4. * V_bed_col / (math.pi * L_D_ratio))**(1./3.)
+        L_bed = L_D_ratio * D_col
+        A_col = math.pi * D_col**2 / 4.0
+
+        # Superficial velocity
+        u = Q_feed / A_col
 
         # Extra length for inert/distributors: tangent-to-tangent length
-        L_vessel_tt = L_bed / (1-self.fraction_inert_packed)
+        L_vessel_tt = L_bed / (1 - self.fraction_inert_packed)
 
         gas_rho = feed.rho
         gas_mu = feed.mu
@@ -278,7 +301,17 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
             L=L_bed
         )
 
-        return Q_feed, V_bed_col, A_col, D_col, L_bed, L_vessel_tt, dP, dP_L
+        return {
+            'Volumetric flow': Q_feed,
+            'Bed volume': V_bed_col,
+            'Bed length': L_bed,
+            'Column area': A_col,
+            'Column diameter': D_col,
+            'Column length': L_vessel_tt,
+            'Superficial velocity': u,
+            'Pressure drop': dP,
+            'Pressure drop per length': dP_L,
+        }
 
     def _run(self):
         feed, regeneration_fluid, adsorbent = self.ins
@@ -307,59 +340,60 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
         # Adsorbate removed per column
         na_removed_ads_step = na_removed_rate * self.t_ads
 
-        # Work capacity
+        # Adsorption conditions
         P_in = self.P_ads if self.P_ads is not None else feed.P
         pa = self._calculate_pi(na_in, feed_in, P_in)
-        q_ads = self.isotherm_model(
-            pa, *self.isotherm_args
-        )
+        q_ads = self.isotherm_model(pa, *self.isotherm_args)
 
+        # Regeneration
         if self.regeneration:
+            P_regen = self.P_regen if self.P_regen is not None else regeneration_fluid.P
+
             regen_in = regeneration_fluid.F_mol
             na_regen = regeneration_fluid.imol[adsorbate]
-            pa_regen = self._calculate_pi(na_regen, regen_in, self.P_regen)
-            q_regen = self.regeneration_isotherm_model(
-                pa_regen, *self.regeneration_isotherm_args
-            )
+            pa_regen = self._calculate_pi(na_regen, regen_in, P_regen)
+            q_regen = self.regeneration_isotherm_model(pa_regen, *self.regeneration_isotherm_args)
+
+            spent_fluid.P = P_regen
+            spent_fluid.imol[adsorbate] = na_removed_ads_step / t_cycle
         else:
+            P_regen = P_in
             q_regen = 0.
+
+            spent_adsorbent.imol[adsorbate] = na_removed_ads_step / t_cycle
         
         q_work = max(q_ads - q_regen, 1e-12)
+        q_work_kmol = q_work / 1000
 
         # Adsorbent mass per column
-        mass_adsorbent = na_removed_ads_step / (q_work * self.f_L)
-        Q_feed,V_bed_col,A_col,D_col,L_bed,L_vessel_tt,dP,dP_L = self._calculate_bed_geometry_and_pressure_drop(feed,mass_adsorbent)
+        mass_adsorbent = na_removed_ads_step / (q_work_kmol * self.f_L)
+        column_results = self._calculate_bed_geometry_and_pressure_drop(feed,mass_adsorbent)
 
         # Outlet stream
-        P_out = P_in - dP
+        P_out = P_in - column_results['Pressure drop']
         if P_out <= 0.:
             raise ValueError("Outlet P must be > 0.")
 
         outlet.P = P_out
         outlet.imol[adsorbate] = na_out
         
-        # Spent fluid and spent adsorbent streams
-        spent_fluid.P = self.P_regen
-        if self.regeneration:
-            spent_fluid.imol[adsorbate] = na_removed_ads_step/t_cycle
-        else:
-            spent_adsorbent.imol[adsorbate] = na_removed_ads_step/t_cycle
-        
         # Variables considered in _design
         self._M_ads = mass_adsorbent
         self._q_work = q_work
+        self._q_work_kmol = q_work_kmol
         self._nAds_removed_ads_step = na_removed_ads_step
         self._q_ads = q_ads
         self._q_regen = q_regen
         self._t_cycle = t_cycle
-        self._Q_feed = Q_feed
-        self._V_bed_col = V_bed_col
-        self._A_col = A_col
-        self._D_col = D_col
-        self._L_bed = L_bed
-        self._L_vessel_tt = L_vessel_tt
-        self._dP_bed = dP
-        self._dP_per_length = dP_L
+        self._Q_feed = column_results['Volumetric flow']
+        self._superficial_velocity = column_results['Superficial velocity']
+        self._V_bed_col = column_results['Bed volume']
+        self._A_col = column_results['Column area']
+        self._D_col = column_results['Column diameter']
+        self._L_bed = column_results['Bed length']
+        self._L_vessel_tt = column_results['Column length']
+        self._dP = column_results['Pressure drop']
+        self._dP_per_length = column_results['Pressure drop per length']
 
     @staticmethod
     def _calculate_pi(ni, nT, P):
@@ -380,7 +414,14 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
     def _design(self):
         design = self.design_results
         
-        vessel_pressure = max(self.P_ads, self.P_regen)
+        P_ads = self.P_ads if self.P_ads is not None else self.ins[0].P
+        if self.regeneration:
+            P_regen = self.P_regen if self.P_regen is not None else self.ins[1].P
+        else:
+            P_regen = P_ads
+
+        vessel_pressure = max(max(P_ads, P_regen) - 101325, 0.)
+
         self._design_and_cost_pressure_vessel(
             pressure=vessel_pressure,
             diameter=self._D_col,
@@ -390,22 +431,39 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
             n_vessels=self.N_columns
         )
 
+        # L/D check
+        length_diameter = self._L_bed / self._D_col
+        if not 2.5 <= length_diameter <= 3.5:
+            warn(
+                f"Bed length / diameter ratio is outside the target range [2.5, 3.5]. Current: {length_diameter}"
+            )
+
         # Bed related results
-        design["Adsorbent per column"] = self._M_ads
+        design["Vessel length"] = design.pop("Length") * 0.3048
+        design["Vessel diameter"] = design.pop("Diameter") * 0.3048
+        design["Vessel weight"] = design.pop("Weight") * 0.4536
+        design["Vessel wall thickness"] = design.pop("Wall thickness") * 25.4
+        design["length / diameter ratio"] = length_diameter
         design["Number of columns"] = self.N_columns
+        
+        design["Adsorbent per column"] = self._M_ads
         design["Total adsorbent"] = self._M_ads * self.N_columns
+        design["Working capacity"] = self._q_work * self.adsorbate_MW / 1000
+        design["Cycle time"] = self._t_cycle
+        
         design["Bed volume per column"] = self._V_bed_col
         design["Bed length per column"] = self._L_bed
-        design["Pressure drop per bed length"] = self._dP_per_length
-        design["Pressure drop per column"] = self._dP_bed
-        design[f"Working capacity (kg {self.adsorbate} / kg adsorbent)"] = self._q_work * self.adsorbate_MW / 1000
-        design["Cycle time"] = self._t_cycle
+        design["Superfical gas velocity"] = self._superficial_velocity
 
-        # Vessel related to convert imperial units to SI units
-        design["Vessel Length"] = design.pop("Length") * 0.3048
-        design["Vessel Diameter"] = design.pop("Diameter") * 0.3048
-        design["Vessel Weight"] = design.pop("Weight") * 0.4536
-        design["Vessel Wall thickness"] = design.pop("Wall thickness") * 25.4
+        design["Pressure drop per bed length"] = self._dP_per_length
+        design["Pressure drop"] = self._dP
 
     def _cost(self):
+        baseline_purchase_costs = self.baseline_purchase_costs
         
+        total_ads = self.design_results["Total adsorbent"]
+        adsorbent_cost_per_kg = self.adsorbent_cost[self.adsorbent]
+        baseline_purchase_costs['adsorbent initial charge'] = adsorbent_cost_per_kg * total_ads
+
+        lifetime = self._default_equipment_lifetime[self.adsorbent]
+        self.equipment_lifetime['adsorbent initial charge'] = lifetime
