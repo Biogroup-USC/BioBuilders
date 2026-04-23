@@ -9,8 +9,7 @@ References
 [5] P. Azhagapillai, M. Khaleel, F. Zoghieb, G. Luckachan, L. Jacob, and D. Reinalda, “Water vapor adsorption capacity loss of molecular sieves 4A, 5A, and 13X resulting from methanol and heptane exposure,” ACS Omega, vol. 7, no. 8, pp. 6463 6471, 2022, doi: 10.1021/acsomega.1c03370.
 [6] E. Gabruś, J. Nastaj, P. Tabero, and T. Aleksandrzak, “Experimental studies on 3A and 4A zeolite molecular sieves regeneration in TSA process: Aliphatic alcohols dewatering water desorption,” Chemical Engineering Journal, vol. 259, pp. 232 242, 2015, doi: 10.1016/j.cej.2014.07.108.
 [7] R. K. Sinnott and G. Towler, Chemical Engineering Design, 6th ed. Oxford, U.K.: Elsevier, 2020, p. 1076.
-[8] C. S. Ana et al., “Experimental analysis of adsorption dynamics in fixed-bed columns under varying superficial velocities,” Fusion Engineering and Design, 2025, doi: 10.1016/j.fusengdes.2025.115039.
-
+[8] D. W. Green and R. H. Perry, Eds., Perry’s Chemical Engineers’ Handbook, 8th ed. New York, NY, USA: McGraw-Hill, 2008, sec. 2, pp. 2-1 2-151.
 """
 
 import biosteam as bst
@@ -116,6 +115,7 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
             'void fraction': 0.30,                      # -     [3]
             'bulk density': (620 + 680)/2,              # kg/m3 [3]
             'temperature limit': 300.,                  # ºC    [2]
+            'specific heat': 0.74                       # kJ / kg * K (300 K) [8]
         }
     }
 
@@ -140,11 +140,14 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
         rho_adsorbent = None,
         P_ads = None,
         P_regen = None,
+        T_ads = None,
+        T_regen = None,
         regeneration_fluid = None,
         adsorbate = None,
         vessel_material = 'Stainless steel 316',
         vessel_type = 'Vertical',
         adsorbent: str = None,
+        isosteric_heat: float = -45.95,
         N_columns = 3,
         particle_diameter = None,
         f_L = 0.7,
@@ -177,21 +180,12 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
                     f"void_fraction must be provided for adsorbent '{adsorbent}'"
                 )
 
-        # Auxiliary equipment
-        self.auxiliary('pump', bst.Pump, ins = self.ins[0])
-
-        if regeneration_fluid is not None:
-            regeneration_pump = self.auxiliary(
-                'regeneration_pump', bst.Pump, ins = self.ins[1]
-            )
-            self.auxiliary(
-                'heat_exchanger', bst.HXutility, ins = regeneration_pump.outs[0]
-            )
-
         self.t_ads = t_ads
         self.t_regen = t_regen
         self.P_ads = P_ads
         self.P_regen = P_regen
+        self.T_ads = T_ads
+        self.T_regen = T_regen
 
         self.adsorbate = adsorbate
         self.adsorbed_fraction = adsorbed_fraction
@@ -202,6 +196,7 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
         self.f_L = f_L
 
         self.regeneration_fluid = regeneration_fluid
+        self.isosteric_heat = isosteric_heat
 
         key = isotherm_model.lower()
         if key not in self.isotherm_models:
@@ -330,6 +325,8 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
         feed_in = feed.F_mol
         na_in = feed.imol[adsorbate]
 
+        heat_feed = feed.F_mass * feed.Cp * (self.T_ads - feed.T)
+
         # Outlet adsorbate
         na_out = (1-self.adsorbed_fraction) * na_in
         na_out = min(max(na_out,0.),na_in)
@@ -355,19 +352,26 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
             q_regen = self.regeneration_isotherm_model(pa_regen, *self.regeneration_isotherm_args)
 
             spent_fluid.P = P_regen
+            spent_fluid.T = self.T_regen
             spent_fluid.imol[adsorbate] = na_removed_ads_step / t_cycle
+
+            heat_regen_gas = regeneration_fluid.F_mass * regeneration_fluid.Cp * (self.T_regen - regeneration_fluid.T)
+            heat_desorption = na_removed_ads_step * abs(self.isosteric_heat) / self.t_regen
         else:
             P_regen = P_in
             q_regen = 0.
 
             spent_adsorbent.imol[adsorbate] = na_removed_ads_step / t_cycle
         
-        q_work = max(q_ads - q_regen, 1e-12)
+        q_work = max((q_ads - q_regen) * self.f_L, 1e-12)
         q_work_kmol = q_work / 1000
 
         # Adsorbent mass per column
-        mass_adsorbent = na_removed_ads_step / (q_work_kmol * self.f_L)
+        mass_adsorbent = na_removed_ads_step / q_work_kmol
         column_results = self._calculate_bed_geometry_and_pressure_drop(feed,mass_adsorbent)
+
+        # Energy for heating zeolites
+        heat_adsorbent = mass_adsorbent/self.t_regen * self.adsorbent_properties[self.adsorbate]['specific heat'] * (self.T_regen - self.T_ads)
 
         # Outlet stream
         P_out = P_in - column_results['Pressure drop']
@@ -375,8 +379,9 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
             raise ValueError("Outlet P must be > 0.")
 
         outlet.P = P_out
+        outlet.T = self.T_ads
         outlet.imol[adsorbate] = na_out
-        
+
         # Variables considered in _design
         self._M_ads = mass_adsorbent
         self._q_work = q_work
@@ -394,6 +399,16 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
         self._L_vessel_tt = column_results['Column length']
         self._dP = column_results['Pressure drop']
         self._dP_per_length = column_results['Pressure drop per length']
+
+        # Utilities
+        ## Feed conditioning duty
+        self.add_heat_utility(heat_feed,feed.T,outlet.T)
+
+        ## Bed regeneration duty
+        self.add_heat_utility(heat_adsorbent+heat_desorption,self.T_ads, self.T_regen)
+
+        ## Regeneration gas conditioning duty
+        self.add_heat_utility(heat_regen_gas, regeneration_fluid.T, spent_fluid.T)
 
     @staticmethod
     def _calculate_pi(ni, nT, P):
@@ -461,9 +476,12 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
     def _cost(self):
         baseline_purchase_costs = self.baseline_purchase_costs
         
+        # Adsorbent cost
         total_ads = self.design_results["Total adsorbent"]
         adsorbent_cost_per_kg = self.adsorbent_cost[self.adsorbent]
         baseline_purchase_costs['adsorbent initial charge'] = adsorbent_cost_per_kg * total_ads
+        if self.regeneration:
+            lifetime = self._default_equipment_lifetime[self.adsorbent]
+            self.equipment_lifetime['adsorbent initial charge'] = lifetime
 
-        lifetime = self._default_equipment_lifetime[self.adsorbent]
-        self.equipment_lifetime['adsorbent initial charge'] = lifetime
+        
