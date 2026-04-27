@@ -8,6 +8,7 @@ __all__ = (
     "updating_to_future_value",
     "calculate_labor_requirements",
     "calculate_centrifuge_diameter",
+    "calculate_packing_equivalent_diameter",
     "solve_operating_pressures_multieffectevaporator",
     "calculate_rdvf_area",
     "agitator_volumetric_power_determination",

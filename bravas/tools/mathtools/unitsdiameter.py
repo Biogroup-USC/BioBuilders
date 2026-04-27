@@ -5,6 +5,7 @@ import numpy as np
 __all__ = (
     "calculate_centrifuge_diameter",
     "calculate_impeller_diameter",
+    "calculate_packing_equivalent_diameter",
 )
 
 def calculate_centrifuge_diameter(
@@ -110,3 +111,28 @@ def calculate_impeller_diameter(
     impeller_diameter = (4 * V_reactor /((impeller_react_diameter**-1)**3 * height_diameter * np.pi))**(1/3)
 
     return impeller_diameter
+
+def calculate_packing_equivalent_diameter(void_fraction, surface_area):
+    """
+    Calculate equivalent particle diameter (Sauter diameter) for packing.
+
+    Parameters
+    ----------
+    void_fraction : float
+        Bed void fraction (ε), dimensionless (0 < ε < 1)
+
+    surface_area : float
+        Specific surface area of packing (a), in m²/m³
+
+    Returns
+    -------
+    dp : float
+        Equivalent particle diameter (m)
+    """
+    if not (0 < void_fraction < 1):
+        raise ValueError("void_fraction must be between 0 and 1")
+
+    if surface_area <= 0:
+        raise ValueError("surface_area must be positive")
+
+    return 6 * (1 - void_fraction) / surface_area
