@@ -21,6 +21,10 @@ import math
 from warnings import warn
 from ..tools.mathtools import calculate_packing_equivalent_diameter
 
+__all__ = (
+    "GasAdsorptionColumn",
+)
+
 @njit(cache=True)
 def equilibrium_loading_Langmuir_isotherm_gas(
     pi,     # Partial pressure [Pa]

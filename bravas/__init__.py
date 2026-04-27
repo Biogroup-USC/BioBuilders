@@ -9,6 +9,7 @@ from .parameters import (
 )
 
 from .units import (
+    GasAdsorptionColumn,
     BinaryDistillation,
     Flash,
     RotaryVacuumDrumFilter,
@@ -84,6 +85,7 @@ __all__ = (
     'parse_case_spec',
 
     # Unit operation
+    'GasAdsorptionColumn',
     'BinaryDistillation',
     'Flash',
     'RotaryVacuumDrumFilter',

@@ -14,6 +14,7 @@ from .distillation import BinaryDistillation
 from .separator import SeparationUnit
 from .boiler import BiomassBoiler
 from .pellet import PelletMill
+from .adsorption import GasAdsorptionColumn
 
 __all__ = (
     "BatchEnzymaticTreatment",
@@ -38,5 +39,6 @@ __all__ = (
     "MembraneFiltration",
     "SeparationUnit",
     "BiomassBoiler",
-    "PelletMill"
+    "PelletMill",
+    "GasAdsorptionColumn",
 )
