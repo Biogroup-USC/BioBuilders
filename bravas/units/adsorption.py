@@ -19,6 +19,7 @@ from biosteam.units.design_tools import PressureVessel
 from numba import njit
 import math
 from warnings import warn
+from ..tools.mathtools import calculate_packing_equivalent_diameter
 
 @njit(cache=True)
 def equilibrium_loading_Langmuir_isotherm_gas(
@@ -33,27 +34,14 @@ def equilibrium_loading_Langmuir_isotherm_gas(
 def equilibrium_loading_Langmuir_dual_site_isotherm_gas(
     pi,     # Adsorbate partial pressure [Pa] 
     ka,     # Adsorption equilibrium constant for cage alpha [1/Pa]
+    a_term, # Alpha term
     kb,     # Adsorption equilibrium constant for cage beta [1/Pa]
+    b_term, # Beta term
     q_max,  # Maximum equilibrium loading [mol/kg]
 ):
-    first_term = 0.162 * q_max * (kb * pi) / (1 + kb * pi)
-    second_term = 0.838 * q_max * (ka * pi) / (1 + ka * pi)
+    first_term = a_term * q_max * (kb * pi) / (1 + kb * pi)
+    second_term = b_term * q_max * (ka * pi) / (1 + ka * pi)
     return first_term + second_term
-
-# Equilibrium-based length calculation [1]
-@njit(cache=True)
-def estimate_bed_length_sinnott(
-    C_ads,          # mol/m3
-    u,              # m/s
-    t_ads,          # s
-    rho_adsorbent,  # kg/m3
-    f_L,            # bed usage fraction
-    q_ads,          # mol/kg
-    q_regen,        # mol/kg
-):
-    q_work = (q_ads - q_regen) * rho_adsorbent
-    length = C_ads * u * t_ads / (q_work * f_L)
-    return length
 
 # Pressure drop determination [7]
 def ergun_pressure_drop(
@@ -114,11 +102,11 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
     # Adsorbent properties
     adsorbent_properties = {
         'Zeolite 3A': {                     
-            'void fraction': 0.30,                      # -     [3]
-            'specific surface area':                    #
-            'bulk density': (620 + 680)/2,              # kg/m3 [3]
-            'temperature limit': 300.,                  # ºC    [2]
-            'specific heat': 0.74                       # kJ / kg * K (300 K) [8]
+            'void fraction': 0.30,                                  # - [3]
+            'specific surface area': 0.7 * 10**6 / ((620 + 680)/2), # m2/m3 [3]
+            'bulk density': (620 + 680)/2,                          # kg/m3 [3]
+            'temperature limit': 300.,                              # ºC    [2]
+            'specific heat': 0.74                                   # kJ / kg * K (300 K) [8]
         }
     }
 
@@ -183,6 +171,12 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
                     f"void_fraction must be provided for adsorbent '{adsorbent}'"
                 )
 
+        if particle_diameter is None:
+            if adsorbent in self.adsorbent_properties:
+                epsilon = self.adsorbent_properties[adsorbent]['void fraction']
+                specific_surface_area = self.adsorbent_properties[adsorbent]['specific surface area']
+                particle_diameter = calculate_packing_equivalent_diameter(epsilon,specific_surface_area)
+
         self.t_ads = t_ads
         self.t_regen = t_regen
         self.P_ads = P_ads
@@ -196,6 +190,7 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
         self.adsorbent = adsorbent
         self.void_fraction = void_fraction
         self.rho_adsorbent = rho_adsorbent
+        self.particle_diameter = particle_diameter
         self.f_L = f_L
 
         self.regeneration_fluid = regeneration_fluid
@@ -222,7 +217,6 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
             self.regeneration_isotherm_model = self.isotherm_models[regeneration_isotherm_model.lower()]
             self.regeneration_isotherm_args = regeneration_isotherm_args
 
-        self.particle_diameter = particle_diameter
         self.N_columns = N_columns
         self.vessel_material = vessel_material
         self.vessel_type = vessel_type
