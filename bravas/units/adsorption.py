@@ -64,12 +64,12 @@ def ergun_pressure_drop(
     dP = dP_L * L
     return dP, dP_L
 
-class GasAdsorptionColumn(PressureVessel, bst.Unit):
+class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the same calculation as TSA
     """
     """ 
     auxiliary_unit_names = (
         'feed_heater',
-        'feed_gas_heater',
+        'regen_gas_heater',
     )
 
     _N_ins = 3
@@ -109,7 +109,7 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
             'void fraction': 0.30,                                  # - [3]
             'specific surface area': 0.7 * 10**6 / ((620 + 680)/2), # m2/m3 [3]
             'bulk density': (620 + 680)/2,                          # kg/m3 [3]
-            'temperature limit': 300.,                              # ºC    [2]
+            'temperature limit': 300.+273.15,                       # K [2]
             'specific heat': 0.74                                   # kJ / kg * K (300 K) [8]
         }
     }
@@ -137,6 +137,7 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
         P_regen = None,
         T_ads = None,
         T_regen = None,
+        T_limit = None,
         regeneration_fluid = None,
         adsorbate = None,
         vessel_material = 'Stainless steel 316',
@@ -181,12 +182,17 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
                 specific_surface_area = self.adsorbent_properties[adsorbent]['specific surface area']
                 particle_diameter = calculate_packing_equivalent_diameter(epsilon,specific_surface_area)
 
+        if T_limit is None:
+            if adsorbent in self.adsorbent_properties:
+                T_limit = self.adsorbent_properties[adsorbent]['temperature limit']
+
         self.t_ads = t_ads
         self.t_regen = t_regen
         self.P_ads = P_ads
         self.P_regen = P_regen
         self.T_ads = T_ads
         self.T_regen = T_regen
+        self.T_limit = T_limit
 
         self.adsorbate = adsorbate
         self.adsorbed_fraction = adsorbed_fraction
@@ -427,25 +433,23 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):
         ## Bed regeneration
         if self.regeneration:
             flow_gas = regeneration_fluid.F_mass
-            Cp_gas = regeneration_fluid.Cp
+            Cp_gas = regeneration_fluid.Cp     
             
-            heat_gas_heater = flow_gas * Cp_gas * (self.T_regen - regeneration_fluid.T)
             heat_desorption = na_removed_ads_step * 1000 * abs(self.isosteric_heat) / self.t_regen
             heat_adsorbent = mass_adsorbent/self.t_regen * self.adsorbent_properties[self.adsorbent]['specific heat'] * (self.T_regen - self.T_ads)
             heat_required = heat_desorption + heat_adsorbent
-
-            T_out = self.T_regen - heat_required / (flow_gas * Cp_gas)
-
-            spent_fluid.T = T_out
+            
+            T_in = self.T_regen - heat_required / (flow_gas * Cp_gas)
+            heat_gas_heater = flow_gas * Cp_gas * (T_in - regeneration_fluid.T)
 
             self.regen_gas_heater.simulate(
                 run=False,
                 design_kwargs=dict(duty=heat_gas_heater)
             )
 
-            if T_out < self.T_ads:
+            if T_in > self.T_limit:
                 warn(
-                    f"Regeneration gas cooled to much due to desorption and bed heating. Insufficient energy for '{regeneration_fluid.ID}' at {regeneration_fluid.T:.2f} K."
+                    f"Temperature of regeneration gas is above the maximum temperature of '{self.adsorbent}'. T_in: {T_in:.2f} | T_limit: {self.T_limit:.2f}"
                 )
 
     @staticmethod
