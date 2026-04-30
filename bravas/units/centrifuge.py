@@ -34,6 +34,7 @@ class SolidsSeparator(bst.Splitter):
     def _init(self, split, 
             order=None, moisture_content=None, 
             moisture_ID=None,
+            solute_ID=None,
             strict_moisture_content=None
         ):
         bst.Splitter._init(self, order=order, split=split)
@@ -43,6 +44,8 @@ class SolidsSeparator(bst.Splitter):
         if moisture_content is not None:
             if moisture_ID is None: moisture_ID = '7732-18-5'
             self.moisture_ID = moisture_ID
+            if solute_ID is None: solute_ID = ()
+            self.solute_ID = solute_ID
     
     def _run(self):
         if self.moisture_content is None:
@@ -53,7 +56,7 @@ class SolidsSeparator(bst.Splitter):
             moisture_ID = self.moisture_ID
             self.isplit[moisture_ID] = 0.
             mix_and_split_with_moisture_content(
-                self.ins, *self.outs, self.split, self.moisture_content, self.moisture_ID,
+                self.ins, *self.outs, self.split, self.moisture_content, self.moisture_ID, self.solute_ID,
                 self.strict_moisture_content,
             )
 
@@ -109,6 +112,7 @@ class SolidsCentrifuge(SolidsSeparator):
               solids=None, 
               moisture_content=0.40,
               moisture_ID=None,
+              solute_ID=None,
               centrifuge_type='scroll_solid_bowl',
               kWh_per_kg = 0.010,
               strict_moisture_content=None,
@@ -119,6 +123,7 @@ class SolidsCentrifuge(SolidsSeparator):
             split=split, 
             order=order, 
             moisture_ID=moisture_ID,
+            solute_ID=solute_ID,
             strict_moisture_content=strict_moisture_content
         )
         if solids is None:

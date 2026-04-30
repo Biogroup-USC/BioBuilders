@@ -7,7 +7,7 @@ from warnings import warn
 # Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
 # Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
 def mix_and_split_with_moisture_content(ins, retentate, permeate,
-                                        split, moisture_content, ID=None,
+                                        split, moisture_content, solvent_IDs=None, solute_IDs=None,
                                         strict=None):
     """
     Run splitter mass and energy balance with mixing all input streams and 
@@ -50,11 +50,11 @@ def mix_and_split_with_moisture_content(ins, retentate, permeate,
 
     """
     mix_and_split(ins, retentate, permeate, split)
-    adjust_moisture_content(retentate, permeate, moisture_content, ID, strict)
+    adjust_moisture_content(retentate, permeate, moisture_content, solvent_IDs, solute_IDs, strict)
 
 # Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
 # Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
-def adjust_moisture_content(retentate, permeate, moisture_content, ID=('Water',), strict=None,):
+def adjust_moisture_content(retentate, permeate, moisture_content, solvent_IDs=('Water',), solute_IDs=(), strict=None,):
     """
     Remove water from permate to adjust retentate moisture content.
     
@@ -94,8 +94,8 @@ def adjust_moisture_content(retentate, permeate, moisture_content, ID=('Water',)
 
     """
     # Checks
-    if isinstance(ID,str):
-        ID = (ID,)
+    if isinstance(solvent_IDs,str):
+        solvent_IDs = (solvent_IDs,)
 
     mc = moisture_content
     if not 0 <= mc <= 1:
@@ -103,7 +103,7 @@ def adjust_moisture_content(retentate, permeate, moisture_content, ID=('Water',)
     
     # Calculate dry mass
     F_mass = retentate.F_mass
-    retentate_liquid = sum(retentate.imass[i] for i in ID)
+    retentate_liquid = sum(retentate.imass[i] for i in solvent_IDs)
     dry_mass = F_mass - retentate_liquid
     if dry_mass < 0:
         raise ValueError("Calculated dry mass is negative. Check species in ID.")
@@ -122,13 +122,15 @@ def adjust_moisture_content(retentate, permeate, moisture_content, ID=('Water',)
     
     # Distribute solvent and soluble chemicals
     if delta_liquid > 0:
-        liquid = sum(permeate.imass[i] for i in ID)
+        liquid = sum(permeate.imass[i] for i in solvent_IDs)
         if liquid <= 0:
+            retentate.show(composition=True,flow='kg/hr')
+            permeate.show(composition=True,flow='kg/hr')
             raise InfeasibleRegion(
-                f"Not enough permeate {ID}; permeate moisture content is infeasible"
+                f"Not enough permeate {solvent_IDs} and permeate flow {permeate.F_mass:.3f} kg/hr; retentate moisture content: {moisture_content} and retentate flow {retentate.F_mass:.3f} kg/hr"
             )
 
-        for chemical in ID:
+        for chemical in solvent_IDs:
             # Calculate the mass fraction of chemical
             fraction = permeate.imass[chemical] / liquid
             chemical_mass = fraction * delta_liquid
@@ -142,10 +144,13 @@ def adjust_moisture_content(retentate, permeate, moisture_content, ID=('Water',)
             if permeate.imass[retentate_key] < 0:
                 if strict is None: strict = True
                 if strict:
-                    raise InfeasibleRegion(f'not enough {chemical_mass}; permeate moisture content')
+                    raise InfeasibleRegion(f'not enough {chemical} ({chemical_mass:.3f} kg/hr); retentate moisture content is infeasible')
                 else:
                     retentate.imass[retentate_key] -= permeate.imass[permeate_key]
                     permeate.imass[permeate_key] = 0.
+        
+        adjust_solute_concentration(retentate, permeate, delta_liquid, solvent_IDs, solute_IDs, strict)
+
     elif 0 > delta_liquid > 1e-12:
         return
     else:
@@ -192,3 +197,41 @@ def mix_and_split(ins, top, bottom, split):
     """
     top.mix_from(ins)
     top.split_to(top, bottom, split, energy_balance=True)
+
+def adjust_solute_concentration(
+        retentate,
+        permeate,
+        delta_liquid,
+        solvent_IDs,
+        solute_IDs,
+        strict=True
+):
+    """
+    """
+    if delta_liquid <= 0:
+        return
+
+    total_solvent = sum(permeate.imass[i] for i in solvent_IDs)
+
+    if total_solvent <= 0:
+        return
+
+    for solute in solute_IDs:
+
+        C = permeate.imass[solute] / total_solvent
+
+        solute_mass = C * delta_liquid
+
+        retentate.imass[solute] += solute_mass
+        permeate.imass[solute] -= solute_mass
+
+        if permeate.imass[solute] < 0:
+            if strict:
+                raise InfeasibleRegion(
+                    f"Not enough {solute} ({solute_mass:.3f} kg/hr) "
+                    "for entrainment with retained liquid"
+                )
+            else:
+                deficit = -permeate.imass[solute]
+                retentate.imass[solute] -= deficit
+                permeate.imass[solute] = 0.0
