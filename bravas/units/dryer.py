@@ -4,7 +4,6 @@ import biosteam as bst
 import flexsolve as flx
 import numpy as np
 from thermosteam import separations as sep
-from ..tools.moisture_adjust import adjust_moisture_content
 
 __all__ = (
     "SprayDryer", "DrumDryer"
@@ -330,7 +329,7 @@ class DrumDryer(bst.Unit):
     
     def _init(self, split, RH=0.80, H=20., length_to_diameter=25, T=343.15, P=10*101325,
               moisture_content=0.15, utility_agent='Natural gas', gas_composition=None,
-              moisture_ID=None, solute_ID=None, kW_per_m2=1.3):
+              moisture_ID=None, kW_per_m2=1.3):
         self._isplit = self.chemicals.isplit(split)
         self.define_utility('Natural gas', self.natural_gas)
         self.P = P
@@ -342,7 +341,6 @@ class DrumDryer(bst.Unit):
         self.moisture_content = moisture_content
         self.utility_agent = utility_agent
         self.moisture_ID = moisture_ID if moisture_ID is not None else "Water"
-        self.solute_ID = solute_ID
 
         # new properties
         self.kW_per_m2 = kW_per_m2
@@ -377,7 +375,7 @@ class DrumDryer(bst.Unit):
         wet_solids, air, natural_gas = self.ins
         dry_solids, hot_air, emissions = self.outs
         wet_solids.split_to(hot_air, dry_solids, self.split)
-        adjust_moisture_content(dry_solids, hot_air, self.moisture_content, self.moisture_ID, self.solute_ID)
+        sep.adjust_moisture_content(dry_solids, hot_air, self.moisture_content, self.moisture_ID)
         hot_air.P = air.P = self.P
         emissions.phase = air.phase = natural_gas.phase = hot_air.phase = 'g'
         design_results = self.design_results
