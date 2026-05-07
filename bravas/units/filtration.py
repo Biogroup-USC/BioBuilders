@@ -3,7 +3,6 @@
 
 import biosteam as bst
 import numpy as np
-from .centrifuge import SolidsSeparator
 from ..tools.mathtools.unitsarea import calculate_rdvf_area
 from ..tools.streamtools import main_chemical_mass_basis
 
@@ -11,6 +10,75 @@ __all__ = (
     'RotaryVacuumFilter',
     'RotatoryVacuumDrumFilter',
 )
+
+# Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
+# Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
+class SolidsSeparator(bst.Splitter):
+    """
+    Create SolidsSeparator object.
+    
+    Parameters
+    ----------
+    ins : 
+        Inlet fluids with solids.
+    outs : 
+        * [0] Retentate.
+        * [1] Permeate.
+    split : array_like
+        Component splits to 0th output stream
+    moisture_content : float
+        Fraction of water in solids
+    
+    """
+    _N_ins = 1
+    _ins_size_is_fixed = False
+    
+    def _init(self, split, 
+            order=None, moisture_content=None, 
+            moisture_ID=None,
+            strict_moisture_content=None
+        ):
+        bst.Splitter._init(self, order=order, split=split)
+        #: Moisture content of retentate
+        self.moisture_content = moisture_content
+        self.strict_moisture_content = strict_moisture_content
+        if moisture_content is not None:
+            if moisture_ID is None: moisture_ID = '7732-18-5'
+            self.moisture_ID = moisture_ID
+        self._base_cost_filter = None
+        self._base_area_filter = None
+        self._base_n_cost_filter = None
+        self._CE_base_filter = None
+    
+    def _run(self):
+        if self.moisture_content is None:
+            bst.separations.mix_and_split(
+                self.ins, *self.outs, self.split,
+            )
+        else:
+            moisture_ID = self.moisture_ID
+            self.isplit[moisture_ID] = 0.
+            bst.separations.mix_and_split_with_moisture_content(
+                self.ins, *self.outs, self.split, self.moisture_content, self.moisture_ID,
+                self.strict_moisture_content,
+            )
+
+
+    #     if self._recycle_system and self._system.algorithm == 'Phenomena oriented':
+    #         ID = self.moisture_ID
+    #         if not ID: return
+    #         top, bottom = self.outs
+    #         top_mol = top.imol[ID]
+    #         self.isplit[ID] = top_mol / (top_mol + bottom.imol[ID])
+            
+    # def _update_nonlinearities(self):
+    #     outs = self.outs
+    #     data = [i.get_data() for i in outs]
+    #     self._run()
+    #     for i, j in zip(outs, data): i.set_data(j)
+
+# Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
+# Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
 class RotaryVacuumFilter(SolidsSeparator):
     """
     Create a RotaryVacuumFilter object.
@@ -50,89 +118,65 @@ class RotaryVacuumFilter(SolidsSeparator):
     _units = {'Area': 'm^2',
               'Individual area': 'm^2'}
 
-    def _init(self,
-              split,
-              order=None,
-              moisture_content=0.40,
-              moisture_ID=None,
-              solute_ID=None,
-              strict_moisture_content=None
-            ):
-        SolidsSeparator._init(
-            self,
-            moisture_content=moisture_content,
-            split=split,
-            order=order,
-            moisture_ID=moisture_ID,
-            solute_ID=solute_ID,
-            strict_moisture_content=strict_moisture_content,
-        )
-
-        self._base_cost = None
-        self._base_n_cost = None
-        self._base_area = None
-        self._base_CE = None
-
-
     def _design(self):
         flow = sum([stream.F_mass for stream in self.outs])
         self.design_results['Area'] = self._calc_Area(flow, self.filter_rate) * 0.092903
 
     @property
-    def base_cost(self):
+    def base_cost_filter(self):
         """
         """
-        if self._base_cost is None:
-            self._base_cost = 280000     # USD
-        return self._base_cost   
+        if self._base_cost_filter is None:
+            self._base_cost_filter = 280000     # USD
+        return self._base_cost_filter   
 
-    @base_cost.setter
-    def base_cost(self, value):
+    @base_cost_filter.setter
+    def base_cost_filter(self, value):
         """
         """
-        self._base_cost = value
-
-    @property
-    def base_area(self):
-        """
-        """
-        if self._base_area is None:
-            self._base_area = 22.0       # m3
-        return self._base_area
-    
-    @base_area.setter
-    def base_area(self, value):
-        """
-        """
-        self._base_area = value
+        self._base_cost_filter = value
 
     @property
-    def base_n_cost(self):
+    def base_area_filter(self):
         """
         """
-        if self._base_n_cost is None:
-            self._base_n_cost = 0.65
-        return self._base_n_cost
+        if self._base_area_filter is None:
+            self._base_area_filter = 22.0       # m3
+        return self._base_area_filter
     
-    @base_n_cost.setter
-    def base_n_cost(self, value):
+    @base_area_filter.setter
+    def base_area_filter(self, value):
         """
         """
-        self._base_n_cost = value
+        self._base_area_filter = value
+
+    @property
+    def base_n_cost_filter(self):
+        """
+        """
+        if self._base_n_cost_filter is None:
+            self._base_n_cost_filter = 0.65
+        return self._base_n_cost_filter
+    
+    @base_n_cost_filter.setter
+    def base_n_cost_filter(self, value):
+        """
+        """
+        self._base_n_cost_filter = value
     
     @property
-    def base_CE(self):
+    def CE_base_filter(self):
         """
         """
-        if self._base_CE is None:
-            self._base_CE = 1000.0
-        return self._base_CE
+        if self._CE_base_filter is None:
+            self._CE_base_filter = 1000.0
+        return self._CE_base_filter
     
-    @base_CE.setter
-    def base_CE(self, value):
+    @CE_base_filter.setter
+    def CE_base_filter(self, value):
         """
         """
-        self._base_CE = value
+        self._CE_base_filter = value
 
     def _cost(self):
         Design = self.design_results
@@ -141,8 +185,8 @@ class RotaryVacuumFilter(SolidsSeparator):
         ## The base cost accounts for a rotatory drum filter, vacuum with discharger,
         ## filtrate pumps, vacuum system, motor and drive.
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Filter_Purchase_Cost = self.base_cost * (Area/self.base_area)**self.base_n_cost
-        self.baseline_purchase_costs['Vessels'] = Filter_Purchase_Cost * bst.CE/self.base_CE
+        Filter_Purchase_Cost = self.base_cost_filter * (Area/self.base_area_filter)**self.base_n_cost_filter
+        self.baseline_purchase_costs['Vessels'] = Filter_Purchase_Cost * bst.CE/self.CE_base_filter
         
     @staticmethod
     def _calc_Area(flow, filter_rate):
