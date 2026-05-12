@@ -114,7 +114,7 @@ class SolidsCentrifuge(SolidsSeparator):
               moisture_ID=None,
               solute_ID=None,
               centrifuge_type='scroll_solid_bowl',
-              kWh_per_kg = 0.010,
+              kWh_per_kg = 0.0055,
               strict_moisture_content=None,
             ):
         SolidsSeparator._init(

@@ -280,7 +280,7 @@ class MembraneFiltration(bst.Unit):
         """
         """
         if self._kWh_per_kg is None:
-            self._kWh_per_kg = 10**-3   # Lower value from http://dx.doi.org/10.1016/j.jclepro.2016.06.164
+            self._kWh_per_kg = 0.0055   # mean value from http://dx.doi.org/10.1016/j.jclepro.2016.06.164
         return self._kWh_per_kg
 
     def _design(self):
