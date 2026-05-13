@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import biosteam as bst
 import flexsolve as flx
+from math import ceil
 from biosteam._tea import (
-    add_all_replacement_costs_to_cashflow_array,
     solve_payment,
     loan_principal_with_interest,
     taxable_earnings_with_fowarded_losses,
@@ -22,6 +22,49 @@ __all__ = (
     "InflationTEA"
 )
 
+# Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
+# Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
+@njit(cache=True)
+def add_replacement_cost_to_cashflow_array(equipment_installed_cost, 
+                                           equipment_lifetime, 
+                                           cashflow_array, 
+                                           venture_years,
+                                           start):
+    N_purchases = ceil(venture_years / equipment_lifetime) - 1
+    equipment_lifetime_index = start
+    for _ in range(N_purchases):
+        equipment_lifetime_index += equipment_lifetime
+        cashflow_array[int(equipment_lifetime_index)] += equipment_installed_cost
+
+# Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
+# Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
+def add_all_replacement_costs_to_cashflow_array(unit_capital_cost, cashflow_array, 
+                                                venture_years, start,
+                                                lang_factor):
+    equipment_lifetime = unit_capital_cost.equipment_lifetime
+    if equipment_lifetime:
+        if lang_factor:
+            installed_costs =  {i: j*lang_factor for i, j in unit_capital_cost.purchase_costs.items()}
+        else:
+            installed_costs = unit_capital_cost.installed_costs
+        if isinstance(equipment_lifetime, int):
+             add_replacement_cost_to_cashflow_array(sum(installed_costs.values()), 
+                                                    equipment_lifetime,
+                                                    cashflow_array,
+                                                    venture_years,
+                                                    start)
+        elif isinstance(equipment_lifetime, dict):
+            for name, installed_cost in installed_costs.items():
+                lifetime = equipment_lifetime.get(name)
+                if lifetime:
+                    add_replacement_cost_to_cashflow_array(installed_cost, 
+                                                           lifetime,
+                                                           cashflow_array,
+                                                           venture_years,
+                                                           start)
+
+# Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
+# Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
 @njit(cache = True)
 def fill_nominal_taxable_and_nontaxable_cashflows_without_loan(
     FCI, WC, sales0, VOC_mat0, VOC_util0, FOC0,
@@ -104,6 +147,8 @@ def fill_nominal_taxable_and_nontaxable_cashflows_without_loan(
                 + w0 * startup_FOCfrac * FOC + w1 * FOC)
     S[start] = w0 * startup_salesfrac * sales + w1 * sales
 
+# Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
+# Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
 def nominal_taxable_and_nontaxable_cashflows(
     FCI, WC, sales0, VOC_mat0, VOC_util0, FOC0,
     construction_schedule, start,
@@ -282,6 +327,8 @@ class TEA(bst.TEA):
         foc_from_labour = self.labor_cost*(1 + self.fringe_benefits + self.administration)
         return foc_from_fci + foc_from_labour
 
+# Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
+# Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
 class InflationTEA(TEA):
     """
 
