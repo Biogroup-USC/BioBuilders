@@ -331,70 +331,181 @@ class TEA(bst.TEA):
 # Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
 class InflationTEA(TEA):
     """
+    Techno-economic analysis (TEA) model with explicit nominal cashflow
+    treatment and category-specific inflation.
 
-    This object performs the techno-economic analysis of the system
-    given.
+    This class extends the base ``TEA`` object by introducing inflation-aware
+    cashflow calculations for:
+    
+    - Sales
+    - Raw materials
+    - Utilities
+    - Fixed operating costs (FOC)
+    - Capital expenditures (CAPEX)
+    - Working capital (WC)
+
+    All economic calculations are performed in nominal monetary terms.
+    Therefore:
+    
+    - All escalated yearly cashflows are nominal
+    - Loan interests and debt payments are nominal
+    - The discount rate (IRR) must also be nominal
+
+    The framework is internally consistent under a nominal financial
+    formulation:
+
+    Base-year values
+    inflation escalation
+    nominal yearly cashflows
+    nominal discounting
+
+    Notes
+    -----
+    The IRR supplied to this model must include inflation expectations.
+    Using a real discount rate together with nominal cashflows would lead
+    to inconsistent net present value (NPV) calculations.
+
+    The relationship between nominal and real discount rates is:
+
+    .. math::
+
+        1 + i_n = (1 + i_r)(1 + pi)
+
+    where:
+
+    - :math:`i_n` is the nominal discount rate
+    - :math:`i_r` is the real discount rate
+    - :math:`pi` is the inflation rate
+
+    Inflation modelling
+    -------------------
+    Inflation can be defined globally or independently for each economic
+    category through:
+    
+    - ``sales_rates``
+    - ``materials_rates``
+    - ``utilities_rates``
+    - ``foc_rates``
+    - ``capex_rates``
+    - ``wc_rates``
+
+    Rates may be provided as:
+    
+    - A constant annual inflation rate (float)
+    - A year-indexed mapping ``{year: rate}``
+
+    When a category-specific inflation profile is not provided,
+    ``global_rates`` is used as fallback.
+
+    Financing assumptions
+    ---------------------
+    Financing is also treated in nominal terms.
+
+    Therefore:
+    
+    - Loan principal is based on nominal CAPEX
+    - Interest rates are nominal
+    - Debt payments are nominal
+
+    This corresponds to a conventional fixed-rate nominal financing model.
 
     Parameters
     ----------
     system : bst.System
-        BioSTEAM System object which simulates the process.
+        BioSTEAM System object representing the process flowsheet.
+
     IRR : float
-        Internal Return Rate. Set to 0.10 by default.
-    duration : tuple
-        Lifetime of the project used to calculate all financial
-        indicators and cashflows.
+        Nominal internal rate of return used for discounting nominal
+        cashflows.
+
+    duration : tuple[int, int]
+        Project lifetime in years as ``(start_year, end_year)``.
+
     depreciation : str | np.ndarray
-        Depreciation schedule array or string with format '{schedule}{years}',
-        where years is the number of years until the property value is 0 and schedule
-        is one of the following: 'MACRS', 'SL', 'DDB' or 'SYD'. Default to venture years.
+        Depreciation schedule specification.
+
     income_tax : float
-        Income tax rate. Set to 0.25 by default which is the corporate rate in Spain.
+        Corporate income tax rate.
+
     operating_days : float
-        Number of operating days per year.
+        Annual operating days.
+
     lang_factor : float | None
-        Lang factor for estimating the fixed capital investment from total purchase cost.
-        If no lang is provided, it is estimated using the bare module factors.
+        Lang factor for estimating installed equipment costs.
+
     labor_cost : float
-        Total labor cost per year ($/year).
+        Annual labour cost in base-year currency.
+
     fringe_benefits : float
-        Fraction of labor cost for fringe benefits. Set to 0.247 by default since it is the
-        average inside UE.
+        Fraction of labour cost associated with fringe benefits.
+
     property_tax : float
-        Property tax as a fraction of fixed capital investment. Set to 1% by default.
+        Property tax as fraction of fixed capital investment (FCI).
+
     property_insurance : float
-        Insurance as a fraction of fixed capital investment. Set to 1% by default.
-    maintenance : float
-        Equipment maintenance costs as a fraction of fixed capital investment. Set to
-        7% by default.
+        Insurance cost as fraction of FCI.
+
     supplies : float
-        Operating supplies as a fraction of maintenance. Set to 15% by default.
+        Operating supplies as fraction of maintenance cost.
+
+    maintenance : float
+        Maintenance cost as fraction of FCI.
+
     administration : float
-        Administration cost as a fraction of labour cost. Set to 20% by default.
+        Administrative cost as fraction of labour cost.
+
     construction_schedule : tuple
-        Schedule for plant construction which represents the fraction of the fixed capital
-        investment spent each year. Note that the construction years will be calculated based
-        on the tuple length. Set to (0.5,0.5) by default which means 50% the first year and 50%
-        the second year.
+        Fractional distribution of construction expenditures over
+        construction years.
+
     startup_months : float
-        Startup time in months until the steady state is achieved.
+        Startup duration in months.
+
     startup_FOCfrac : float
         Fraction of fixed operating costs incurred during startup.
+
     startup_VOCfrac : float
         Fraction of variable operating costs incurred during startup.
+
     startup_salesfrac : float
-        Fraction of sales during startup.
+        Fraction of sales achieved during startup.
+
     WC_over_FCI : float
-        Working capital as a fraction of fixed capital investment.
+        Working capital requirement as fraction of FCI.
+
     finance_interest : float
-        Yearly interest of loan as a fraction.
+        Nominal annual loan interest rate.
+
     finance_years : int
-        Number of years the loan is paid for.
+        Loan repayment duration in years.
+
     finance_fraction : float
-        Fraction of capital cost which needs to be financed.
+        Fraction of capital investment financed through debt.
+
     accumulate_interest_during_construction : bool
-        Whether to accumulate interest during construction years. Set
-        to False by default.
+        Whether interest accrued during construction is capitalized.
+
+    sales_rates : float | Mapping[int, float]
+        Inflation profile for product sales.
+
+    materials_rates : float | Mapping[int, float]
+        Inflation profile for raw material costs.
+
+    utilities_rates : float | Mapping[int, float]
+        Inflation profile for utility costs.
+
+    foc_rates : float | Mapping[int, float]
+        Inflation profile for fixed operating costs.
+
+    capex_rates : float | Mapping[int, float]
+        Inflation profile for capital expenditures.
+
+    wc_rates : float | Mapping[int, float]
+        Inflation profile for working capital.
+
+    global_rates : float | Mapping[int, float]
+        Global fallback inflation profile used when category-specific
+        inflation rates are not provided.
 
     """
     def __init__(self,
@@ -497,17 +608,6 @@ class InflationTEA(TEA):
         VOC_mat0, VOC_util0 = self.system.material_cost, self.system.utility_cost
         sales0 = self.sales
 
-        # Arrays for calculating cashflow
-        C_FC, C_WC, D, S, C, L, LP = np.zeros((7, start + years))
-
-        # Fill depreciation array
-        self._fill_depreciation_array(D, start, years, TDC)
-
-        # Add the cost of the replacements
-        units_cap_costs = self.system.unit_capital_costs if isinstance(self.system, bst.AgileSystem) else self.system.cost_units
-        for unit in units_cap_costs:
-            add_all_replacement_costs_to_cashflow_array(unit, C_FC, years, start, self.system.lang_factor)
-        
         # Load nominal factor with _factor helper
         f_sales = self._factor(self.sales_rates)
         f_capex = self._factor(self.capex_rates)
@@ -516,6 +616,19 @@ class InflationTEA(TEA):
         f_foc = self._factor(self.foc_rates)
         f_wc = self._factor(self.wc_rates)
 
+        # Arrays for calculating cashflow
+        C_FC, C_WC, D, S, C, L, LP = np.zeros((7, start + years))
+
+        # Fill depreciation array
+        nominal_TDC = np.sum(TDC * np.asarray(self.construction_schedule) * f_capex[:start])
+
+        self._fill_depreciation_array(D, start, years, nominal_TDC)
+
+        # Add the cost of the replacements
+        units_cap_costs = self.system.unit_capital_costs if isinstance(self.system, bst.AgileSystem) else self.system.cost_units
+        for unit in units_cap_costs:
+            add_all_replacement_costs_to_cashflow_array(unit, C_FC, years, start, self.system.lang_factor)
+        
         # calculate taxable and non taxable cashflows
         return (
             *nominal_taxable_and_nontaxable_cashflows(
@@ -533,20 +646,24 @@ class InflationTEA(TEA):
         """
         """
         # Base-year cashflows
-        TDC, FCI = self.TDC, self._FCI(self.TDC)
+        TDC = self.TDC 
+        FCI = self._FCI(TDC)
+        
         FOC0 = self._FOC(FCI)
-        VOC_mat0, VOC_util0 = self.system.material_cost, self.system.utility_cost
+
+        system = self.system
+        VOC_mat0 =  system.material_cost
+        VOC_util0 = system.utility_cost
+        
         sales0 = self.sales
         
         # Lifetime
-        start, years = self._start, self._years
+        start = self._start
+        years = self._years
         length = start + years
 
         # Generate arrays
         C_D, C_FC, C_WC, D, L, LI, LP, LPl, C, S, T, I, TE, FL, NE, CF, DF, NPV, CNPV = data = np.zeros((19, length))
-
-        # Fill depreciation
-        self._fill_depreciation_array(D, start, years, TDC)
 
         # Build nominal factors array
         f_sales = self._factor(self.sales_rates)
@@ -556,87 +673,97 @@ class InflationTEA(TEA):
         f_foc = self._factor(self.foc_rates)
         f_wc = self._factor(self.wc_rates)
         
-        # Nominalise CAPEX
-        system = self.system
-        lang_factor = self.lang_factor
-        unit_capital_costs = system.unit_capital_costs if isinstance(system, bst.AgileSystem) else system.cost_units
-        for unit in unit_capital_costs: add_all_replacement_costs_to_cashflow_array(unit, C_FC, years, start, lang_factor)
+        # Fill depreciation
+        nominal_TDC = np.sum(TDC*np.asarray(self.construction_schedule) * f_capex[:start])
 
-        C_FC[:start] = FCI * self.construction_schedule
-        C_FC *= f_capex
-
-        # Nominalise depreciable capital
-        C_D[:start] = TDC * self.construction_schedule
-        C_D *= f_capex
-
-        # Nominalise OPEX and sales
-        FOC_nom         =   FOC0        *   f_foc[start:]
-        VOC_mat_nom     =   VOC_mat0    *   f_mat[start:]
-        VOC_util_nom    =   VOC_util0   *   f_util[start:]
-        S_nom           =   sales0      *   f_sales[start:]
-
-        # Calculate S and C
-        start1 = start + 1
-        C[start1:] = (FOC_nom + VOC_mat_nom + VOC_util_nom)[1:]
-        S[start1:] = S_nom[1:]
-
-        # Calculate C and S of first year (including startup)
-        w0 = self._startup_time
-        w1 = 1. - w0
-        VOC = VOC_mat_nom[0] + VOC_util_nom[0]
-        FOC = FOC_nom[0]
-        sales = S_nom[0]
-
-        C[start] = (w0 * self.startup_VOCfrac * VOC + w1 * VOC
-                    + w0 * self.startup_FOCfrac * FOC + w1 * FOC)
-        S[start] = w0 * self.startup_salesfrac * sales + w1 * sales
-
-        # Nominalise working capital
+        self._fill_depreciation_array(D, start, years, nominal_TDC)
+        
+        # Working capital
         WC = self.WC_over_FCI * FCI
-        C_WC[start-1] = WC * f_wc[start-1]
-        C_WC[-1] = -WC * f_wc[-1]
+
+        # Fill taxable and non-taxable cashflows
+        taxable_cashflow, nontaxable_cashflow = (
+            nominal_taxable_and_nontaxable_cashflows(
+                FCI=FCI,
+                WC=WC,
+                sales0=sales0,
+                VOC_mat0=VOC_mat0,
+                VOC_util0=VOC_util0,
+                FOC0=FOC0,
+                construction_schedule=self.construction_schedule,
+                start=start,
+                C_FC=C_FC,
+                C_WC=C_WC,
+                D=D,
+                S=S,
+                C=C,
+                L=L,
+                LP=LP,
+                f_sales=f_sales,
+                f_capex=f_capex,
+                f_mat=f_mat,
+                f_util=f_util,
+                f_foc=f_foc,
+                f_wc=f_wc,
+                startup_time=self._startup_time,
+                startup_VOCfrac=self.startup_VOCfrac,
+                startup_FOCfrac=self.startup_FOCfrac,
+                startup_salesfrac=self.startup_salesfrac,
+                finance_interest=self.finance_interest,
+                finance_years=self.finance_years,
+                finance_fraction=self.finance_fraction,
+                accumulate_interest_during_construction=self.accumulate_interest_during_construction,
+            )
+        )
+
+        # Depreciable capital
+        C_D[:start] = TDC * np.asarray(self.construction_schedule) * f_capex[:start]
 
         # Add finance if a fraction of TCI is a loan; calculate taxable and non taxable cashflows
         if self.finance_interest:
-            # Financial parameters
+
             interest = self.finance_interest
             years_pay = self.finance_years
             end = start + years_pay
-            
-            # Calculate loan
-            L[:start] = loan = self.finance_fraction * (C_FC[:start])
 
-            # Calculate 
+            loan_principal = 0.0
+
             if self.accumulate_interest_during_construction:
-                initial_loan_principal = loan_principal_with_interest(loan, interest)
-            else:
-                initial_loan_principal = loan.sum()
-            
-            # Solve loan payment
-            LP[start:end] = solve_payment(initial_loan_principal, interest, years_pay)
-            
-            # Calculate interest during construction
-            loan_principal = 0
-            if self.accumulate_interest_during_construction:
+
                 for i in range(end):
-                    LI[i] = li = (loan_principal + L[i]) * interest
-                    LPl[i] = loan_principal = loan_principal - LP[i] + li + L[i]
+
+                    LI[i] = li = (
+                        loan_principal + L[i]
+                    ) * interest
+
+                    LPl[i] = loan_principal = (
+                        loan_principal
+                        - LP[i]
+                        + li
+                        + L[i]
+                    )
+
             else:
+
                 for i in range(end):
+
                     if i < start:
                         li = 0.0
                     else:
-                        li = (loan_principal + L[i]) * interest
+                        li = (
+                            loan_principal + L[i]
+                        ) * interest
+
                     LI[i] = li
-                    LPl[i] = loan_principal = loan_principal - LP[i] + li + L[i]
+
+                    LPl[i] = loan_principal = (
+                        loan_principal
+                        - LP[i]
+                        + li
+                        + L[i]
+                    )
+
                 LI[:start] = L[:start] * interest
-            taxable_cashflow = S - C - D - LP
-            nontaxable_cashflow = D + L -C_FC - C_WC
-            if not self.accumulate_interest_during_construction:
-                nontaxable_cashflow[:start] -= LI[:start]
-        else:
-            taxable_cashflow = S - C - D
-            nontaxable_cashflow = D - C_FC - C_WC
         
         # Taxable earnings with forwarded losses
         TE[:] = taxable_earnings_with_fowarded_losses(taxable_cashflow)
@@ -740,7 +867,8 @@ class InflationTEA(TEA):
         start = self._start
         sales_coefficients[:start] = 0
         w0 = self._startup_time
-        sales_coefficients[start] =  w0*self.startup_salesfrac + (1.-w0)
+        w1 = 1.-w0
+        sales_coefficients[start] =  w0*self.startup_salesfrac + w1
         
         # Scale sales
         sales_coefficients *= self._factor(self.sales_rates)
