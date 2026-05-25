@@ -634,7 +634,7 @@ class InflationTEA(TEA):
         # Base-year cashflows
         TDC, FCI = self.TDC, self._FCI(self.TDC)
         FOC0 = self._FOC(FCI)
-
+        start, years = self._start, self._years
         VOC_mat0 = self.system.material_cost
         VOC_util0 = self._utility_costs(self.system.utility_cost)
         sales0 = self.sales
