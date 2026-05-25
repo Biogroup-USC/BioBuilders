@@ -719,5 +719,7 @@ class ContourStudy:
             if path:
                 fig.savefig(path)
             figs.append((fig, ax, cf))
+
+            plt.close()
         
         return figs

@@ -719,6 +719,21 @@ class InflationTEA(TEA):
         # Depreciable capital
         C_D[:start] = TDC * np.asarray(self.construction_schedule) * f_capex[:start]
 
+        units_cap_costs = (
+            self.system.unit_capital_costs
+            if isinstance(self.system, bst.AgileSystem)
+            else self.system.cost_units
+        )
+        
+        for unit in units_cap_costs:
+            add_all_replacement_costs_to_cashflow_array(
+                unit,
+                C_FC,
+                years,
+                start,
+                self.system.lang_factor
+            )
+
         # Add finance if a fraction of TCI is a loan; calculate taxable and non taxable cashflows
         if self.finance_interest:
 
