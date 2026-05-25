@@ -332,9 +332,6 @@ class MultiEffectEvaporator(bst.Unit):                                      #TOD
             total_volume += 0.0283168466 * np.pi * L * R * R # m3
         Design['Volume'] = total_volume
 
-        # Compute the heat utility requirements
-        self.add_heat_utility(duty, T_in = Tci, T_out = Tco)
-
         # Compute the power utility requirements
         self.vacuum_system = bst.VacuumSystem(
             self, self.vacuum_system_preference, vessel_volume = total_volume, P_suction = self.outs[0].P,

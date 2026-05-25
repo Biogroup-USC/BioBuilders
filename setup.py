@@ -1,9 +1,8 @@
-
 from setuptools import setup, find_packages
 
 setup(
     name='bravas',
-    version='0.31.5',
+    version='0.36.0',
     author= "Isaac, Andrea",
     author_email= "isaacleis.garrote@usc.es",
     description = 'Library to perform biorefinery and value chain assestment',  

@@ -1,0 +1,23 @@
+{
+    "name": "Naringenin_Soluble",
+    "source": {
+        "origin": "user defined",
+        "identifier": "",
+        "notes": "Built from different papers"
+    },
+    "CAS": null,
+    "formula": "C15H1205",
+    "MW": 272.25,
+    "aliases": null,
+    "phase": "s",
+    "phase_ref": "s",
+    "Cp": 2.1,
+    "rho": 1500,
+    "V": null,
+    "properties":{
+
+    },
+    "copy_missing_from": "Water",
+    "notes": "",
+    "is_pseudochemical": null
+}

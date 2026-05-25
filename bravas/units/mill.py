@@ -76,6 +76,13 @@ class BallMill(bst.Unit):
             self._power_consumption = 0.016 # kWh upper value for grinding from: http://dx.doi.org/10.1016/j.jclepro.2016.06.164
         return self._power_consumption
     
+    @power_consumption.setter
+    def power_consumption(self,value):
+        """
+        This setter allows to change power consumption.
+        """
+        self._power_consumption = value
+
     def _design(self):
         """
         """
@@ -248,6 +255,13 @@ class AttritionMill(bst.Unit):
         if self._power_consumption is None:
             self._power_consumption = 0.016     # kWh/kg from http://dx.doi.org/10.1016/j.jclepro.2016.06.164 / 16 kWh/ton is the upper value for grinding
         return self._power_consumption
+    
+    @power_consumption.setter
+    def power_consumption(self,value):
+        """
+        This setter allows to change power consumption.
+        """
+        self._power_consumption = value
 
     def _design(self):
         """

@@ -286,7 +286,7 @@ def agitator_volumetric_power_determination(
     method: Literal[
         "Piccinno method",
         "Zhou method",
-        "Sinnott heuristics",
+        "Sinnot heuristics",
         "Agitation power equation"
     ] = "Agitation power equation",
     Np: float = None,

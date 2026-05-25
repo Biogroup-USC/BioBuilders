@@ -17,13 +17,12 @@ __all__ = (
 @dataclass
 class CSParameter:
     name: str
-    setter: Callable[[float],None]
+    setter: Callable[[float], None]
     element: object = None
     units: str = None
     baseline: float = None
     bounds: tuple[float, float] = None
     n: int = None
-    levels: int | np.ndarray = None
     coupled: bool = False
     description: str = None
 
@@ -60,18 +59,28 @@ class ContourStudy:
                  TEA: bst.TEA = None,
                  ):
         # Check if the object provided has a method called simulate
-        if TEA is None or not hasattr(TEA, "system"):
-            raise ValueError("The TEA object provided must include a system to simulate")
-        if not hasattr(TEA.system, "simulate"):
-            raise ValueError("The system has not .simulate()")
+        if TEA is None:
+            raise TypeError("TEA must be a valid bst.TEA object, got None.")
+        system = getattr(TEA,"system",None)
+        if system is None:
+            raise TypeError(
+                f"TEA must expose a `.system` attribute with a BioSTEAM system. "
+                f"Got type={type(TEA)!r} without `.system`."
+            )
+        simulate = getattr(system,"simulate",None)
+        if not callable(simulate):
+            raise TypeError(
+                f"TEA.system must provide a callable `.simulate()` method. "
+                f"Got TEA.system type={type(system)!r} with simulate={simulate!r}"
+            )
 
         # Parameters
         self.TEA = TEA
         self.system = TEA.system
 
         # Properties
-        self._parameters = []
-        self._indicators = [] 
+        self._parameters: list[CSParameter] = []
+        self._indicators: list[CSIndicator] = [] 
 
     @property
     def parameters(self):
@@ -92,8 +101,18 @@ class ContourStudy:
         return self._indicators
 
     # Define parameters using BioSTEAM conventions
-    def parameter(self,*, name = None, element = None, units = None, baseline = None,
-                  bounds = None, n = None, levels = None, coupled = False, description = None):
+    def parameter(
+            self,
+            *, 
+            name = None, 
+            element = None, 
+            units = None, 
+            baseline = None,
+            bounds = None, 
+            n = None,
+            coupled = False, 
+            description = None,
+        ):
         """
 
         Register a model parameter for contour mapping and parametric studies.
@@ -115,15 +134,10 @@ class ContourStudy:
         baseline : float
             Baseline value assigned to the parameter which represents its current value.
         bounds : tuple[float, float]
-            Minimum and maximum values for uniform sampling. Mutually exclusive with `levels`.
-            Required when generating grids for contour maps unless discretization is given explicitly
-            through `levels`.
+            Minimum and maximum values for uniform sampling. This is used to build a grid.
         n : int
             Number of evenly spaced samples between ``bounds`` when creating a grid. If omitted, the grid
             constructor must apply its own discretization.
-        levels : array_like of float
-            Explicit values at which the parameter is evaluated. Cannot be combined with ``bounds``. Use this
-            when user-defined sampling is required.
         coupled : bool, default=False
             Flag for parameters that conceptually depend on other parameters or are part of a coupled design (not           #TODO
             implemented yet).
@@ -133,16 +147,72 @@ class ContourStudy:
             
         """
         def decorator(setter_fn: Callable[[float], None]):
+            
+            param_name = name or setter_fn.__name__
+            
+            # Copy variables to locals
+            baseline_ = baseline
+            bounds_ = bounds
+            n_ = n
+
+            # Validate setter
+            if not callable(setter_fn):
+                raise TypeError(f"Setter for parameter '{param_name}' must be callable.")
+
+            # Validate baseline
+            if baseline_ is None:
+                raise ValueError(
+                    f"A baseline value must be defined for parameter '{param_name}'"
+                )
+            
+            # Validate bounds or levels
+            if bounds_ is None:
+                raise ValueError(
+                    f"Parameter '{param_name}': provide bounds."
+                )
+            
+            if len(bounds_) != 2:
+                raise ValueError(
+                    f"Parameter '{param_name}': bounds must be length-2 tuple."
+                )
+            
+            try:
+                lb,ub = (float(bounds_[0]), float(bounds_[1]))
+            except Exception:
+                raise TypeError(
+                    f"Parameter '{param_name}': bounds must contain numeric values."
+                )
+            
+            if lb == ub:
+                raise ValueError(
+                    f"Parameter '{param_name}': lower and upper bounds are equal."
+                )
+            bounds_ = (min(lb,ub),max(lb,ub))
+
+            # Validate levels
+            if n_ is not None:
+                if not isinstance(n_, int):
+                    raise TypeError(f"Parameter '{param_name}': n must be an integer.")
+                if n_ < 1:
+                    raise ValueError(
+                            f"Parameter {param_name}: n must be >= 1."
+                        )
+                    
             p = CSParameter(
-                name=name or setter_fn.__name__,
-                setter=setter_fn, element=element, units=units, baseline=baseline,
-                bounds=bounds,n=n, levels=levels, coupled=coupled,description=description 
+                name=param_name,
+                setter=setter_fn,
+                element=element, 
+                units=units, 
+                baseline=baseline_,
+                bounds=bounds_,
+                n=n_,
+                coupled=coupled,
+                description=description, 
             )
-            # Validation to avoid mixing levels and n
-            if p.levels is not None and p.bounds is not None:
-                raise ValueError("Use bounds or levels, not both")
             self.parameters.append(p)
+            
             return setter_fn
+        
         return decorator
     
     # Define indicator using BioSTEAM conventions
@@ -164,15 +234,25 @@ class ContourStudy:
         
         """
         def decorator(getter_fn: Callable[[],float]):
+            
+            ind_name = name or getter_fn.__name__
+
+            if not callable(getter_fn):
+                raise TypeError(f"Getter for indicator '{ind_name}' must be callable.")
+
             ind = CSIndicator(
-                name=name or getter_fn.__name__,
-                getter=getter_fn, units=units, element=element
+                name=ind_name,
+                getter=getter_fn, 
+                units=units, 
+                element=element
             )
             self._indicators.append(ind)
+            
             return getter_fn
+        
         return decorator
     
-    def build_grid(self, param_x: str, param_y: str, nx: int, ny: int, order: str = "row"):
+    def build_grid(self, param_x: str, param_y: str, nx: int = None, ny: int = None, order: str = "row"):
         """
 
         Build a Cartesian grid for two registered parameters.
@@ -191,43 +271,48 @@ class ContourStudy:
             Number of grid points along the x-axis.
         ny : int
             Number of grid points along the y-axis.
-        order : {"row", "column"}, default="row"
+        order : {"row", "serpentine"}, default="row"
             Returned coordinate pairs order which will be directly passed to `build_cartesian_grid`.
             This affects the order in which simulations are performed but not the shape of ``X`` and
             ``Y``.
 
         """
-        px = next((p for p in self.parameters if p.name == param_x), None)
-        py = next((p for p in self.parameters if p.name == param_y), None)
-        if px is None or py is None:
-            missing_p = [n for n,p in [(param_x, px),(param_y, py)] if p is None]
-            raise ValueError("Parameters not found: {}".format(missing_p))
+        px = self._get_param(param_x)
+        py = self._get_param(param_y)
+
+        # Priority nx and ny
+        if nx is None:
+            nx = px.n if px.n is not None else 20
         
-        X,Y,pairs = build_cartesian_grid(xbounds=px.bounds, ybounds=py.bounds, nx=nx, ny=ny,return_pairs=True,order=order)
-        return X, Y, pairs, px, py
-    
-    @staticmethod
-    def _ix(v, arr):
-        """
+        if ny is None:
+            ny = py.n if py.n is not None else 20
+        
+        # validate nx and ny
+        if not isinstance(nx, int) or nx < 1:
+            raise ValueError(f"nx must be an integer >= 1 (got {nx!r}).")
+        
+        if not isinstance(ny, int) or ny < 1:
+            raise ValueError(f"ny must be an integer >= 1 (got {ny!r}).")
 
-        Return the index of the grid value closest to a given scalar.
-
-        The search first attempts to match values using `numpy.isclose` with a tight tolerance; if no
-        element is considered close, the index of the nearest value (in absolute difference) is returned.
-
-        Parameters
-        ----------
-        V : float
-            Target value to locate in the array.
-        arr : array_like
-            One-dimensional array of grid coordinates.
-
-        """
-        idx = np.where(np.isclose(arr, v, rtol=1e-10, atol=1e-12))[0]
-        return int(idx[0]) if idx.size else int(np.argmin(np.abs(arr-v)))
+        X,Y,pairs,idx_pairs = build_cartesian_grid(
+            xbounds=px.bounds, 
+            ybounds=py.bounds, 
+            nx=nx, 
+            ny=ny,
+            return_pairs=True,
+            return_idx=True,
+            order=order
+        )
+        return X, Y, pairs, idx_pairs, px, py
 
     def run_on_grid(
-            self, X, Y, pairs, px, py,
+            self, 
+            X, 
+            Y, 
+            pairs, 
+            idx_pairs, 
+            px, 
+            py,
             indicators = None,
             x_display_fn = None, 
             y_display_fn = None):
@@ -246,6 +331,7 @@ class ContourStudy:
             2D arrays representing the x- and y- coordinates of the grid, returned by `CountourStudy.build_grid`.
         pairs : iterable of tuple[float, float]
             Iterable of (x, y) values indicating the parameter values for each simulation.
+        idx_pairs : iterable of tuple[float, float]
         px, py : CSParameter
             Parameter objects corresponding to the x and y axes, returned by `ContourStudy.build_grid`.
         indicators : str or sequence of str
@@ -257,9 +343,11 @@ class ContourStudy:
             shown in another (e.g., logarithmic scaling,...)
 
         """
+        # store initial values
+        restore_vx = px.baseline
+        restore_vy = py.baseline
+
         # 1D axis of the grid
-        x_vals = X[0,:]
-        y_vals = Y[:,0]
         ny, nx = Y.shape
 
         # Create one z per indicator
@@ -267,9 +355,9 @@ class ContourStudy:
             selected_inds = list(self.indicators)
         else:
             if isinstance(indicators, str):
-                requested = {indicators}
+                requested = [indicators]
             else:
-                requested = set(indicators)
+                requested = list(indicators)
             
             name_to_ind = {ind.name: ind for ind in self.indicators}
             missing = [name for name in requested if name not in name_to_ind]
@@ -284,60 +372,91 @@ class ContourStudy:
         X_plot = X.copy()
         Y_plot = Y.copy()
 
+        # Validate pairs and idx_pairs
+        if len(pairs) != len(idx_pairs):
+            raise ValueError("pairs and idx_pairs must have the same lenght")
+
         # time 0
         t0 = time.perf_counter()
         
         # Progress bar
-        try:
-            total = len(pairs)
-        except TypeError:
-            total = ny*nx 
-        bar = tqdm(pairs, total=total, desc="Contour mapping", unit="sim", smoothing=0.0, miniters=1, mininterval=0.0,dynamic_ncols=True)
+        total = len(pairs)
+        bar = tqdm(
+            zip(pairs,idx_pairs),
+            total=total,
+            desc="Contour mapping",
+            unit="sim",
+            smoothing=0.0,
+            miniters=1,
+            mininterval=0.2,
+            dynamic_ncols=True,
+        )
 
         # Simulate each pair
         failures = []
-        for vx, vy in pairs:
-            # Simulation time 0
-            s0 = time.perf_counter()
 
-            # Get the cordinates of each point
-            i = self._ix(vx, x_vals)
-            j = self._ix(vy, y_vals)
-            
-            try:
-                # Change the parameters
-                px.setter(float(vx))
-                py.setter(float(vy))
+        # helper to register failures
+        def _register_failures(vx,vy,i,j,stage,e,dt=None):
+            failures.append({
+                "point": (float(vx),float(vy)),
+                "idx": (i, j),
+                "stage": str(stage),
+                "error": repr(e),
+                "dt": (float(dt) if dt is not None else None),
+            })
+
+        try:
+            for (vx,vy), (i,j) in bar:
+                # Simulation time 0
+                s0 = time.perf_counter()
+
                 try:
-                    # Simulate the system
-                    self.system.simulate()
-                except Exception as e:
-                    failures.append(((vx, vy), repr(e)))
-                    continue
+                    # Setter
+                    try:
+                        # Change the parameters
+                        px.setter(float(vx))
+                        py.setter(float(vy))
+                    except:
+                        _register_failures(vx, vy, i, j, "setter", e)
+                        continue
                 
-                # Read and save only the requested indicators
-                for ind in selected_inds:
-                    zs[ind.name][j, i] = float(ind.getter())
+                    # Simulate
+                    try:
+                        # Simulate the system
+                        self.system.simulate()
+                    except Exception as e:
+                        _register_failures(vx, vy, i, j, "simulate", e)
+                        continue
+                    
+                    # Read and save only the requested indicators
+                    for ind in selected_inds:
+                        try:    
+                            zs[ind.name][j, i] = float(ind.getter())
+                        except Exception as e:
+                            _register_failures(vx, vy, i, j, f"indicator:{ind.name}",e)
+                            continue
+                    
+                    # Transforms parameters to plot
+                    if x_display_fn is not None:
+                        X_plot[j, i] = float(x_display_fn(vx, vy, self))
+                    if y_display_fn is not None:
+                        Y_plot[j, i] = float(y_display_fn(vx, vy, self))
 
-                if x_display_fn is not None:
-                    X_plot[j, i] = float(x_display_fn(vx, vy, self))
-                if y_display_fn is not None:
-                    Y_plot[j, i] = float(y_display_fn(vx, vy, self))
-                        
-            except Exception:
-                # Keep NaN and continue
-                pass
-            
-            finally:
-                # Update bar progress
-                iter_dt = time.perf_counter() - s0
-                bar.set_postfix_str(f"t/it={iter_dt:.2f}s | fails = {len(failures)}")
-                bar.update(1)
-                bar.refresh()
+                finally:
+                    # Update bar progress
+                    iter_dt = time.perf_counter() - s0
+                    bar.set_postfix_str(f"t/it={iter_dt:.2f}s | fails = {len(failures)}")
         
-        bar.close()
-        print("")
-        print(f"Finished at {time.perf_counter()-t0:.1f}s | failures = {len(failures)}")
+        finally:
+            bar.close()
+            print("")
+            print(f"Finished at {time.perf_counter()-t0:.1f}s | failures = {len(failures)}")           
+        
+        # Restore initial values
+        px.setter(float(restore_vx))
+        py.setter(float(restore_vy))
+        self.system.simulate()
+
         return zs, failures, X_plot, Y_plot
     
     def _get_param(self, name_or_param):
@@ -464,7 +583,7 @@ class ContourStudy:
             * if `None` levels are generated automatically inferred from the data.
         n_round_ind : int, default=1
             Number of decimals to use when rounding generated contour levels.
-        cmap : str, default="RdBu_r"
+        cmap : str, default="Spectral_r"
             Colormap name passed to `matplotlib.pyplot.contourf`.
         path : str, optional
             File path to save each figure. If ``None``, figures are not saved to disk.

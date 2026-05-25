@@ -1,6 +1,7 @@
 from .chems import (
-    ChemDataBase,
     ChemicalsManager,
+    ChemicalRecord,
+    UserChemicalStorage,
 )
 
 from .parameters import (
@@ -8,9 +9,9 @@ from .parameters import (
 )
 
 from .units import (
+    GasAdsorptionColumn,
     BinaryDistillation,
     Flash,
-    RotaryVacuumDrumFilter,
     RotaryVacuumFilter,
     ExtractionReactor,
     ShellHeatExchanger,
@@ -97,16 +98,17 @@ from .maps import(
 
 __all__ = (
     # Chemicals
-    'ChemDataBase',
     'ChemicalsManager',
+    'UserChemicalStorage',
+    'ChemicalRecord',
 
     # Parameters
     'parse_case_spec',
 
     # Unit operation
+    'GasAdsorptionColumn',
     'BinaryDistillation',
     'Flash',
-    'RotaryVacuumDrumFilter',
     'RotaryVacuumFilter',
     'ExtractionReactor',
     'ShellHeatExchanger',
@@ -161,6 +163,7 @@ __all__ = (
     'calculate_rdvf_area',
     'calculate_centrifuge_diameter',
     'calculate_impeller_diameter',
+    'calculate_packing_equivalent_diameter',
     'calculate_tank_dimensions',
 
     # Supply    

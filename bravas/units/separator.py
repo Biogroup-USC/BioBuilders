@@ -26,7 +26,7 @@ class SeparationUnit(bst.Unit):
         Outlet streams representing separated products.
         * [0] separated compounds.
         * [1] remnants.
-    sfi : dict[str, float]
+    split : dict[str, float]
         Separation factor of each compound defined as
         kg of the compound separated per kg of compound
         in the feed. If a compound is not mentioned inside
@@ -46,13 +46,13 @@ class SeparationUnit(bst.Unit):
 
     def _init(
         self,
-        sfi: dict[str, float] = None, 
+        split: dict[str, float] = None, 
         operating_T: float = None, 
         operating_P: float = None
     ):
         """
         """
-        self.sfi = sfi
+        self.split = split
         self.operating_T = operating_T if operating_T is not None else (25+273.15)
         self.operating_P = operating_P if operating_P is not None else 101325
     
@@ -71,8 +71,8 @@ class SeparationUnit(bst.Unit):
             ID = chem.ID
             
             # Get the separation factor
-            if ID in self.sfi:
-                sfi = self.sfi[ID]
+            if ID in self.split:
+                sfi = self.split[ID]
             else:
                 sfi = 0
             

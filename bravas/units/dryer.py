@@ -186,7 +186,6 @@ class SprayDryer(bst.Unit):
 # Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
 class DrumDryer(bst.Unit):
     """
-
     Create a drum dryer that dries solids by passing hot air 
     (heated by burning natural gas).
     
@@ -202,8 +201,8 @@ class DrumDryer(bst.Unit):
         * [2] Emissions
     split : dict[str, float]
         Component splits to hot gas (stream [1]).
-    R : float, optional
-        Flow of hot gas over evaporation. Defaults to 1.4 wt gas / wt evap.
+    RH : float, optional
+        Relative humidity of hot gas [as fraction]. Defaults to 0.80.
     H : float, optional
         Specific evaporation rate [kg/hr/m3]. Defaults to 20. 
     length_to_diameter : float, optional
@@ -213,12 +212,104 @@ class DrumDryer(bst.Unit):
     moisture_content : float
         Moisture content of solids [wt / wt]. Defaults to 0.10.
         
+    Notes
+    -----
+    The flow rate for gas in the inlet is calculated to meet the `RH` specification
+    (i.e. relative humidity of hot gas depending on moisture_ID evaporated). The flow 
+    rate of inlet natural gas is also altered to meet the heat demand.
+    
+    The default parameter values are based on heuristics for drying 
+    dried distillers grains with solubles (DDGS).
+    
+    Examples
+    --------
+    >>> import biosteam as bst
+    >>> from biorefineries import corn as c
+    >>> bst.settings.set_thermo(c.create_chemicals())
+    >>> feed = bst.Stream('feed', phase='l', T=352.33, P=101325,
+    ...     Water=0.6749, Ethanol=5.041e-06, Ash=0.01978, Yeast=0.008452, 
+    ...     CaO=0.0001446, TriOlein=0.02702, H2SO4=0.001205, Fiber=0.1508, 
+    ...     SolubleProtein=0.04805, InsolubleProtein=0.06967, 
+    ...     total_flow=32720, units='kg/hr',
+    ... )
+    >>> dryer = bst.DrumDryer('D610', 
+    ...     (feed, 'dryer_air', 'natural_gas'), 
+    ...     ('dryed_solids', 'hot_air', 'emissions'),
+    ...     moisture_content=0.10, split=dict(Ethanol=1.0)
+    ... )
+    >>> dryer.simulate()
+    >>> dryer.show('cwt100')
+    DrumDryer: D610
+    ins...
+    [0] feed
+        phase: 'l', T: 352.33 K, P: 101325 Pa
+        composition (%): Water             67.5
+                         Ethanol           0.000504
+                         Ash               1.98
+                         Yeast             0.845
+                         CaO               0.0145
+                         TriOlein          2.7
+                         H2SO4             0.12
+                         Fiber             15.1
+                         SolubleProtein    4.8
+                         InsolubleProtein  6.97
+                         ----------------  3.27e+04 kg/hr
+    [1] dryer_air
+        phase: 'g', T: 298.15 K, P: 1.01325e+06 Pa
+        composition (%): O2  21
+                         N2  79
+                         --  1.32e+06 kg/hr
+    [2] natural_gas
+        phase: 'g', T: 298.15 K, P: 101325 Pa
+        composition (%): CH4  100
+                         ---  2.45e+03 kg/hr
+    outs...
+    [0] dryed_solids
+        phase: 'l', T: 343.15 K, P: 101325 Pa
+        composition (%): Water             10
+                         Ash               5.48
+                         Yeast             2.34
+                         CaO               0.04
+                         TriOlein          7.48
+                         H2SO4             0.334
+                         Fiber             41.7
+                         SolubleProtein    13.3
+                         InsolubleProtein  19.3
+                         ----------------  1.18e+04 kg/hr
+    [1] hot_air
+        phase: 'g', T: 343.15 K, P: 1.01325e+06 Pa
+        composition (%): Water    1.56
+                         Ethanol  1.23e-05
+                         O2       20.7
+                         N2       77.8
+                         -------  1.34e+06 kg/hr
+    [2] emissions
+        phase: 'g', T: 373.15 K, P: 101325 Pa
+        composition (%): Water  45
+                         CO2    55
+                         -----  1.22e+04 kg/hr
+                        
+    >>> dryer.results()
+    Drum dryer                                 Units     D610
+    Electricity         Power                     kW      845
+                        Cost                  USD/hr       66
+    Natural gas (inlet) Flow                   kg/hr 2.45e+03
+                        Cost                  USD/hr      534
+    Design              Evaporation            kg/hr 2.09e+04
+                        Volume                       1.05e+03
+                        Diameter                   m     3.76
+                        Length                             94
+                        Peripheral drum area      m2 1.11e+03
+    Purchase cost       Drum dryer               USD  1.2e+06
+    Total purchase cost                          USD  1.2e+06
+    Utility cost                              USD/hr      600
+    
     """
-
     # auxiliary_unit_names = ('heat_exchanger',)
     _units = {'Evaporation': 'kg/hr',
               'Peripheral drum area': 'm2',
-              'Diameter': 'm'}
+              'Diameter': 'm',
+              'length': 'm'}
     _N_ins = 3
     _N_outs = 3
     
@@ -235,28 +326,30 @@ class DrumDryer(bst.Unit):
     def natural_gas(self):
         """[Stream] Natural gas to satisfy steam and electricity requirements."""
         return self.ins[2]
-
-    def _init(self, split, R=1.4, H=20., length_to_diameter=25, T=343.15, P=10*101325,
+    
+    def _init(self, split, RH=0.80, H=20., length_to_diameter=25, T=343.15, P=10*101325,
               moisture_content=0.15, utility_agent='Natural gas', gas_composition=None,
-              moisture_ID=None):
+              moisture_ID=None, kW_per_m2=1.3):
         self._isplit = self.chemicals.isplit(split)
         self.define_utility('Natural gas', self.natural_gas)
         self.P = P
         self.T = T
-        self.R = R
+        self.RH = RH
         self.H = H
         self.gas_composition = gas_composition
         self.length_to_diameter = length_to_diameter
         self.moisture_content = moisture_content
         self.utility_agent = utility_agent
-        self.moisture_ID = moisture_ID
-    
-        # Initialize new properties
-        self._base_n_cost = None
-        self._base_area = None
-        self._base_cost = None
-        self._CE_base = None
+        self.moisture_ID = moisture_ID if moisture_ID is not None else "Water"
 
+        # new properties
+        self.kW_per_m2 = kW_per_m2
+
+        self._base_cost = None
+        self._base_area = None
+        self._base_n_cost = None
+        self._CE_base = None
+        
     @property
     def utility_agent(self):
         return self._utility_agent
@@ -266,7 +359,18 @@ class DrumDryer(bst.Unit):
         if utility_agent not in ('Natural gas', 'Steam'):
             raise ValueError(f"utility agent must be either 'Steam' or 'Natural gas'; not '{utility_agent}'")
         self._utility_agent = utility_agent
-   
+
+    def _get_moisture_ID_psat(self, T):
+        chemical = self.thermo.chemicals[self.moisture_ID]
+        return chemical.Psat(T)
+
+    def _convert_air_mol_to_mass(self, n_air, gas_composition):
+        mol_weight_air = 0.
+        for chem, x in gas_composition:
+            chem_mol_weight = self.thermo.chemicals[chem].MW
+            mol_weight_air += x / chem_mol_weight
+        return n_air / mol_weight_air
+
     def _run(self):
         wet_solids, air, natural_gas = self.ins
         dry_solids, hot_air, emissions = self.outs
@@ -279,7 +383,22 @@ class DrumDryer(bst.Unit):
         gas_composition = self.gas_composition
         if gas_composition is None:
             gas_composition = [('N2', 0.79), ('O2', 0.21)]
-        total_gas_flow = self.R * evaporation
+
+        # Calculate n_moisture_ID and n_evap_compounds
+        n_moisture_id = hot_air.imol[self.moisture_ID]
+        n_evap_compounds = hot_air.F_mol - n_moisture_id
+
+        # Calculate y_moisture_ID
+        y_moisture_id = self.RH * self._get_moisture_ID_psat(self.T)/self.P
+        if not (0 < y_moisture_id < 1):
+            raise ValueError(
+                f"Invalid partial pressure of moisture_ID compound (expected between 0 and 1). Current: {y_moisture_id}."
+            )
+
+        # Calculate total gas flow (molar basis)
+        n_dry_gas = (n_moisture_id * (1-y_moisture_id)/y_moisture_id - n_evap_compounds)
+
+        total_gas_flow = self._convert_air_mol_to_mass(n_dry_gas, gas_composition)
         for ID, x in gas_composition:
             air.imass[ID] = x * total_gas_flow
         hot_air.mol += air.mol
@@ -298,16 +417,20 @@ class DrumDryer(bst.Unit):
                 CH4 = duty / LHV
                 return CH4
             flx.wegstein(f, 0., 1e-3)
-
+        
     def _design(self):
         length_to_diameter = self.length_to_diameter
         design_results = self.design_results
         design_results['Volume'] = volume = design_results['Evaporation'] / self.H 
         design_results['Diameter'] = diameter = bst.design_tools.cylinder_diameter_from_volume(volume, length_to_diameter)
         design_results['Length'] = length = diameter * length_to_diameter
-        design_results['Peripheral drum area'] = bst.design_tools.cylinder_area(diameter, length)
+        design_results['Peripheral drum area'] = drum_area = bst.design_tools.cylinder_area(diameter, length)
         if self.utility_agent == 'Steam':
             self.add_heat_utility(self.H_out - self.H_in, self.T)
+        
+        # power utility
+        kW = self.kW_per_m2 * drum_area
+        self.add_power_utility(kW)
 
     @property
     def base_cost(self):

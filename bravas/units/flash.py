@@ -130,10 +130,10 @@ class Flash(design.PressureVessel, bst.Unit):
     _auxin_index = {
         'heat_exchanger': 0
     }
-    _units = {'Length': 'ft',
-              'Diameter': 'ft',
-              'Weight': 'lb',
-              'Wall thickness': 'in',
+    _units = {'Length': 'm',
+              'Diameter': 'm',
+              'Weight': 'kg',
+              'Wall thickness': 'mm',
               'Total volume': 'ft3'}
     _max_agile_design = (
         'Length',
@@ -210,6 +210,11 @@ class Flash(design.PressureVessel, bst.Unit):
         self.has_vapor_condenser = has_vapor_condenser
         
         self._load_components()
+
+        self._base_cost = None
+        self._base_n_cost = None
+        self._base_volume = None
+        self._base_CE = None
         
     def _load_components(self):
         self._multi_stream = ms = bst.MultiStream(None, thermo=self.thermo)
@@ -288,6 +293,62 @@ class Flash(design.PressureVessel, bst.Unit):
         else:
             self.heat_exchanger.simulate_as_auxiliary_exchanger(self.ins, self.outs, vle=self.flash_inlet)
 
+    @property
+    def base_cost(self):
+        """
+        """
+        if self._base_cost is None:
+            self._base_cost = 75000.0   # USD
+        return self._base_cost
+    
+    @base_cost.setter
+    def base_cost(self,value):
+        """
+        """
+        self._base_cost = value
+    
+    @property
+    def base_volume(self):
+        """
+        """
+        if self._base_volume is None:
+            self._base_volume = 3.0     # m3
+        return self._base_volume
+
+    @base_volume.setter
+    def base_volume(self,value):
+        """
+        """
+        self._base_volume = value
+    
+    @property
+    def base_n_cost(self):
+        """
+        """
+        if self._base_n_cost is None:
+            self._base_n_cost = 0.53
+        return self._base_n_cost
+
+    @base_n_cost.setter
+    def base_n_cost(self, value):
+        """
+        """
+        self._base_n_cost = value
+    
+    @property
+    def base_CE(self):
+        """
+        """
+        if self._base_CE is None:
+            self._base_CE = 1000.0
+        return self._base_CE
+    
+    @base_CE.setter
+    def base_CE(self, value):
+        """
+        """
+        self._CE_base = value
+
     def _cost(self):
         D = self.design_results
         if not self.no_vessel_needed:
@@ -295,6 +356,32 @@ class Flash(design.PressureVessel, bst.Unit):
                 self._vessel_purchase_cost(D['Weight'], D['Diameter'], D['Length'])
             )
             self._cost_vacuum()
+        
+        D["Length"] = D.pop("Length") * 0.3048
+        D["Diameter"] = D.pop("Diameter") * 0.3048
+        D["Weight"] = D.pop("Weight") * 0.4536
+        D["Wall thickness"] = D.pop("Wall thickness") * 25.4
+
+        volume = np.pi * D['Diameter']**2 * D['Length'] / 4
+        vessel = f"{self.vessel_type} pressure vessel"
+        vessel_purchase_cost = self.base_cost * (volume/self.base_volume) ** self.base_n_cost
+        self.baseline_purchase_costs[vessel] = vessel_purchase_cost
+
+        ## The material, pressure and temperature factor are assumed to be 1
+        self.F_D[vessel] = self.F_M[vessel] = self.F_P[vessel] = 1
+
+        ## Bare module
+        delivery = 0.10                 # - [9]
+        installation = 0.90             # Metal tanks [9]
+        instrumentation_Control = 0.50  # - [9]
+        piping = 0.68                   # Fluid [9]   
+
+        bare_module = (1 + (delivery + installation + instrumentation_Control + piping))
+        self.F_BM[vessel] = bare_module
+
+        ## Scale costs using CEPCI
+        base_CE = self.base_CE
+        self.baseline_purchase_costs[vessel] *= bst.CE/base_CE
 
     def _cost_vacuum(self):
         P = self.P
