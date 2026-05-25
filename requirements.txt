@@ -11,3 +11,4 @@ numpy_financial>=1.0.0
 geopandas>=1.1.2
 shapely>=2.1.2
 networkx>=3.6.1
+geopy>=2.4.1
