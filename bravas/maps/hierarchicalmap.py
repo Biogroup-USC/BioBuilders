@@ -234,7 +234,7 @@ class HierarchicalMapPlotter:
         self.filtered_muni = gdf_to_plot if level_for_layers=="municipalities" else None
         return {"level_used": level_for_layers, "gdf": gdf_to_plot, "reason": reason}
 
-    def plot_map(self, suppliers=None, plants=None, customers=None, autonomics=None, provinces=None, regions=None, municipalities=None,
+    def plot_map(self, ax = None, suppliers=None, plants=None, customers=None, autonomics=None, provinces=None, regions=None, municipalities=None,
                  target_level="municipalities", plot_layers=None, figsize=(10,10), annotate_municipalities=False, show=True, savepath=None):
         """
         """
@@ -245,7 +245,10 @@ class HierarchicalMapPlotter:
             return scope
 
         # Create figure
-        fig, ax = plt.subplots(figsize=figsize)
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        else:
+            fig = ax.figure
 
         # Plot the base selection with no fill
         base_gdf = gdf_used.copy()
@@ -270,13 +273,21 @@ class HierarchicalMapPlotter:
                     sub.boundary.plot(ax=ax, linewidth=width, color=color)
 
         # Add points (suppliers, plants, customers)
-        for pts in (suppliers, plants, customers):
-            if pts:
+        legend_elements = []
+
+        def plot_points(data, color, marker, label):
+            if data:
                 try:
-                    gpts = self.dict_to_gdf(pts, epsg=self.epsg)
-                    gpts.plot(ax=ax, markersize=50)
+                    gpts = self.dict_to_gdf(data, epsg = self.epsg)
+                    gpts.plot(ax = ax, color = color, marker = marker, markersize = 60, label = label)
+                    legend_elements.append((color, marker, label))
                 except Exception:
                     pass
+        
+        # Plot each type
+        plot_points(suppliers, "green", "o", "Suppliers")
+        plot_points(plants, "red", "*", "Plants")
+        plot_points(customers, "blue", "^", "Customers")
 
         # Annotate municipalities if desired
         if annotate_municipalities and self.filtered_muni is not None and len(self.filtered_muni) > 0:
@@ -291,6 +302,16 @@ class HierarchicalMapPlotter:
                                     fontsize=6, color="dimgray", ha="center")
                     except Exception:
                         pass
+        
+        # Add legend
+        if legend_elements:
+            handles = []
+            labels = []
+            for color, marker, label in legend_elements:
+                handles.append(plt.Line2D([0], [0], marker = marker, color = 'w',
+                                          markerfacecolor = color, markersize = 8))
+                labels.append(label)
+            ax.legend(handles, labels, loc = 'upper right')
 
         # Remove axes
         ax.set_xticks([]); ax.set_yticks([])
@@ -300,6 +321,7 @@ class HierarchicalMapPlotter:
             plt.savefig(savepath, bbox_inches="tight")
         if show:
             plt.show()
-        plt.close(fig)
+        if ax is None:
+            plt.close(fig)
 
         return scope

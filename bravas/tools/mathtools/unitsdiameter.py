@@ -5,6 +5,7 @@ import numpy as np
 __all__ = (
     "calculate_centrifuge_diameter",
     "calculate_impeller_diameter",
+    "calculate_tank_dimensions",
 )
 
 def calculate_centrifuge_diameter(
@@ -110,3 +111,81 @@ def calculate_impeller_diameter(
     impeller_diameter = (4 * V_reactor /((impeller_react_diameter**-1)**3 * height_diameter * np.pi))**(1/3)
 
     return impeller_diameter
+
+def calculate_tank_dimensions(
+        mass_flow,
+        tau,
+        density = 1000,
+        design_factor = 1.2,
+        height_diameter_ratio = 1.0
+):
+    """
+    Calculate the required tanl volume, diameter and height based
+    on residence time and a design factor.
+
+    Parameter 
+    ---------
+    mass_flow: float
+        Mass flow entering the vessel [kg/hr].
+
+    tau: float
+        Residence time [h].
+
+    density: float, optional
+        Fluid density [kg/m3]. Default is 1000 kg/m3.
+    
+    design_factor = float, optional
+        Oversizing factor applied to the calculated volume. Default is 1.2.
+    
+    diameter_height_ratio: float, optional
+        Diameter/height ratio (D/H) [m/m]. Default is 1.0.
+
+    Notes
+    -----
+    The vessel volume is calculated as:
+        V = (mass_flow / density) * tau * design_factor
+    
+    Assuming a cylindrical vessel adn using D/H ratio:
+        D = (4 * V / (pi* ratio)) ^ (1/3)
+        H = D * ratio
+    
+    Returns
+    -------
+    Volume: float
+        Vessel volume [m3].
+    
+    Diameter: float
+        Vessel diameter [m].
+    
+    Height: float
+        Vessel height [m].
+    """
+
+    # Check inputs
+    if mass_flow <= 0:
+        raise ValueError("Mass flow must be positive")
+    
+    if tau <= 0:
+        raise ValueError("Residence time must be positive")
+    
+    if density <= 0:
+        raise ValueError("Density must be positive")
+    
+    if design_factor <= 0:
+        raise ValueError("Design factor must be positive")
+    
+    if height_diameter_ratio <= 0:
+        raise ValueError("Height/diameter ratio must be positive")
+    
+    # Required vessel volume [m3]
+    volume = mass_flow / density * tau * design_factor
+
+    # Diameter [m]
+    diameter = (
+        (4 * volume / (np.pi * height_diameter_ratio)) ** (1/3)
+    )
+
+    # Height [m]
+    height = diameter * height_diameter_ratio
+
+    return volume, diameter, height

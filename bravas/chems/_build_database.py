@@ -237,3 +237,33 @@ DB.insert_data_into_db(
     Rho = 1500,                 # 1500 kg/m3 is the mean of the generic reference value (1.4 - 1.6 g/cm3)
     Cp = 1.75,                  # kJ/(kg·K) generic reference value for polysaccharides: https://doi.org/10.1080/10942910701444705
 )
+
+# Triglyceride,
+DB.insert_data_into_db(
+    ID="Neutral_Oil",           # Assumed as triolein
+    MW=885,                     # g/mol
+    Phase='l',
+    Rho=913,                    # kg/m3
+    Cp=2.25,                    # kJ/kg/K
+    CAS="122-32-7"              
+)
+
+# Free fatty acid
+DB.insert_data_into_db(         # Assumed as oleic acid (dominant in pomace oil)
+    ID = "FFA",
+    MW=282.47,                  # g/mol
+    Phase='l',
+    Rho=895,                    # kg/m3
+    Cp=2.0,                     # kJ/kg/K
+    CAS="112-80-1"              
+)
+
+# Sodium soap
+DB.insert_data_into_db(
+    ID = "Soapstock",           # Modeled as sodium oleate
+    MW=304.44,                  # g/mol
+    Phase='s',
+    Rho=900,                    # kg/m3
+    Cp=1.8,                     # kJ/kg/K
+    CAS="143-19-1"          
+)

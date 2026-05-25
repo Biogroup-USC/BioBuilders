@@ -114,8 +114,13 @@ def parse_case_spec(source: str | Path | Mapping[str,Any]) -> dict[str,Any]:
     
     stream_prices = {str(k): v for k,v in stream_prices.items()}
 
+    capacity_data = spec.get("capacity_range")
+    if not isinstance(stream_prices, dict):
+        raise ValueError("'stream prices' must be a dict")
+
     return {
         "unit_operations": units_params,
         "techno_economic": tea_params,
         "stream_prices": stream_prices,
+        "capacity_range": capacity_data 
     }
