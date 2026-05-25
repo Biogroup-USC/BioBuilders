@@ -12,7 +12,7 @@ from .filtration import RotaryVacuumFilter, MembraneFiltration
 from .flash import Flash
 from .distillation import BinaryDistillation
 from .separator import SeparationUnit
-from .boiler import BiomassBoiler
+from .biomass_CHP import BiomassCHP
 from .pellet import PelletMill
 from .adsorption import GasAdsorptionColumn
 
@@ -37,7 +37,7 @@ __all__ = (
     "LiquidsSettler",
     "MembraneFiltration",
     "SeparationUnit",
-    "BiomassBoiler",
+    "BiomassCHP",
     "PelletMill",
     "GasAdsorptionColumn",
 )

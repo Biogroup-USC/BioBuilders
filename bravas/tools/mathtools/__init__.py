@@ -1,6 +1,6 @@
 from .logmean import log_mean
 from .economy import discounting_to_present_value, updating_to_future_value, calculate_labor_requirements, calculate_mean_median_price
-from .unitsdiameter import calculate_centrifuge_diameter, calculate_impeller_diameter, calculate_packing_equivalent_diameter
+from .unitsdiameter import calculate_centrifuge_diameter, calculate_impeller_diameter, calculate_packing_equivalent_diameter, calculate_tank_dimensions
 from .solveparameter import solve_operating_pressures_multieffectevaporator
 from .unitsarea import calculate_rdvf_area
 from .control import damp_to
@@ -15,6 +15,7 @@ __all__ = (
     "calculate_centrifuge_diameter",
     "calculate_impeller_diameter",
     "calculate_packing_equivalent_diameter",
+    "calculate_tank_dimensions",
     "solve_operating_pressures_multieffectevaporator",
     "calculate_rdvf_area",
     "agitator_volumetric_power_determination",

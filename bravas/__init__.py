@@ -28,7 +28,7 @@ from .units import (
     MembraneFiltration,
     SeparationUnit,
     BatchEnzymaticTreatment,
-    BiomassBoiler,
+    BiomassCHP,
     PelletMill,
 )
 
@@ -36,6 +36,9 @@ from .tea import (
     TEA,
     InflationTEA,
     ProcessSettingsManager,
+    BaseDistance,
+    TruckTransportationCost,
+    PipelineTransportationCost,
 )
 
 from .results import (
@@ -71,7 +74,26 @@ from .tools import (
     calculate_rdvf_area,
     calculate_centrifuge_diameter,
     calculate_impeller_diameter,
-    calculate_packing_equivalent_diameter,
+    calculate_tank_dimensions,
+)
+
+from .supply import (
+    get_equipment_costs,
+    calculate_capex,
+    export_capex_excel,
+    load_json,
+    raw_material_cost,
+    labor_cost,
+    opex,
+    export_opex,
+    loan_table,
+    cash_flow,
+    VAN_TIR,
+    export_economic,
+)
+
+from .maps import(
+    HierarchicalMapPlotter,
 )
 
 __all__ = (
@@ -103,13 +125,16 @@ __all__ = (
     'MembraneFiltration',
     'SeparationUnit',
     'BatchEnzymaticTreatment',
-    'BiomassBoiler',
+    'BiomassCHP',
     'PelletMill',
 
     # Tea
     'TEA',
     'InflationTEA',
     'ProcessSettingsManager',
+    'BaseDistance',
+    'TruckTransportationCost',
+    'PipelineTransportationCost',
 
     # Results
     'ProcessMassBalance',
@@ -138,5 +163,23 @@ __all__ = (
     'calculate_rdvf_area',
     'calculate_centrifuge_diameter',
     'calculate_impeller_diameter',
-    'calculate_packing_equivalent_diameter',    
+    'calculate_packing_equivalent_diameter',
+    'calculate_tank_dimensions',
+
+    # Supply    
+    'get_equipment_costs',
+    'calculate_capex',
+    'export_capex_excel',
+    'load_json',
+    'raw_material_cost',
+    'labor_cost',
+    'opex',
+    'export_opex',
+    'loan_table',
+    'cash_flow',
+    'VAN_TIR',
+    'export_economic',
+
+    # Maps
+    'HierarchicalMapPlotter',
 )

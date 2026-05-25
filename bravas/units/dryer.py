@@ -39,7 +39,7 @@ class SprayDryer(bst.Unit):
     _N_ins = 1
     _N_outs = 2
     _units = {
-        'Evaporation rate': 'kg/hr',
+        'Evaporation rate': 'kg/s',
         'Heat duty': 'kJ/hr'
     }
 
@@ -82,7 +82,7 @@ class SprayDryer(bst.Unit):
         Dryed, Water = self.outs
 
         evap_rate = Water.get_total_flow('kg/hr')
-        self.design_results['Evaporation rate'] = evap_rate
+        self.design_results['Evaporation rate'] = evap_rate / 3600
 
         # Energy demand 
         latent_heat = 2276 # kJ/kg for water at 105 ºC (2 bar) from HYSYS (low pressure steam)
@@ -118,7 +118,7 @@ class SprayDryer(bst.Unit):
         """
         """
         if self._base_evaporation_capacity is None:
-            self._base_evaporation_capacity = 1 # kg/hr from: Rules of Thumb
+            self._base_evaporation_capacity = 1 # kg/s from: Rules of Thumb
         return self._base_evaporation_capacity
     
     @base_evaporation_capacity.setter

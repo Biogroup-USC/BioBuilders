@@ -67,12 +67,11 @@ def add_all_replacement_costs_to_cashflow_array(unit_capital_cost, cashflow_arra
 # Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
 @njit(cache = True)
 def fill_nominal_taxable_and_nontaxable_cashflows_without_loan(
-    FCI, WC, sales0, VOC_mat0, VOC_util0, FOC0,
+    FCI, WC, sales0, VOC_mat0, VOC_util0, FOC0, 
     construction_schedule, start,
     C_FC, C_WC, S, C,
     f_sales, f_capex, f_mat, f_util, f_foc, f_wc,
-    startup_time,
-    startup_VOCfrac, startup_FOCfrac, startup_salesfrac, 
+    startup_time, startup_VOCfrac, startup_FOCfrac, startup_salesfrac, 
 ):
     """
 
@@ -125,8 +124,8 @@ def fill_nominal_taxable_and_nontaxable_cashflows_without_loan(
     # Nominalise material cost
     VOC_mat_nom = VOC_mat0 * f_mat[start:]
 
-    # Nominalise utility cost
-    VOC_util_nom = VOC_util0 * f_util[start:]
+    # Nominalise utility cost (select between adjusted or original)
+    VOC_util_nom =VOC_util0 * f_util[start:]
 
     # Nominalise FOC
     FOC_nom = FOC0 * f_foc[start:]
@@ -156,17 +155,20 @@ def nominal_taxable_and_nontaxable_cashflows(
     f_sales, f_capex, f_mat, f_util, f_foc, f_wc,
     startup_time, startup_VOCfrac, startup_FOCfrac, startup_salesfrac,
     finance_interest, finance_years, finance_fraction, accumulate_interest_during_construction,
-
+    ignore_cogen_costs = False
 ):
     """
     """
+    # Adjust to cogeneration
+    VOC_util0 = 0.0 if ignore_cogen_costs else VOC_util0
+
     # fill nominal cashflows excluding finances
     fill_nominal_taxable_and_nontaxable_cashflows_without_loan(
-        FCI, WC, sales0, VOC_mat0, VOC_util0, FOC0,
-        construction_schedule, start,
+        FCI, WC, sales0, VOC_mat0, VOC_util0,
+        FOC0, construction_schedule, start,
         C_FC, C_WC, S, C,
         f_sales, f_capex, f_mat, f_util, f_foc, f_wc,
-        startup_time, startup_VOCfrac, startup_FOCfrac, startup_salesfrac 
+        startup_time, startup_VOCfrac, startup_FOCfrac, startup_salesfrac,
     )
 
     # Finance
@@ -288,13 +290,17 @@ class TEA(bst.TEA):
                  finance_interest: float = None, 
                  finance_years: int = None, 
                  finance_fraction: float = None, 
-                 accumulate_interest_during_construction: bool = False
+                 accumulate_interest_during_construction: bool = False,
+                 ignore_cogen_costs = False
                 ):
         
         # Call to parent constructor
-        super().__init__(system, IRR, duration, depreciation, income_tax, operating_days, lang_factor, 
-                         construction_schedule, startup_months, startup_FOCfrac, startup_VOCfrac, startup_salesfrac, 
-                         WC_over_FCI, finance_interest, finance_years, finance_fraction, accumulate_interest_during_construction)
+        super().__init__(system, IRR, duration, depreciation, income_tax, 
+                         operating_days, lang_factor, 
+                         construction_schedule, startup_months, 
+                         startup_FOCfrac, startup_VOCfrac, startup_salesfrac, 
+                         WC_over_FCI, finance_interest, finance_years, 
+                         finance_fraction, accumulate_interest_during_construction)
         
         # Parameters
         self.labor_cost = labor_cost
@@ -304,7 +310,15 @@ class TEA(bst.TEA):
         self.supplies= supplies
         self.maintenance = maintenance
         self.administration = administration
-        
+
+        self.ignore_cogen_costs = ignore_cogen_costs
+    
+    def _utility_costs(self, base_cost):
+        """
+        Apply cogeneration logic
+        """
+        return 0.0 if self.ignore_cogen_costs else base_cost
+
     def _DPI(self, installed_equipment_cost):
         return super()._DPI(installed_equipment_cost)
     
@@ -540,14 +554,30 @@ class InflationTEA(TEA):
                  capex_rates: float | Mapping[int, float] = None,
                  wc_rates: float | Mapping[int, float] = None,
                  global_rates: float | Mapping[int, float] = None,
+                 ignore_cogen_costs = False
                 ):
         # Call to parent constructor
         super().__init__(
-            system, IRR, duration, depreciation, income_tax, operating_days, lang_factor, labor_cost, fringe_benefits,
-            property_tax, property_insurance, supplies, maintenance, administration, construction_schedule, startup_months, 
-            startup_FOCfrac, startup_VOCfrac, startup_salesfrac, WC_over_FCI, finance_interest, finance_years, finance_fraction, 
-            accumulate_interest_during_construction
-        )
+            system, IRR, duration, depreciation, income_tax,
+            operating_days, lang_factor,
+            labor_cost,
+            fringe_benefits,
+            property_tax,
+            property_insurance,
+            supplies,
+            maintenance,
+            administration,
+            construction_schedule,
+            startup_months,
+            startup_FOCfrac,
+            startup_VOCfrac,
+            startup_salesfrac,
+            WC_over_FCI,
+            finance_interest,
+            finance_years,
+            finance_fraction,
+            accumulate_interest_during_construction,
+            ignore_cogen_costs)
 
         # New inflation parameters
         self.sales_rates = sales_rates
@@ -604,8 +634,9 @@ class InflationTEA(TEA):
         # Base-year cashflows
         TDC, FCI = self.TDC, self._FCI(self.TDC)
         FOC0 = self._FOC(FCI)
-        start, years = self._start, self._years
-        VOC_mat0, VOC_util0 = self.system.material_cost, self.system.utility_cost
+
+        VOC_mat0 = self.system.material_cost
+        VOC_util0 = self._utility_costs(self.system.utility_cost)
         sales0 = self.sales
 
         # Load nominal factor with _factor helper
@@ -638,6 +669,7 @@ class InflationTEA(TEA):
                 f_sales, f_capex, f_mat, f_util, f_foc, f_wc,
                 self._startup_time, self.startup_VOCfrac, self.startup_FOCfrac, self.startup_salesfrac,
                 self.finance_interest, self.finance_years, self.finance_fraction, self.accumulate_interest_during_construction, 
+                ignore_cogen_costs = self.ignore_cogen_costs
             ),
             D
         )

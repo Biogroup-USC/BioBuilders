@@ -6,13 +6,15 @@ Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
 
 import biosteam as bst
 
-__all__ = ('BiomassBoiler',)
+__all__ = ('BiomassCHP',)
 
-class BiomassBoiler(bst.Unit): 
+class BiomassCHP(bst.Unit): 
     """
-    Create a boiler for the production of steam from biomass.
+    Create a biomass Combined Heat and Power (CHP) unit.
 
-    This class simulates a biomass boiler, accounting for its steam generation, design and cost.
+    Produces steam (heat) and electricity from biomass combustion.
+
+    This class simulates a biomass CHP, accounting for its steam generation, design and cost.
     
     Parameters
     ----------
@@ -36,6 +38,12 @@ class BiomassBoiler(bst.Unit):
     boiler_efficiency: float, optional
         Boiler efficiency for conversion of fuel energy into steam [fraction]. Default is 0.80.
     
+    heat_fraction: float, optional
+        Fraction of energetic production that it is transformed into steam. Default is 0.50.
+
+    electricity_fraction: float, optional
+        Fraction of energetic production that goes to electricity. Default is 0.35.
+        
     LHV: float, optional
         Lower heating value of biomass feed [kJ/kg].
     
@@ -61,7 +69,9 @@ class BiomassBoiler(bst.Unit):
     
     _N_ins = 3
     _N_outs = 3
-    _units = {'Steam flow': 'kg/hr',
+    _units = {'Steam flow produced': 'kg/hr',
+              'Electricity produced': 'kW',
+              'Heat produced': 'kW'
               }
     
     def __init__(self, ID = '', ins = None, 
@@ -70,6 +80,8 @@ class BiomassBoiler(bst.Unit):
                        'Ash'),
                  thermo = None, *,
                  boiler_efficiency = 0.80,
+                 heat_fraction = 0.50,
+                 electricity_fraction = 0.35,
                  LHV = None,
                  elemental_composition = None,
                  h_steam = 2706, # kJ/kg default for low pressure steam at 2 bar and 120ºC, from HYSYS,
@@ -81,6 +93,8 @@ class BiomassBoiler(bst.Unit):
         
         super().__init__(ID, ins, outs, thermo)       
         self.boiler_efficiency = boiler_efficiency
+        self.heat_fraction = heat_fraction
+        self.electricity_fraction = electricity_fraction
         self.LHV = LHV
         self.elemental_composition = elemental_composition # (dict, fractions)
         self.h_steam = h_steam
@@ -97,6 +111,10 @@ class BiomassBoiler(bst.Unit):
         self._base_produced_steam = None
         self._base_n_cost = None
         self._CE_base = None
+
+        self.utilities = []
+        self.heat_utilities = []
+        self.power_utility = bst.PowerUtility()
     
     @property
     def emissions(self):
@@ -130,6 +148,9 @@ class BiomassBoiler(bst.Unit):
     def _design(self):
         """
         """
+        if self.heat_fraction + self.electricity_fraction > 1:
+            raise ValueError("Heat + electricity fraction cannot exceed 1")
+
         biomass = self.biomass
         biomass.phase = 's'
 
@@ -161,24 +182,34 @@ class BiomassBoiler(bst.Unit):
         # Energy from combustion
         Q_combustion = self.LHV * biomass.F_mass # kJ/hr       
         Q_available =self.boiler_efficiency * Q_combustion # kJ/hr
+        
+        Q_heat = Q_available * self.heat_fraction # kJ/hr
+        Q_electricity = Q_available * self.electricity_fraction # kJ/hr
 
         # Calculate the stream produced
         delta_h = self.h_steam - self.h_water # kJ/kg
-        stream_mass =  Q_available / delta_h # kg/hr
-        steam.imass['Water'] = stream_mass
+        stream_mass =  Q_heat / delta_h # kg/hr
+        steam.imass['Water'] = stream_mass # kg/hr
 
-        # Heat utility (energy balance)
-        T_steam = getattr(self, 'T_steam', 393.15) # K, default 120ºC
-        P_steam = getattr(self, 'P_stream', 202650) # Pa, default 2 bar
-        steam.T = T_steam
-        steam.P = P_steam
+        steam.T = self.T_steam
+        steam.P = self.P_steam
 
-        T_water_in = getattr(self, 'T_water_in', 298.15) # K, default 25ºC
-        makeup_water.T = T_water_in
+        # Unit change
+        electricity_kW = Q_electricity / 3600 
+        heat_kW = Q_heat / 3600
 
-        hu = bst.HeatUtility()
-        hu.duty = -Q_available
-        self.heat_utilities.append(hu)
+        # Heat utility ()
+        Q_losses = Q_available - Q_heat - Q_electricity
+        losses_kW = Q_losses / 3600
+        
+        # Utilities
+        self.power_utility = bst.PowerUtility()  
+        self.power_utility.production = electricity_kW 
+        self.utilities.append(self.power_utility)
+
+        steam_utility = bst.HeatUtility()
+        steam_utility.duty = -Q_heat # Negative = Generation
+        self.heat_utilities.append(steam_utility)
 
         # Combustion chemistry
         ec = self.elemental_composition
@@ -219,7 +250,14 @@ class BiomassBoiler(bst.Unit):
 
         # Compile the design results
         Design = self.design_results
-        Design['Steam flow'] = self.steam.F_mass
+        Design['Steam flow produced'] = self.steam.F_mass
+        Design['Electricity produced'] = electricity_kW
+        Design['Heat produced'] = heat_kW
+
+        # Save the heat results
+        self.elec_produced = electricity_kW
+        self.heat_produced = heat_kW
+        self.q_losses = losses_kW
 
     @property
     def base_cost(self):
@@ -281,7 +319,7 @@ class BiomassBoiler(bst.Unit):
         """
         """
         # Load all the design parameters needed
-        Produced_Steam = self.design_results['Steam flow']
+        Produced_Steam = self.design_results['Steam flow produced']
 
         # Calculate the baseline purchase cost for the biomass boiler: Water tube with fire tube for smaller size, 1.5 MPa
         # with boiler, burner, fan, deaerator, chemical injection, stack, integral piping, instrument.
