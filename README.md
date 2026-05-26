@@ -1,4 +1,4 @@
-# **Bioprocesses Route Analysis & Value-chain Assessment Simulation (BRAVAS)**
+# **BioBuilders: Build your biorefinery**
 
 This repository constains all the code used to develop multiscale models of different biorefineries using [BioSTEAM](https://github.com/BioSTEAMDevelopmentGroup/biosteam.git) as the core framework.
 

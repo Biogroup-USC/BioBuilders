@@ -3,7 +3,7 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bravas"
+name = "biobuilders"
 version = "0.37.0"
 description = "Library to perform biorefinery and value chain assestment."
 authors = [
@@ -12,7 +12,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.8, <3.13"
 license = { text = "MIT"}
-urls = { "Homepage" = "https://github.com/Biogroup-USC/BRAVAS.git" }
+urls = { "Homepage" = "https://github.com/Biogroup-USC/BioBuilders.git" }
 dependencies = [
   "biosteam>=2.51.4",
   "pandas>=2.2.2",
@@ -22,7 +22,12 @@ dependencies = [
   "openpyxl>=3.1.5",
   "matplotlib>=3.10.3",
   "seaborn>=0.13.0",
-  "tqdm>=4.67.1"
+  "tqdm>=4.67.1",
+  "numpy_financial>=1.0.0",
+  "geopandas>=1.1.2",
+  "shapely>=2.1.2",
+  "networkx>=3.6.1",
+  "geopy>=2.4.1"
 ]
 
 [tool.setuptools.package-data]

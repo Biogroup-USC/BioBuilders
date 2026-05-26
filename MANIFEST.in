@@ -1,5 +1,5 @@
-recursive-include bravas *.py
-recursive-include bravas/chems/database *.db
-recursive-include bravas/data/ *.json
-exclude bravas/chems/_build_database.py
-exclude bravas/test.py
+recursive-include biobuilders *.py
+recursive-include biobuilders/chems/database *.db
+recursive-include biobuilders/data/ *.json
+exclude biobuilders/chems/_build_database.py
+exclude biobuilders/test.py

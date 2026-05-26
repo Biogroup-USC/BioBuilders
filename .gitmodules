@@ -1,4 +1,4 @@
-[submodule "BRAVAS-SystemLab"]
-	path = BRAVAS-SystemLab
-	url = https://github.com/Biogroup-USC/BRAVAS-SystemLab.git
+[submodule "BioBuilders-SystemLab"]
+	path = BioBuilders-SystemLab
+	url = https://github.com/Biogroup-USC/BioBuilders-SystemLab.git
 	branch = main
