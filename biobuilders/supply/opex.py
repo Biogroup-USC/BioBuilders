@@ -23,8 +23,10 @@ def raw_material_cost(system, prices):
 
     for s in system.feeds:
         if s.ID in prices:
-            total += s.F_mass * hours_year * prices[s.ID]
-            
+            for chem, price in prices.items():
+                if chem in s.imass:
+                    total += s.imass[chem] * hours_year * price
+    
     return total
 
 def labor_cost(process_type, salary = 38366):
