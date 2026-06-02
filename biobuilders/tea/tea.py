@@ -6,7 +6,6 @@ from typing import Optional
 
 __all__ = (
     "TEA",
-    "InflationTEA"
 )
 
 class TEA(bst.TEA):
@@ -113,7 +112,8 @@ class TEA(bst.TEA):
                          construction_schedule, startup_months, 
                          startup_FOCfrac, startup_VOCfrac, startup_salesfrac, 
                          WC_over_FCI, finance_interest, finance_years, 
-                         finance_fraction, accumulate_interest_during_construction)
+                         finance_fraction, accumulate_interest_during_construction,
+                         inflation_rate, start_year)
         
         # Added parameters
         self.labor_cost = labor_cost
