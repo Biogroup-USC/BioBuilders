@@ -3,7 +3,7 @@
 import pandas as pd
 import numpy as np
 import biosteam as bst
-from ..tea import TEA, InflationTEA
+from ..tea import TEA
 from ..tools.diagramtools import simplify_labels, filename_to_save
 import matplotlib.pyplot as plt
 import os
@@ -16,7 +16,7 @@ __all__ = (
 class ResultsTEA:
     """
     """
-    def __init__(self, cashflow: pd.DataFrame = None, TEAobject: TEA | InflationTEA = None):
+    def __init__(self, cashflow: pd.DataFrame = None, TEAobject: TEA  = None):
         """
         """
         if cashflow is not None:
