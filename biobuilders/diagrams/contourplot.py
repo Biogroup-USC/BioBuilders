@@ -152,6 +152,20 @@ def plot_contourf(
         units = indicator_units.get(ind)
         cb.set_label(ind if not units else f"{ind} [{units}]")
 
+        ax.set_title(ind if title is None else title)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+
+        fig.tight_layout()
+
+        if Path is not None:
+            save_path = _resolve_save_path(path, indicator = ind, n = len(plot_indicators))
+            fig.savefig(save_path, dpi = 300, bbox_inches = "tight")
+        
+        figs.append((fig, ax, cf))
+    
+    return figs
+
         
  
 def _get_indicator_units(results: dict) -> dict:

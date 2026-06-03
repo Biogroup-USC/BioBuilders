@@ -1,10 +1,14 @@
 from biosteam import Model
 from ..tools.mathtools.sampling import build_cartesian_grid
+from ..diagrams.contourplot import plot_contourf
 import time
 import numpy as np
 from tqdm import tqdm
 from typing import Literal
 
+__all__ = (
+    "ContourAnalysis",
+)
 class ContourAnalysis:
     """
     """

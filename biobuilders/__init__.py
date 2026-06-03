@@ -57,6 +57,10 @@ from .sensitivity import (
     StandRegCoeffs,
 )
 
+from .evaluation import (
+    ContourAnalysis,
+)
+
 from .tools import (
     # Streams
     extract_components_flow,
@@ -148,6 +152,9 @@ __all__ = (
 
     # Sensitivity
     'StandRegCoeffs',
+
+    # Evaluation
+    'ContourAnalysis',
 
     # Tools
     'extract_components_flow',
