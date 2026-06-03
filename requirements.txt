@@ -12,3 +12,7 @@ geopandas>=1.1.2
 shapely>=2.1.2
 networkx>=3.6.1
 geopy>=2.4.1
+bw2data==4.7
+bw2io==0.9.17
+ecoinvent_interface==3.1
+bw2io[multifunctional]==1.1.1

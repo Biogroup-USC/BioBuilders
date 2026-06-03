@@ -1,11 +1,10 @@
-from .tea import TEA, InflationTEA
+from .tea import TEA
 from .settingsprocess import ProcessSettingsManager
 from .transportation import BaseDistance, TruckTransportationCost, PipelineTransportationCost
 
 __all__ = (
     "ProcessSettingsManager",
     "TEA",
-    "InflationTEA",
     "BaseDistance",
     "TruckTransportationCost",
     "PipelineTransportationCost",

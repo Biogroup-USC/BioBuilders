@@ -34,7 +34,6 @@ from .units import (
 
 from .tea import (
     TEA,
-    InflationTEA,
     ProcessSettingsManager,
     BaseDistance,
     TruckTransportationCost,
@@ -134,7 +133,6 @@ __all__ = (
 
     # Tea
     'TEA',
-    'InflationTEA',
     'ProcessSettingsManager',
     'BaseDistance',
     'TruckTransportationCost',
