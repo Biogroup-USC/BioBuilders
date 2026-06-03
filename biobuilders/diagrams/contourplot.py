@@ -20,6 +20,7 @@ def plot_contourf(
     cmap: str = "Spectral_r",
     path: str | Path = None,
     baseline: dict | None = None,
+    use_results_baseline: bool = True,
     desired_ind: dict | None = None,
     marker_color: str = None,
     crosshair: bool = False,
@@ -74,11 +75,21 @@ def plot_contourf(
     Y = np.asarray(results["Y"], dtype = float)
     Z_data = results["Z"]
 
+    if baseline is None:
+        if use_results_baseline:
+            baseline = results.get("baseline", None)
+
     if x_display_fn is not None:
         X = np.asarray(x_display_fn(X), dtype = float)
 
     if y_display_fn is not None:
         Y = np.asarray(y_display_fn(Y), dtype = float)
+    
+    baseline = _transform_baseline_point(
+        baseline,
+        x_display_fn=x_display_fn,
+        y_display_fn=y_display_fn
+    )
     
     if X.shape != Y.shape:
         raise ValueError(f"X and Y must have the same shape. Got X{X.shape}, Y{Y.shape}.")
@@ -116,7 +127,7 @@ def plot_contourf(
             )
         
         Zm = np.ma.masked_invalid(Z)
-        levels_arr = _get_levels(Zm, levels, cmap)
+        levels_arr = _get_levels(Zm, levels, n_round_ind)
     
         fig, ax = plt.subplots()
 
@@ -158,7 +169,7 @@ def plot_contourf(
 
         fig.tight_layout()
 
-        if Path is not None:
+        if path is not None:
             save_path = _resolve_save_path(path, indicator = ind, n = len(plot_indicators))
             fig.savefig(save_path, dpi = 300, bbox_inches = "tight")
         
@@ -176,7 +187,9 @@ def _get_indicator_units(results: dict) -> dict:
         unit = getattr(indicator, "units", None)
 
         if name is not None:
-            units[name] = units
+            units[name] = unit
+    
+    return units
 
 def _get_levels(Zm, levels=None, n_round: int = 1):
     """Return contour levels from data or user input"""
@@ -189,6 +202,10 @@ def _get_levels(Zm, levels=None, n_round: int = 1):
     else:
         levels_arr = np.asarray(levels, dtype=float)
     
+    print("levels_arr:", levels_arr)
+    print("Z min:", np.nanmin(Zm))
+    print("Z max:", np.nanmax(Zm))
+
     return np.round(levels_arr, n_round)
 
 def _levels_from_data(Zm, n: int = 10):
@@ -221,45 +238,52 @@ def _add_baseline(
     baseline_ind_linestyle,
 ):
     """Add baseline marker, crosshair and baseline indicator contour."""
-    if baseline is None:
+    if baseline is None or not isinstance(baseline, dict):
         return
-    
 
-    if not isinstance(baseline, dict):
-        raise TypeError("baseline must be a dictionary or None")
-    
-    x0,y0 = baseline.get("point", (None, None))
+    try:
+        x0, y0 = baseline.get("point", (None, None))
 
-    if x0 is not None and y0 is not None:
-        x0 = float(x0)
-        y0 = float(y0)
+        if x0 is not None and y0 is not None:
+            if crosshair:
+                ax.axvline(x0, linestyle="--", linewidth=1)
+                ax.axhline(y0, linestyle="--", linewidth=1)
 
-        if crosshair:
-            ax.axvline(x0, linestyle = "--", linewidth = 1)
-            ax.axhline(y0, linestyle = "--", linewidth = 1)
+            if show_baseline_marker:
+                ax.plot(
+                    x0,
+                    y0,
+                    color=marker_color,
+                    marker="o",
+                    markersize=6,
+                )
 
-        if show_baseline_marker:
-            ax.plot(x0, y0, color = marker_color, marker = "o", markersize = 6)
-    
-    base_values = baseline.get("values", {})
+        base_values = baseline.get("values", {})
 
-    if show_baseline_contour and indicator in base_values:
-        v0 = float(base_values[indicator])
+        if show_baseline_contour and indicator in base_values:
+            v0 = float(base_values[indicator])
 
-        cs = ax.contour(
-            X,
-            Y,
-            Zm,
-            levels = [v0],
-            linewidth = 2,
-            colors = [baseline_ind_color],
-            linestyles = baseline_ind_linestyle
-        )
+            cs = ax.contour(
+                X,
+                Y,
+                Zm,
+                levels=[v0],
+                linewidths=2,
+                colors=[baseline_ind_color],
+                linestyles=baseline_ind_linestyle,
+            )
 
-        try:
-            ax.clabel(cs, inline = True, fmt = {v0: f"{indicator} base"})
-        except Exception:
-            pass
+            try:
+                ax.clabel(
+                    cs,
+                    inline=True,
+                    fmt={v0: f"{indicator} base"},
+                )
+            except Exception:
+                pass
+
+    except Exception:
+        pass
 
 def _add_desired_contours(
     ax,
@@ -274,38 +298,76 @@ def _add_desired_contours(
     """Add desired indicator contour lines."""
     if desired_ind is None or indicator not in desired_ind:
         return
-    
+
     val_dict = desired_ind[indicator]
 
     if not isinstance(val_dict, dict):
         raise ValueError("Desired indicator values must be a dictionary[str, float].")
-    
+
+    float_values = [float(v) for v in val_dict.values()]
+
     if not val_dict:
         raise ValueError(f"desired_ind[{indicator!r}] cannot be an empty dict.")
-    
-    levels = [float(v) for v in val_dict.values()]
+
     fmt_dict = {float(v): label for label, v in val_dict.items()}
 
     cs = ax.contour(
         X,
         Y,
         Zm,
-        levels = levels,
-        linewidth = 2,
-        colors = [desired_ind_color],
-        linestyles = desired_ind_linestyle
+        levels=float_values,
+        linewidths=2,
+        colors=[desired_ind_color],
+        linestyles=desired_ind_linestyle,
     )
 
     try:
-        ax.clabel(cs, inline = True, fmt = fmt_dict)
+        ax.clabel(cs, inline=True, fmt=fmt_dict)
     except Exception:
         pass
 
 def _resolve_save_path(path, indicator: str, n: int):
-    """Return a save path, appending indicator name when plotting multiple figures."""
+    """Return a save path, creating folders and appending indicator name when needed."""
     path = Path(path)
+
+    # path is a directory or have no file extension
+    if path.is_dir() or path.suffix == "":
+        path.mkdir(parents=True, exist_ok=True)
+        return path / f"{indicator}_contour.png"
+
+    # path is a file path
+    path.parent.mkdir(parents=True, exist_ok=True)
 
     if n == 1:
         return path
-    
+
     return path.with_name(f"{path.stem}_{indicator}{path.suffix}")
+
+def _transform_baseline_point(baseline, x_display_fn = None, y_display_fn = None):
+    """Return a copy of baseline with transformed point coordinates"""
+    if baseline is None:
+        return None
+    
+    if not isinstance(baseline, dict):
+        raise TypeError("baseline must be a dictionary or None.")
+    
+    baseline = dict(baseline)
+    x0, y0 = baseline.get("point", (None, None))
+
+    if x0 is None or y0 is None:
+        return baseline
+    
+    if x_display_fn is not None:
+        x0 = float(
+            np.asarray(x_display_fn(np.asarray([[x0]], dtype = float))).ravel()[0]
+        )
+
+    if y_display_fn is not None:
+        y0 = float(
+            np.asarray(
+                y_display_fn(np.asarray([[y0]], dtype=float))
+            ).ravel()[0]
+        )
+
+    baseline["point"] = (float(x0), float(y0))
+    return baseline

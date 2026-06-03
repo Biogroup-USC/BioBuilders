@@ -86,6 +86,40 @@ class ContourAnalysis:
         
         return selected_indicators
 
+    def _compute_baseline(self, parameter_x, parameter_y, indicators):
+        """Compute indicators using baseline values"""
+        px = parameter_x
+        py = parameter_y
+
+        baseline_x = getattr(px, "baseline", None)
+        baseline_y = getattr(py, "baseline", None)
+
+        if baseline_x is None or baseline_y is None:
+            raise ValueError(
+                "Both contour parameters must define a baseline value "
+                "to compute the baseline case."
+            )
+        
+        px.setter(float(baseline_x))
+        py.setter(float(baseline_y))
+        self.system.simulate()
+
+        values = {}
+
+        for indicator in indicators:
+            try:
+                values[indicator.name] = float(indicator.getter())
+            except Exception as e:
+                raise RuntimeError(
+                    f"Could not evaluate baseline value for indicator "
+                    f"{indicator.name!r}."
+                ) from e
+
+        return {
+            "point": (float(baseline_x), float(baseline_y)),
+            "values": values,
+        }
+
     def _build_grid(
         self,
         parameter_x,
@@ -136,9 +170,13 @@ class ContourAnalysis:
         parameter_y,
         indicators,
         show_progress: bool = True,
+        reset_each_run: bool = False,
     ):
         px = parameter_x
         py = parameter_y
+
+        restore_px = px.baseline
+        restore_py = py.baseline
 
         if len(pairs) != len(idx_pairs):
             raise ValueError("pairs and idx_pairs must have the same lenght.")
@@ -183,6 +221,12 @@ class ContourAnalysis:
                 vx = float(vx)
                 vy = float(vy)
 
+                if reset_each_run:
+                    px.setter(float(restore_px))
+                    py.setter(float(restore_py))
+                    self.system.empty_recycles()
+                    self.system.simulate()
+
                 s0 = time.perf_counter()
                 try:
                     try:
@@ -210,13 +254,13 @@ class ContourAnalysis:
                         iterator.set_postfix_str(
                             f"t/it={dt:.2f}s | fails={len(failures)}"
                         )
-        
+
         finally:
             if show_progress:
                 iterator.close()
             
-            px.setter(float(px.baseline))
-            py.setter(float(py.baseline))
+            px.setter(float(restore_px))
+            py.setter(float(restore_py))
             self.system.simulate()
         
         elapsed = time.perf_counter() - t0
@@ -234,6 +278,7 @@ class ContourAnalysis:
         ybounds = None,
         order: Literal["row","serpentine"] = "row",
         show_progress: bool = True,
+        reset_each_run: bool = False,
     ):
         """Evaluate selected BioSTEAM indicators over a 2D parameter grid."""
         X, Y, pairs, idx_pairs, px, py = self._build_grid(
@@ -256,6 +301,13 @@ class ContourAnalysis:
             parameter_y=py,
             indicators=selected_indicators,
             show_progress=show_progress,
+            reset_each_run=reset_each_run
+        )
+
+        baseline = self._compute_baseline(
+            parameter_x = px,
+            parameter_y = py,
+            indicators = selected_indicators
         )
 
         return {
@@ -265,5 +317,6 @@ class ContourAnalysis:
             "failures": failures,
             "parameters": (px, py),
             "indicators": selected_indicators,
+            "baseline": baseline,
             "elapsed": elapsed
         }
