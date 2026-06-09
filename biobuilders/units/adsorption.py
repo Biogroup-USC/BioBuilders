@@ -212,11 +212,11 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
                 f"isotherm_model must be one of {tuple(self.isotherm_models)}"
             )
         self.isotherm_model = self.isotherm_models[key]
-        self.isotherm_args = isotherm_args or ()
+        self.isotherm_args = list(isotherm_args or ())
         
         if regeneration_isotherm_model is None:
             self.regeneration_isotherm_model = None
-            self.regeneration_isotherm_args = ()
+            self.regeneration_isotherm_args = []
         else:
             rkey = regeneration_isotherm_model.lower()
             if rkey not in self.isotherm_models:
@@ -225,7 +225,7 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
                 )
             
             self.regeneration_isotherm_model = self.isotherm_models[regeneration_isotherm_model.lower()]
-            self.regeneration_isotherm_args = regeneration_isotherm_args
+            self.regeneration_isotherm_args = list(regeneration_isotherm_args)
 
         self.N_columns = N_columns
         self.vessel_material = vessel_material
