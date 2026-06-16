@@ -26,10 +26,8 @@ class RotaryVacuumFilter(SolidsSeparator):
                        Fraction of water in retentate.
     
     """
-    auxiliary_unit_names = ('vacuum_system',)
-    _F_BM_default = {'Vessels': 2.32,
-                     'Vacuum system': 1.0}
-    
+    _F_BM_default = {'Vessels': 2.32,}
+   
     #: Revolutions per second
     rps = 20/3600
     
@@ -44,8 +42,8 @@ class RotaryVacuumFilter(SolidsSeparator):
     
     _kwargs = {'moisture_content': 0.80} # fraction
     _bounds = {'Individual area': (2, 100)}
-    _units = {'Area': 'm^2',
-              'Individual area': 'm^2'}
+    _units = {'Area': 'ft^2',
+              'Individual area': 'ft^2'}
 
     def _init(self,
               split,
@@ -53,7 +51,8 @@ class RotaryVacuumFilter(SolidsSeparator):
               moisture_content=0.40,
               moisture_ID=None,
               solute_ID=None,
-              strict_moisture_content=None
+              strict_moisture_content=None,
+              solids=None,
             ):
         SolidsSeparator._init(
             self,
@@ -65,16 +64,37 @@ class RotaryVacuumFilter(SolidsSeparator):
             strict_moisture_content=strict_moisture_content,
         )
 
+        self.solids = solids
+
+        self._kWh_per_kg = None
+
         self._base_cost = None
         self._base_n_cost = None
         self._base_area = None
         self._base_CE = None
+    
+    @property
+    def kWh_per_kg(self):
+        """
+        """
+        if self._kWh_per_kg is None:
+            self._kWh_per_kg = 0.0055   # mean value from http://dx.doi.org/10.1016/j.jclepro.2016.06.164
+        return self._kWh_per_kg
 
+    @kWh_per_kg.setter
+    def kWh_per_kg(self,value):
+        """
+        """
+        self._kWh_per_kg = value
 
     def _design(self):
         flow = sum([stream.F_mass for stream in self.outs])
-        self.design_results['Area'] = self._calc_Area(flow, self.filter_rate) * 0.092903
-
+        self.design_results['Area'] = self._calc_Area(flow, self.filter_rate)
+        
+        if self.solids is not None:
+            total_solids = sum(i.imass[self.solids].sum() for i in self.ins)
+            self.add_power_utility(self.kWh_per_kg*total_solids)
+    
     @property
     def base_cost(self):
         """
@@ -134,13 +154,19 @@ class RotaryVacuumFilter(SolidsSeparator):
     def _cost(self):
         Design = self.design_results
         Area = Design['Area']
+        ub = self._bounds['Individual area'][1]
+        N_vessels = np.ceil(Area/ub)
+        iArea = Area/N_vessels # individual vessel
+        self.parallel['self'] = N_vessels
+        Design['Individual area'] = iArea
+        
         # Calculate the baseline purchase costs for the Rotatory Vacuum Drum Filter
         ## The base cost accounts for a rotatory drum filter, vacuum with discharger,
         ## filtrate pumps, vacuum system, motor and drive.
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Filter_Purchase_Cost = self.base_cost * (Area/self.base_area)**self.base_n_cost
+        Filter_Purchase_Cost = self.base_cost * ((Area * 0.092903)/self.base_area)**self.base_n_cost
         self.baseline_purchase_costs['Vessels'] = Filter_Purchase_Cost * bst.CE/self.base_CE
-        
+
     @staticmethod
     def _calc_Area(flow, filter_rate):
         """Return area in ft^2 given flow in kg/hr and filter rate in lb/day-ft^2."""
@@ -282,6 +308,12 @@ class MembraneFiltration(bst.Unit):
         if self._kWh_per_kg is None:
             self._kWh_per_kg = 0.0055   # mean value from http://dx.doi.org/10.1016/j.jclepro.2016.06.164
         return self._kWh_per_kg
+
+    @kWh_per_kg.setter
+    def kWh_per_kg(self,value):
+        """
+        """
+        self._kWh_per_kg = value
 
     def _design(self):
         """

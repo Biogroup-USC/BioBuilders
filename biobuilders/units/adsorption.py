@@ -127,10 +127,10 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
         adsorbed_fraction: float = 1.,
         t_ads: float = None,
         t_regen: float = None,
-        isotherm_args: tuple = None,
+        isotherm_args: list = None,
         isotherm_model: str = None,
-        regeneration_isotherm_args = None,
-        regeneration_isotherm_model = None,
+        regeneration_isotherm_args: list = None,
+        regeneration_isotherm_model: str = None,
         void_fraction = None,
         rho_adsorbent = None,
         P_ads = None,
@@ -212,7 +212,7 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
                 f"isotherm_model must be one of {tuple(self.isotherm_models)}"
             )
         self.isotherm_model = self.isotherm_models[key]
-        self.isotherm_args = list(isotherm_args or ())
+        self.isotherm_args = list(isotherm_args)
         
         if regeneration_isotherm_model is None:
             self.regeneration_isotherm_model = None
