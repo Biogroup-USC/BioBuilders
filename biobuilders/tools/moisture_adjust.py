@@ -54,7 +54,7 @@ def mix_and_split_with_moisture_content(ins, retentate, permeate,
 
 # Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
 # Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
-def adjust_moisture_content(retentate, permeate, moisture_content, solvent_IDs=('Water',), solute_IDs=(), strict=None,):
+def adjust_moisture_content(retentate, permeate, moisture_content, solvent_IDs=('Water',), solute_IDs=None, strict=None,):
     """
     Remove water from permate to adjust retentate moisture content.
     
@@ -93,68 +93,108 @@ def adjust_moisture_content(retentate, permeate, moisture_content, solvent_IDs=(
     InfeasibleRegion: not enough water; permeate moisture content is infeasible
 
     """
-    # Checks
-    if isinstance(solvent_IDs,str):
+    # Calculate solute concentration
+    if not solvent_IDs:
+        raise ValueError(
+            f"solvent_IDs must contain at least one chemical."
+        )
+    elif isinstance(solvent_IDs, str):
         solvent_IDs = (solvent_IDs,)
+    else:
+        solvent_IDs = tuple(solvent_IDs)
+
+    if solute_IDs is None:
+        solute_IDs = ()
+    elif isinstance(solute_IDs, str):
+        solute_IDs = (solute_IDs,)
+    else:
+        solute_IDs = tuple(solute_IDs)
+
+    if moisture_content is None:
+        raise ValueError(
+            f"moisture_content must be provided. Its value should be between 0 and 1."
+        )
+    
+    if not 0. <= moisture_content < 1.:
+        raise ValueError(
+            f"moisture_content must be between 0 and 1, both included."
+        )
+    
+    # Total solvent in feed
+    liquid_total = sum(permeate.imass[get_key_for(permeate, ID, 'l')] for ID in solvent_IDs)
+    if liquid_total <= 0:
+        if strict is None:
+            strict = True
+        if strict:
+            raise InfeasibleRegion(
+                f"not enough solvent {solvent_IDs} for the moisture_content specified."
+            )
+        else:
+            return
 
     mc = moisture_content
-    if not 0 <= mc <= 1:
-        raise ValueError("moisture_content must satisfy 0 <= moisture_content <= 1.")
-    
-    # Calculate dry mass
-    F_mass = retentate.F_mass
-    retentate_liquid = sum(retentate.imass[i] for i in solvent_IDs)
-    dry_mass = F_mass - retentate_liquid
-    if dry_mass < 0:
-        raise ValueError("Calculated dry mass is negative. Check species in ID.")
 
-    # Solve liquid needed
-    tgt_liquid = dry_mass * mc / (1 - mc)
-    delta_liquid = tgt_liquid - retentate_liquid
-
-    # Return if moisture requirements already satisfy
-    if abs(delta_liquid) < 1e-12:
-        return
-    
-    # Handle Multistream
-    def _get_key(stream, chemical_ID):
-        return ('l', chemical_ID) if isinstance(stream, tmo.MultiStream) else chemical_ID
-    
-    # Distribute solvent and soluble chemicals
-    if delta_liquid > 0:
-        liquid = sum(permeate.imass[i] for i in solvent_IDs)
-        if liquid <= 0:
-            retentate.show(composition=True,flow='kg/hr')
-            permeate.show(composition=True,flow='kg/hr')
-            raise InfeasibleRegion(
-                f"Not enough permeate {solvent_IDs} and permeate flow {permeate.F_mass:.3f} kg/hr; retentate moisture content: {moisture_content} and retentate flow {retentate.F_mass:.3f} kg/hr"
-            )
-
-        for chemical in solvent_IDs:
-            # Calculate the mass fraction of chemical
-            fraction = permeate.imass[chemical] / liquid
-            chemical_mass = fraction * delta_liquid
-
-            retentate_key = _get_key(retentate, chemical)
-            permeate_key = _get_key(permeate, chemical)
-
-            retentate.imass[retentate_key] += chemical_mass
-            permeate.imass[permeate_key] -= chemical_mass
-
-            if permeate.imass[retentate_key] < 0:
-                if strict is None: strict = True
-                if strict:
-                    raise InfeasibleRegion(f'not enough {chemical} ({chemical_mass:.3f} kg/hr); retentate moisture content is infeasible')
-                else:
-                    retentate.imass[retentate_key] -= permeate.imass[permeate_key]
-                    permeate.imass[permeate_key] = 0.
+    if solute_IDs:
         
-        adjust_solute_concentration(retentate, permeate, delta_liquid, solvent_IDs, solute_IDs, strict)
+        # Dictionary with solute concentration per kg of solvent
+        solutes_conc = {}
 
-    elif 0 > delta_liquid > 1e-12:
-        return
+        for solute in solute_IDs:
+            permeate_solute = permeate.imass[get_key_for(permeate, solute, 'l')]
+            solute_conc = permeate_solute / liquid_total  # kg solute / kg liquid (feed)
+            solutes_conc[solute] = solute_conc
+
+        solutes_total_conc = sum(solutes_conc[ID] for ID in solutes_conc.keys())
     else:
-        warn(f"Retentate liquid ({retentate_liquid} 'kg/hr') is higher than liquid needed to satisfy moisture ({tgt_liquid} 'kg/hr').")
+        solutes_conc = {}
+        solutes_total_conc = 0.
+
+    # solve liquid needed to satisfy moisture
+    liquid_total_retentate = sum(retentate.imass[get_key_for(retentate, ID, 'l')] for ID in solvent_IDs)
+    solids_retentate = retentate.F_mass - liquid_total_retentate
+    mc_factor = mc/(1-mc)
+    liquid_retained = (mc_factor * solids_retentate) / (1 - mc_factor * solutes_total_conc)
+    liquid_transfer = liquid_retained - liquid_total_retentate
+
+    if abs(liquid_transfer) < 1e-12:
+        return
+
+    if liquid_transfer < 0:
+        warn(
+            f"Retentate already has more solvent than required "
+            f"({liquid_total_retentate:.3g} kg/hr > {liquid_retained:.3g} kg/hr). "
+            "No solvent removal implemented."
+        )
+        return
+    
+    # Distribute solvents
+    fraction_retained = liquid_transfer / liquid_total
+    for ID in solvent_IDs:
+        key_r = get_key_for(retentate, ID, 'l')
+        key_p = get_key_for(permeate, ID, 'l')
+        retentate.imass[key_r] += fraction_retained * permeate.imass[key_p]
+        permeate.imass[key_p] -= fraction_retained * permeate.imass[key_p]
+
+        if abs(permeate.imass[key_p]) < 1e-12:
+            permeate.imass[key_p] = 0.
+
+        if permeate.imass[key_p] < 0:
+            if strict is None: strict = True
+            if strict:
+                raise InfeasibleRegion(
+                    f"not enough {ID} for the moisture_content specified."
+                )
+            else:
+                retentate.imass[key_r] -= permeate.imass[key_p]
+                permeate.imass[key_p] = 0.
+
+    # Distribute solutes
+    for solute, conc in solutes_conc.items():
+        retentate.imass[get_key_for(retentate, solute, 'l')] += conc * liquid_transfer
+        permeate.imass[get_key_for(permeate, solute, 'l')] -= conc * liquid_transfer
+        
+        if abs(permeate.imass[get_key_for(permeate, solute, 'l')]) < 1e-12:
+            permeate.imass[get_key_for(permeate, solute, 'l')] = 0.
 
 # Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
 # Copyright (c) 2019-2023 BioSTEAM Development Group. All rights reserved.
@@ -198,40 +238,6 @@ def mix_and_split(ins, top, bottom, split):
     top.mix_from(ins)
     top.split_to(top, bottom, split, energy_balance=True)
 
-def adjust_solute_concentration(
-        retentate,
-        permeate,
-        delta_liquid,
-        solvent_IDs,
-        solute_IDs,
-        strict=True
-):
-    """
-    """
-    if delta_liquid <= 0:
-        return
-
-    total_solvent = sum(permeate.imass[i] for i in solvent_IDs)
-
-    if total_solvent <= 0:
-        return
-
-    for solute in solute_IDs:
-
-        C = permeate.imass[solute] / total_solvent
-
-        solute_mass = C * delta_liquid
-
-        retentate.imass[solute] += solute_mass
-        permeate.imass[solute] -= solute_mass
-
-        if permeate.imass[solute] < 0:
-            if strict:
-                raise InfeasibleRegion(
-                    f"Not enough {solute} ({solute_mass:.3f} kg/hr) "
-                    "for entrainment with retained liquid"
-                )
-            else:
-                deficit = -permeate.imass[solute]
-                retentate.imass[solute] -= deficit
-                permeate.imass[solute] = 0.0
+def get_key_for(stream, ID, phase='l'):
+    """Return the correct index for Stream or MultiStream."""
+    return (phase, ID) if isinstance(stream, tmo.MultiStream) else ID
