@@ -10,6 +10,7 @@ from .parameters import (
 
 from .units import (
     GasAdsorptionColumn,
+    LiquidAdsorptionColumn,
     BinaryDistillation,
     Flash,
     RotaryVacuumFilter,
@@ -110,6 +111,7 @@ __all__ = (
 
     # Unit operation
     'GasAdsorptionColumn',
+    'LiquidAdsorptionColumn',
     'BinaryDistillation',
     'Flash',
     'RotaryVacuumFilter',
