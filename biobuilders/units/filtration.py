@@ -1,9 +1,18 @@
 """
+References:
+[1] D. W. Green and R. H. Perry, Eds., “Membrane separation processes,” in Perry’s 
+Chemical Engineers’ Handbook, 8th ed., sec. 20, “Alternative Separation Processes.” 
+New York, NY, USA: McGraw-Hill, 2008
+
+[2] D. R. Woods, “Membranes and membrane configurations,” in Rules of Thumb in Engineering 
+Practice, ch. 4, “Homogeneous Separation.” Weinheim, Germany: Wiley-VCH, 2007, sec. 4.15, 
+pp. 123–128.
 """
 
 import biosteam as bst
 import numpy as np
 from .centrifuge import SolidsSeparator
+from typing import Literal
 
 __all__ = (
     'RotaryVacuumFilter',
@@ -172,19 +181,18 @@ class RotaryVacuumFilter(SolidsSeparator):
         """Return area in ft^2 given flow in kg/hr and filter rate in lb/day-ft^2."""
         return flow * 52.91 / filter_rate
 
+MEMBRANE_CAPACITY = {       # [1]
+    "Spiral": (0.1, 35),    # m2/module
+    "Fiber": (0.001, 5),    # m2/module
+    "Cassette": (0.05, 2.5) # m2/module
+}
 MEMBRANE_LMH = {
-    "UF_hollow_fibers": (0.005, 0.016),     # L/s*m2
-    "UF_Spiral_Wound": (0.08, 0.14),        # L/s*m2
-    "UF_Tubes": (0.06, 0.2),                # L/s*m2
-    "MF": (0.001, 0.2)
+    "Ultrafiltration": {
+        "Polysulfone_Hollow_Fibers": ((0.005 + 0.016)/2)*60,    # L/h*m2
+        "Polysulfone_Spiral_Wound": ((0.08 + 0.14)/2)*60,       # L/h*m2
+        "Polysulfone_Tubes": ((0.06 + 0.20)/2)*60,              # L/h*m2
+    },
 }
-MEMBRANE_CAPACITY = {
-    "UF_hollow_fibers": (0.1, 25),  # L/s
-    "UF_Spiral_Wound": (0.1, 25),   # L/s
-    "UF_Tubes": (0.1, 25),          # L/s
-    "MF": (0.001, 1.0)              # L/s
-}
-
 class MembraneFiltration(bst.Unit):
     """
 
@@ -221,6 +229,12 @@ class MembraneFiltration(bst.Unit):
         0.60 kg DW/kg
 
     """
+    _default_equipment_lifetime = {
+        'Membrane': 3,
+    }
+
+    auxiliary_unit_names = ('pump')
+
     # Number of input streams
     _N_ins = 1
     # Number of output streams
@@ -231,89 +245,80 @@ class MembraneFiltration(bst.Unit):
     }
 
     def _init(
-        self, 
-        type: int = 0, 
+        self,
+        split: dict = None,
+        pressure_drop: float = 120000,
+        permeate_pressure: float = 101325,
+        TMP: float = None,
+        LMH: float = None,
+        VCF: float = 0.40,
+        solids_concentration: float = None,
+        type: Literal["Spiral","Fiber","Cassette"] = "Spiral",
         solids_retained: list[str] = [], 
-        solids: list[str] = [], 
-        solids_retentate_conc: float = 0.60, 
-        solvent_IDs: list = [], 
-        solute_IDs: list = []
+        solids: list[str] = [],
+        solvent_IDs: list = [],
         ):
-        """
-        """
-        if type == 0:
-            self.type = "UF_hollow_fibers"
-        elif type == 1:
-            self.type = "UF_Spiral_Wound"
-        elif type == 2:
-            self.type = "UF_Tubes"
-        elif type == 3:
-            self.type = "MF"
         
+        self.type = type
+        self.split = split
+        self.pressure_drop = pressure_drop
+        self.permeate_pressure = permeate_pressure
+        self.TMP = TMP
+        self.LMH = LMH
+        self.VCF = VCF
+        self.solids_concentration = solids_concentration
         self.solids_retained = solids_retained
         self.solids = solids
-        self.retentate_solids_conc = solids_retentate_conc
         self.solvent_IDs = solvent_IDs
-        self.solute_IDs = solute_IDs
 
         # Properties
-        self._kWh_per_kg = None
         self._base_cost = None
         self._base_n_cost = None
         self._base_area = None
         self._CE_base = None
 
+    def _load_auxiliaries(self):
+        P_inlet = self._solve_pressure()
+
+        self.pump = bst.Pump(
+            ID = 'Auxiliary pump', 
+            ins = self.ins[0], 
+            P = P_inlet
+        )
+
+    def _solve_pressure(self):
+        p_drop = self.pressure_drop         # Pa, P_inlet - P_retentate
+        tmp = self.TMP                      # Pa, average TMP
+        p_permeate = self.permeate_pressure # Pa, permeate pressure
+
+        if p_drop < 0:
+            raise ValueError("pressure_drop must be positive: P_inlet - P_retentate.")
+
+        if tmp <= 0:
+            raise ValueError("TMP must be positive.")
+
+        p_inlet = tmp + p_permeate + p_drop / 2
+
+        return p_inlet
+
     def _run(self):
-        """
-        """
+        
         # Input stream
         feed, = self.ins
 
         # Output streams
         permeate, retentate = self.outs
         permeate.copy_like(feed)
+        
+        # split components
+        for chem, split in self.split:
+            rejection = split * permeate.imass[chem]
+            
+            retentate.imass[chem] += rejection
+            permeate.imass[chem] -= rejection
 
-        # Calculate the amount of solids retained
-        solids_retained = 0
-        for solid in self.solids_retained:
-            flow_permeate = 0 * feed.imass[solid]
-            flow_retentate = 1 * feed.imass[solid]
-            solids_retained += flow_retentate
-
-            permeate.imass[solid] = flow_permeate
-            retentate.imass[solid] = flow_retentate
-
-        # Calculate solute and solvent needed to satisfy retained solids concentration
-        mass_solute_solvent = solids_retained / self.retentate_solids_conc - solids_retained
-
-        # Distribute solute and solvent
-        solvent_feed = 0.
-        for solvent_ID in self.solvent_IDs:
-            solvent_feed += feed.imass[solvent_ID]
-
-        solute_feed = 0.
-        for solute_ID in self.solute_IDs:
-            solute_feed += feed.imass[solute_ID]
-
-        split_to_retentate = mass_solute_solvent/(solvent_feed+solute_feed)
-
-        for element in self.solvent_IDs + self.solute_IDs:
-            retentate.imass[element] = feed.imass[element] * split_to_retentate
-            permeate.imass[element] -= retentate.imass[element]
-    
-    @property
-    def kWh_per_kg(self):
-        """
-        """
-        if self._kWh_per_kg is None:
-            self._kWh_per_kg = 0.0055   # mean value from http://dx.doi.org/10.1016/j.jclepro.2016.06.164
-        return self._kWh_per_kg
-
-    @kWh_per_kg.setter
-    def kWh_per_kg(self,value):
-        """
-        """
-        self._kWh_per_kg = value
+        # 
+        
 
     def _design(self):
         """
