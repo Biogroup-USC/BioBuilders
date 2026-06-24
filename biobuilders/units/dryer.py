@@ -2,7 +2,7 @@
 """
 import biosteam as bst
 import flexsolve as flx
-import numpy as np
+import numpy as np 
 from thermosteam import separations as sep
 
 __all__ = (
@@ -36,68 +36,144 @@ class SprayDryer(bst.Unit):
         Humidity content of the flow (fraction)
     """
 
-    _N_ins = 1
+    _N_ins = 2
     _N_outs = 2
     _units = {
-        'Evaporation rate': 'kg/s',
-        'Heat duty': 'kJ/hr'
+        "Evaporation rate": "kg/s",
+        "Residence time": "s",
+        "Gas volumetric flow": "m3/s",
+        "Volume": "m3",
+        "Diameter": "m",
+        "Height": "m",
     }
 
     def _init(self,
-              moisture_content = 0.10,
-              dryer_efficiency = 0.80, # From Piccinno et al. (2016)
+        moisture_content = 0.10,
+        moisture_ID: str = "Water",
+        split: dict = None,
+        dryer_efficiency = 0.80,    # From Piccinno et al. (2016)
+        RH: float = 0.50,
+        T: float = 273.15 + 70,
+        P: float = 101325,
+        residence_time: float = 30,
+        gas_composition: dict = None,
+        utility_agent: str = 'low_pressure_steam',
+        peripheral_velocity: float = 161,
+
     ):
-        """
-        Initialize the properties.
-        """
         self. moisture_content = moisture_content
+        self.moisture_ID = moisture_ID
+        self.split = split
         self.dryer_efficiency = dryer_efficiency
+        self.RH = RH
+        self.T = T
+        self.P = P
+        self.residence_time = residence_time
+        self.gas_composition = gas_composition
+        self.utility_agent = utility_agent
+        self.peripheral_velocity = peripheral_velocity
 
         self._base_cost = None
         self._base_evaporation_capacity = None
         self._base_n_cost = None
         self._CE_base = None
 
-        # Add heating utilty (air)
-        self.heat_utilities =[bst.HeatUtility()]
+    def _get_moisture_vapor_pressure(self, T):
+        chemical = self.thermo.chemicals[self.moisture_ID]
+        return chemical.Psat(T)
 
     def _run(self):
         """
         """
+        design = self.design_results
         # Define the streams
-        Feed = self.ins[0]
-        Dryed, Water = self.outs
-        Dryed.copy_like(Feed)
-
-        # Remove all water first
-        Water.copy_flow(Dryed, 'Water', remove=True)
+        feed, gas = self.ins
+        dryed, wet_gas = self.outs
+        
+        dryed.empty()
+        wet_gas.empty()
 
         # Adjust final moisture
-        sep.adjust_moisture_content(Dryed, Water, self.moisture_content)
-        Water.phase = 'g'
-        Dryed.phase = 's'
-        Feed.phase = 's'
+        feed.split_to(wet_gas, dryed, self.split)
+        sep.adjust_moisture_content(dryed, wet_gas, self.moisture_content, self.moisture_ID)
+        design['Evaporation rate'] = wet_gas.imass[self.moisture_ID]/3600
+
+        # Calculate moisture ID vapor molar fraction in outlet gas
+        Psat = self._get_moisture_vapor_pressure(self.T)
+        P = self.P
+
+        y_moisture = self.RH * Psat / P
+        if y_moisture <= 0:
+            raise ValueError("Calculated outlet moisture molar fraction is zero or negative.")
+
+        if y_moisture >= 1:
+            raise ValueError(
+                "Outlet gas is pure moisture or above saturation. "
+                "Increase pressure, reduce RH, or reduce operating temperature."
+            )
+        
+        # Required dry gas molar flow
+        n_other = wet_gas.imol[self.moisture_ID]
+        n_dry_gas = n_other * (1 - y_moisture) / y_moisture
+
+        if not self.gas_composition:
+            gas_composition = {"O2": 0.21, "N2": 0.79}
+        else:
+            gas_composition = self.gas_composition
+
+        # molar gas flow
+        gas.reset_flow(**dict(gas_composition), units='kmol/hr',total_flow=n_dry_gas)
+        wet_gas.mol += gas.mol
+        
+        # Temperature and pressure
+        dryed.T = wet_gas.T = self.T
+        dryed.P = wet_gas.P = self.P
+        dryed.phase = 's'
+        wet_gas.phase = gas.phase = 'g'
 
     def _design(self):
-        Dryed, Water = self.outs
+        feed, gas = self.ins
+        dryed, wet_gas = self.outs
 
-        evap_rate = Water.get_total_flow('kg/hr')
-        self.design_results['Evaporation rate'] = evap_rate / 3600
+        design = self.design_results
 
-        # Energy demand 
-        latent_heat = 2276 # kJ/kg for water at 105 ºC (2 bar) from HYSYS (low pressure steam)
-        Q = evap_rate * latent_heat / self.dryer_efficiency
-        self.design_results['Heat duty'] = Q
+        # Heating utilities
+        Q = wet_gas.H + dryed.H - feed.H - gas.H
+        Q = Q / self.dryer_efficiency
 
-        steam = bst.settings.get_heating_agent('low_pressure_steam')
-        if not self.heat_utilities:
-            self.add_heat_utility(
-                unit_duty = Q,
-                T_in = 378.15, # K (105ºC and 2 bar)
-                agent = steam
-            )
-        else:
-            self.heat_utilities[0].duty = Q
+        design["Dryer efficiency"] = self.dryer_efficiency
+
+        utility_agent = bst.settings.get_heating_agent(self.utility_agent)
+        self.add_heat_utility(Q, T_in = gas.T, agent = utility_agent)
+
+        # Power utilities
+        if self.peripheral_velocity is not None:
+            U = self.peripheral_velocity # m/s
+            
+            # Specific atomizer power
+            Ps = U**2 / 3600    # kWh/t feed
+
+            feed_tph = feed.F_mass / 1000   # t/h
+            atomizer_power = Ps * feed_tph  # kW
+
+            design["Atomizer specific power"] = Ps
+            
+            self.add_power_utility(atomizer_power)
+        
+        # chamber volume
+        tau = self.residence_time
+
+        gas_vol_flow = wet_gas.F_vol / 3600
+        volume = gas_vol_flow * tau
+
+        diameter = (volume / 1.47) ** (1/3)
+        height = diameter
+
+        design["Residence time"] = tau
+        design["Gas volumetric flow"] = gas_vol_flow
+        design["Volume"] = volume
+        design["Diameter"] = diameter
+        design["Height"] = height
 
     @property
     def base_cost(self):
@@ -157,25 +233,25 @@ class SprayDryer(bst.Unit):
         """
         """
         # Load all the design parameters needed
-        Evaporation_Rate = self.design_results['Evaporation rate']
+        evaporation_rate = self.design_results['Evaporation rate']
 
         # Calculate the design cost for the spray dryer: Including instrumentation, pressure nozzle atomization, residence time about 16 s,
         # access platform, support steel, air preheater, feed system, fan, motor and drive and dust collectors. Tin = 150ºC and Tout = 75ºC
-        Spray_Dryer_Purchase_Cost = self.base_cost * (Evaporation_Rate/self.base_evaporation_capacity) ** self.base_n_cost
-        self.baseline_purchase_costs['Spray Dryer'] = Spray_Dryer_Purchase_Cost
+        purchase_cost = self.base_cost * (evaporation_rate/self.base_evaporation_capacity) ** self.base_n_cost
+        self.baseline_purchase_costs['Spray Dryer'] = purchase_cost
 
         # The material, pressure and temperature factor are assumed to be 1
         self.F_D['Spray Dryer'] = self.F_M['Spray Dryer'] = self.F_P['Spray Dryer'] = 1
 
         # The bare module factor which account for installation cost is calculated as the sum of delivery, installation, piping, instrumentation and controls
-        Delivery = 0.10
-        Installation = 0.60 # Dryer
-        Instrumentation_Control = 0.50
-        Piping = 0.31 # Solid-fluid
+        delivery = 0.10
+        installation = 0.60 # Dryer
+        instrumentation_Control = 0.50
+        piping = 0.31 # Solid-fluid
 
         # Calculate the bare module with percentages from Peters: Plant Design and Economics for Chemical Engineers
-        Bare_Module = (1 + (Delivery + Installation +  Instrumentation_Control + Piping))
-        self.F_BM['Spray Dryer'] = Bare_Module
+        bare_module = (1 + (delivery + installation +  instrumentation_Control + piping))
+        self.F_BM['Spray Dryer'] = bare_module
 
         # Scale the cost using CEPCI
         CE_base = self.CE_base
