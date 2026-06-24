@@ -13,6 +13,7 @@ import biosteam as bst
 import numpy as np
 from .centrifuge import SolidsSeparator
 from typing import Literal
+from math import ceil
 
 __all__ = (
     'RotaryVacuumFilter',
@@ -188,9 +189,9 @@ MEMBRANE_CAPACITY = {       # [1]
 }
 MEMBRANE_LMH = {
     "Ultrafiltration": {
-        "Polysulfone_Hollow_Fibers": ((0.005 + 0.016)/2)*60,    # L/h*m2
-        "Polysulfone_Spiral_Wound": ((0.08 + 0.14)/2)*60,       # L/h*m2
-        "Polysulfone_Tubes": ((0.06 + 0.20)/2)*60,              # L/h*m2
+        "Polysulfone_Hollow_Fibers": ((0.005 + 0.016)/2)*3600,  # L/h*m2
+        "Polysulfone_Spiral_Wound": ((0.08 + 0.14)/2)*3600,     # L/h*m2
+        "Polysulfone_Tubes": ((0.06 + 0.20)/2)*3600,            # L/h*m2
     },
 }
 class MembraneFiltration(bst.Unit):
@@ -230,7 +231,7 @@ class MembraneFiltration(bst.Unit):
 
     """
     _default_equipment_lifetime = {
-        'Membrane': 3,
+        'Module': 3,
     }
 
     auxiliary_unit_names = ('pump')
@@ -251,12 +252,12 @@ class MembraneFiltration(bst.Unit):
         permeate_pressure: float = 101325,
         TMP: float = None,
         LMH: float = None,
-        VCF: float = 0.40,
+        VCF: float = None,
         solids_concentration: float = None,
-        type: Literal["Spiral","Fiber","Cassette"] = "Spiral",
+        module_area: float = None,
         solids_retained: list[str] = [], 
-        solids: list[str] = [],
-        solvent_IDs: list = [],
+        solids_IDs: list[str] = [],
+        solvent_IDs: list = ["Water",],
         ):
         
         self.type = type
@@ -267,8 +268,9 @@ class MembraneFiltration(bst.Unit):
         self.LMH = LMH
         self.VCF = VCF
         self.solids_concentration = solids_concentration
+        self.module_area = module_area
         self.solids_retained = solids_retained
-        self.solids = solids
+        self.solids_IDs = solids_IDs
         self.solvent_IDs = solvent_IDs
 
         # Properties
@@ -278,12 +280,10 @@ class MembraneFiltration(bst.Unit):
         self._CE_base = None
 
     def _load_auxiliaries(self):
-        P_inlet = self._solve_pressure()
-
-        self.pump = bst.Pump(
-            ID = 'Auxiliary pump', 
-            ins = self.ins[0], 
-            P = P_inlet
+        self.pump = self.auxiliary(
+            "pump",
+            bst.Pump,
+            ins = self.ins[0],
         )
 
     def _solve_pressure(self):
@@ -311,43 +311,119 @@ class MembraneFiltration(bst.Unit):
         permeate.copy_like(feed)
         
         # split components
-        for chem, split in self.split:
+        for chem, split in self.split.items():
+            if chem in self.solvent_IDs:
+                continue
+            
             rejection = split * permeate.imass[chem]
             
             retentate.imass[chem] += rejection
             permeate.imass[chem] -= rejection
 
-        # 
-        
+        # Distribute solvent
+        solvent_in = sum(feed.imass[chem] for chem in self.solvent_IDs)
+        solvent_vol_in = sum(feed.ivol[chem] for chem in self.solvent_IDs)
+
+        if self.solids_concentration:
+            # Calculate solvent retained 
+            solids_retained = sum(retentate.imass[chem] for chem in self.solids_IDs)
+
+            # based on solids_concentration = kg solvent / kg retained solids
+            solvent_retained = self.solids_concentration * solids_retained
+
+            if solvent_retained >= solvent_in:
+                raise ValueError(
+                    f"Not enough solvent '{solvent_in:.3f} kg/h' to achive the solvent retained '{solvent_retained:.3f} kg/h'."
+                )
+
+            fraction_in_mass = solvent_retained / solvent_in
+
+            for chem in self.solvent_IDs:
+                solvent_i_mass_retained = fraction_in_mass * feed.imass[chem]
+                
+                retentate.imass[chem] += solvent_i_mass_retained
+                permeate.imass[chem] -= solvent_i_mass_retained
+
+        else:
+            if self.VCF <= 0:
+                raise ValueError("VCF must be greater than zero.")
+            
+            # Target retentate volume based on volume concentration factor (VCF)
+            target_retentate_vol = feed.F_vol / self.VCF
+
+            # Calculate solvent volume needed
+            non_solvent_vol = retentate.F_vol
+            solvent_vol = target_retentate_vol - non_solvent_vol
+            
+            if solvent_vol < 0:
+                raise ValueError(
+                    f"Target retentate volume ({target_retentate_vol:.3f} m3/h) "
+                    f"is smaller than the retained non-solvent volume "
+                    f"({non_solvent_vol:.3f} m3/h). Increase VCF or reduce rejection."
+                )
+
+            if solvent_vol >= solvent_vol_in:
+                raise ValueError(
+                    f"Not enough solvent. Available: {solvent_vol_in:.3f} m3/h; "
+                    f"required: {solvent_vol:.3f} m3/h."
+                )
+            
+            fraction_in_vol = solvent_vol / solvent_vol_in
+            
+            for chem in self.solvent_IDs:
+                solvent_i_vol_retained = fraction_in_vol * feed.ivol[chem]
+
+                # Convert volume to mass
+                rho_i = feed.imass[chem] / feed.ivol[chem]
+                solvent_i_mass_retained = solvent_i_vol_retained * rho_i
+
+                retentate.imass[chem] += solvent_i_mass_retained
+                permeate.imass[chem] -= solvent_i_mass_retained
 
     def _design(self):
         """
         """
         # The area is calculated using the permeate following the next
-        # equation: LMH = Q/A                                                           #TODO apply temperature increment (+25% for each +10ºC)
-        feed = self.ins[0]
+        # equation: LMH = Q/A
         permeate = self.outs[0]
         
-        LMH = MEMBRANE_LMH[self.type][1] * 10**-3 * 3600 * permeate.rho  # kg/h         #TODO Use a conservative value (mean for example)S
-        
-        A = permeate.F_mass / LMH
+        LMH = self.LMH
 
-        # design results
+        mass_flux = LMH * 1e-3 * permeate.rho   # kg/m2/h
+        
+        A = permeate.F_mass / mass_flux
+
+        # Design results
         design = self.design_results
         design["Area (total)"] = A
+        design["VCF"] = self.VCF
+        design["LMH"] = LMH
+        design["Mass flux"] = mass_flux
 
-        # Number of modules needed
-        volumetric_flow = permeate.F_vol/3600                   # m3/s
-        capacity = MEMBRANE_CAPACITY[self.type][1]              # m3/s
-        self.parallel["Modules"] = volumetric_flow/capacity
+        # Volumetric permeate flow
+        volumetric_flow = permeate.F_vol       # m3/h
+        design["Volumetric flow"] = volumetric_flow
+
+        # Module area
+        module_area = self.module_area
+
+        if module_area <= 0:
+            raise ValueError("Module area must be greater than zero.")
+
+        modules = ceil(A / module_area)
+
+        design["Module area"] = module_area
+        design["Modules"] = modules
+
+        self.parallel["Module"] = modules
 
         # Utilities
-        solids_load = 0
-        for solid in self.solids:
-            solids_load += feed.imass[solid]
+        P_inlet = self._solve_pressure()
 
-        power = self.kWh_per_kg * solids_load
-        self.add_power_utility(power)
+        self.pump.simulate(
+            run = False,
+            design_kwargs = dict(P = P_inlet)
+        )
     
     @property
     def base_cost(self):
