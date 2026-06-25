@@ -1,47 +1,72 @@
 import biosteam as bst
 from .centrifuge import SolidsSeparator
 
+__all__ = (
+    'SieveBend',
+)
+
 class SieveBend(SolidsSeparator):
     """
     Continuous fixed inclined wedge-wire screen for coarse solids separation.
 
-    This unit models a sieve bend as a solids separator with optional moisture
-    control in the retained solids stream. The equipment is typically used for
-    continuous screening, dewatering, and removal of oversize particles from
-    slurry streams.
+    This unit models a sieve bend as a solid-liquid separator used for
+    continuous screening and dewatering of slurry streams. Separation is defined
+    by component-wise split fractions to the retained oversize stream. If a
+    target moisture content is provided, the moisture in the retained solids
+    stream is adjusted using the inherited ``SolidsSeparator`` moisture-control
+    routine.
+
+    The screen area is estimated from the solids loading capacity:
+
+        A = m_solids / L_solids
+
+    where ``A`` is the screen area [m2], ``m_solids`` is the dry solids flow
+    [g/s], and ``L_solids`` is the solids loading capacity [g/s/m2].
 
     Parameters
     ----------
     ID : str
-        Unit ID.
+        Unit operation ID.
     ins : Stream
         Feed slurry.
     outs : tuple[Stream]
         Output streams:
-        * [0] Retained/oversize solids stream.
+
+        * [0] Retained oversize solids stream.
         * [1] Liquid and fine solids passing through the screen.
+
     split : array_like or dict
-        Component splits to the retained solids stream.
+        Component split fractions to the retained oversize stream.
+    order : sequence[str], optional
+        Chemical order used to define split values when ``split`` is array-like.
     moisture_content : float, optional
-        Moisture content of the retained solids stream.
-    hydraulic_loading : float, optional
-        Liquid loading capacity, in L/s/m2.
-    solids_loading : float, optional
-        Solids loading capacity, in g/s/m2.
+        Target moisture content of the retained oversize stream.
     moisture_ID : str, optional
-        ID of the moisture component. Defaults to water.
-    solute_ID : tuple[str], optional
-        Solutes associated with the moisture phase.
+        ID of the moisture component. Defaults to water if not provided by the
+        inherited ``SolidsSeparator``.
+    solute_ID : str or tuple[str], optional
+        Solute IDs associated with the moisture phase when enforcing moisture
+        content.
     strict_moisture_content : bool, optional
-        Whether to enforce the moisture content strictly.
+        Whether to strictly enforce the specified moisture content.
+    solids_loading : float, optional
+        Solids loading capacity of the screen [g/s/m2]. Default is 2.5 g/s/m2.
+
+    Attributes
+    ----------
+    base_cost : float
+        Reference purchase cost of the sieve bend [USD].
+    base_n_cost : float
+        Cost scaling exponent.
+    base_area : float
+        Reference screen area used for cost scaling [m2].
+    CE_base : float
+        Chemical Engineering Plant Cost Index used for the reference cost.
+
     """
 
-    line = 'Sieve bend'
-
     _units = {
-        'Liquid flow': 'L/s',
         'Solids flow': 'g/s',
-        'Area by liquid loading': 'm2',
         'Area by solids loading': 'm2',
         'Screen area': 'm2',
     }
@@ -54,7 +79,7 @@ class SieveBend(SolidsSeparator):
         moisture_ID=None,
         solute_ID=None,
         strict_moisture_content=None,
-        solids_loading=2.5,      # g/s/m2
+        solids_loading=2.5,
     ):
         super()._init(
             split=split,
@@ -66,6 +91,11 @@ class SieveBend(SolidsSeparator):
         )
 
         self.solids_loading = solids_loading
+
+        self._base_cost = None
+        self._base_n_cost = None
+        self._base_area = None
+        self._CE_base = None
 
     def _design(self):
         feed = self.ins[0]
@@ -82,4 +112,90 @@ class SieveBend(SolidsSeparator):
 
         design_results['Solids flow'] = solids_flow_g_s
         design_results['Area by solids loading'] = A_solids
-        design_results['Screen area'] = A_screen    
+        design_results['Screen area'] = A_screen
+
+    @property
+    def base_cost(self):
+        """
+        """
+        if self._base_cost is None:
+            self._base_cost = 45000 # USD
+        return self._base_cost
+
+    @base_cost.setter
+    def base_cost(self, value):
+        """
+        """
+        self._base_cost = value
+
+    @property
+    def base_n_cost(self):
+        """
+        """
+        if self._base_n_cost is None:
+            self._base_n_cost = 0.62
+        return self._base_n_cost
+
+    @base_n_cost.setter
+    def base_n_cost(self, value):
+        """
+        """
+        self._base_n_cost = value
+
+    @property
+    def base_area(self):
+        """
+        """
+        if self._base_area is None:
+            self._base_area = 1.5   # m2
+        return self._base_area
+
+    @base_area.setter
+    def base_area(self, value):
+        """
+        """
+        self._base_area = value
+
+    @property
+    def CE_base(self):
+        """
+        """
+        if self._CE_base is None:
+            self._CE_base = 1000
+        return self._CE_base
+
+    @CE_base.setter
+    def CE_base(self, value):
+        """
+        """
+        self._CE_base = value
+
+    def _cost(self):
+        """
+        """
+        # Load all the design parameters needed to calculate the costs
+        area = self.design_results["Screen area"]
+
+        # Calculate the baseline purchase cost for Screen, vibrating.
+        ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
+        sieve_bend_cost = self.base_cost * (area/self.base_area)**self.base_n_cost
+        self.baseline_purchase_costs['Sieve bend'] = sieve_bend_cost
+
+        ## The material, pressure and temperature factors are assumed to be 1
+        self.F_D['Sieve bend'] = self.F_M['Sieve bend'] = self.F_P['Sieve bend'] = 1
+
+        ## The Bare module factor which account for installation costs is calculated as the sum of delivery, installation,
+        ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
+        ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
+        ### Factors
+        delivery = 0.10
+        installation = 0.80             # Filters
+        instrumentation_Control = 0.50
+        piping = 0.31                   # Solid-Fluid   
+        ### Calculate the bare module
+        bare_module = (1 + (delivery + installation + instrumentation_Control + piping))
+        self.F_BM['Sieve bend'] = bare_module
+
+        ## Scale the costs using CEPCI
+        ce_factor = bst.CE/self.CE_base
+        self.baseline_purchase_costs['Sieve bend'] = self.baseline_purchase_costs['Sieve bend'] * ce_factor
