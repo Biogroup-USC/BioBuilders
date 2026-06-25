@@ -59,7 +59,6 @@ class SprayDryer(bst.Unit):
         gas_composition: dict = None,
         utility_agent: str = 'low_pressure_steam',
         peripheral_velocity: float = 161,
-
     ):
         self. moisture_content = moisture_content
         self.moisture_ID = moisture_ID
