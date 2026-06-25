@@ -279,6 +279,8 @@ class MembraneFiltration(bst.Unit):
         self._base_area = None
         self._CE_base = None
 
+        self._load_auxiliaries()
+
     def _load_auxiliaries(self):
         self.pump = self.auxiliary(
             "pump",
@@ -380,6 +382,14 @@ class MembraneFiltration(bst.Unit):
                 retentate.imass[chem] += solvent_i_mass_retained
                 permeate.imass[chem] -= solvent_i_mass_retained
 
+        # Pressure
+        P_inlet = self._solve_pressure()
+        permeate.P = self.permeate_pressure
+        retentate.P = P_inlet - self.pressure_drop
+
+        self.pump.P = P_inlet
+        self.pump.simulate()
+
     def _design(self):
         """
         """
@@ -416,24 +426,13 @@ class MembraneFiltration(bst.Unit):
         design["Modules"] = modules
 
         self.parallel["Module"] = modules
-
-        # Utilities
-        P_inlet = self._solve_pressure()
-
-        self.pump.simulate(
-            run = False,
-            design_kwargs = dict(P = P_inlet)
-        )
     
     @property
     def base_cost(self):
         """
         """
         if self._base_cost is None:
-            if self.type.startswith("MF"):
-                self._base_cost = 150000    # $ for membrane and housing
-            elif self.type.startswith("UF"):
-                self._base_cost = 240       # $ for m2 of membrane
+            self._base_cost = 240    # $ for membrane and housing
         return self._base_cost
 
     @base_cost.setter
@@ -447,10 +446,7 @@ class MembraneFiltration(bst.Unit):
         """
         """
         if self._base_n_cost is None:
-            if self.type.startswith("MF"):
-                self._base_n_cost = 0.92
-            elif self.type.startswith("UF"):
-                self._base_n_cost = 1.0
+            self._base_n_cost = 1.0
         return self._base_n_cost
 
     @base_n_cost.setter
@@ -464,10 +460,7 @@ class MembraneFiltration(bst.Unit):
         """
         """
         if self._base_area is None:
-            if self.type.startswith("MF"):
-                self._base_area = 50        # m2
-            elif self.type.startswith("UF"):
-                self._base_area = 1         # m2
+            self._base_area = 1         # m2
         return self._base_area
 
     @base_area.setter
@@ -481,10 +474,7 @@ class MembraneFiltration(bst.Unit):
         """
         """
         if self._CE_base is None:
-            if self.type.startswith("MF"):
-                self._CE_base = 1000
-            elif self.type.startswith("UF"):
-                self._CE_base = 1000
+            self._CE_base = 1000
         return self._CE_base
 
     @CE_base.setter
@@ -502,14 +492,6 @@ class MembraneFiltration(bst.Unit):
         # Calculate the baseline purchase cost for membrane module
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
         membranes_module = self.base_cost * (area/self.base_area)**self.base_n_cost
-        
-        ## UF membranes are accounted individually, but they represent 10 % of the total cost for small areas and
-        ## 50% for largest
-        if self.type.startswith("UF"):
-            if area < 10:
-                membranes_module *= 1/0.15
-            else:
-                membranes_module *= 1/0.50
 
         self.baseline_purchase_costs['Membrane module'] = membranes_module
 
