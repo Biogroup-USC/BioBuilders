@@ -3,7 +3,7 @@
 import math
 
 __all__ = (
-    "log_mean"
+    "log_mean",
 )
 
 def log_mean(a: float, b: float):
