@@ -260,7 +260,6 @@ class MembraneFiltration(bst.Unit):
         solvent_IDs: list = ["Water",],
         ):
         
-        self.type = type
         self.split = split
         self.pressure_drop = pressure_drop
         self.permeate_pressure = permeate_pressure
@@ -311,7 +310,8 @@ class MembraneFiltration(bst.Unit):
         # Output streams
         permeate, retentate = self.outs
         permeate.copy_like(feed)
-        
+        retentate.empty()
+
         # split components
         for chem, split in self.split.items():
             if chem in self.solvent_IDs:
@@ -321,6 +321,14 @@ class MembraneFiltration(bst.Unit):
             
             retentate.imass[chem] += rejection
             permeate.imass[chem] -= rejection
+
+        # Solutes follow the liquid
+        liquid_solute_IDs = [
+            chem.ID for chem in feed.chemicals
+            if chem.ID not in self.solvent_IDs
+            and chem.ID not in self.split.keys()
+            and feed.imass[chem.ID] > 0
+        ]
 
         # Distribute solvent
         solvent_in = sum(feed.imass[chem] for chem in self.solvent_IDs)
@@ -358,10 +366,14 @@ class MembraneFiltration(bst.Unit):
             solvent_vol = target_retentate_vol - non_solvent_vol
             
             if solvent_vol < 0:
+                VCF_max = feed.F_vol / non_solvent_vol
+
                 raise ValueError(
-                    f"Target retentate volume ({target_retentate_vol:.3f} m3/h) "
+                    f"Target retentate volume ({target_retentate_vol:.6f} m3/h) "
                     f"is smaller than the retained non-solvent volume "
-                    f"({non_solvent_vol:.3f} m3/h). Increase VCF or reduce rejection."
+                    f"({non_solvent_vol:.6f} m3/h). "
+                    f"Maximum feasible VCF is {VCF_max:.4f}. "
+                    f"Decrease VCF or reduce rejection."
                 )
 
             if solvent_vol >= solvent_vol_in:
