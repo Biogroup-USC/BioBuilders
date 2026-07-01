@@ -14,6 +14,7 @@ from .flash import Flash
 from .distillation import BinaryDistillation
 from .separator import SeparationUnit
 from .biomass_CHP import BiomassCHP
+from .boiler import NaturalGasBoiler
 from .pellet import PelletMill
 from .adsorption import GasAdsorptionColumn, LiquidAdsorptionColumn
 
@@ -40,6 +41,7 @@ __all__ = (
     'SieveBend',
     "SeparationUnit",
     "BiomassCHP",
+    "NaturalGasBoiler",
     "PelletMill",
     "GasAdsorptionColumn",
     "LiquidAdsorptionColumn",

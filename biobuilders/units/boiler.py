@@ -1,15 +1,15 @@
 import biosteam as bst
 from ..tools.mathtools.logmean import log_mean
 
+__all__ = (
+    'NaturalGasBoiler',
+)
+
 class NaturalGasBoiler(bst.Unit): 
     """
     """
     _N_ins = 3
     _N_outs = 2
-
-    auxiliary_unit_names = (
-        'heat_exchanger',
-    )
 
     _units = {
         "Heat duty": "kJ/hr",
@@ -33,12 +33,12 @@ class NaturalGasBoiler(bst.Unit):
         self,
         excess_air: float = 0.20,
         hot_fluid_T: float = 273.15 + 60.0,
-        hot_fluid_P: float = 101325,
+        hot_fluid_P: float = None,
         flue_gas_T: float = 273.15 + 260,
         thermal_efficiency: float = 0.85,
         F: float = 1.0,
-        U: float = 75.0,
-        flue_gas_convective_T: float = 650,
+        U: float = 30.0,
+        flue_gas_convective_T: float = 273.15 + 650,
     ):
         """
         """
@@ -51,6 +51,12 @@ class NaturalGasBoiler(bst.Unit):
         self.F = F
         self.U = U
 
+        self._base_cost = None
+        self._base_n_cost = None
+        self._base_heat_adsorbed = None
+        self._base_area = None
+        self._base_CE = None
+
     def _run(self):
         
         natural_gas, combustion_air, cold_fluid = self.ins
@@ -59,14 +65,23 @@ class NaturalGasBoiler(bst.Unit):
         # Calculate required duty
         hot_fluid.copy_like(cold_fluid)
         hot_fluid.T = self.hot_fluid_T
-        hot_fluid.P = self.hot_fluid_P
+        
+        if self.hot_fluid_P is None:
+            hot_fluid.P = cold_fluid.P
+        else:
+            hot_fluid.P = self.hot_fluid_P
 
         Q_required = hot_fluid.H - cold_fluid.H
+        if Q_required <= 0:
+            raise ValueError(
+                f"{self.ID}: Q_required must be positive. "
+                "Check hot_fluid_T and cold_fluid.T."
+            )
 
         # Methane required
         Q_fuel = Q_required / self.thermal_efficiency
 
-        LHV = self.thermo.chemicals.CH4.LHV
+        LHV = abs(self.thermo.chemicals.CH4.LHV)
         n_CH4 = Q_fuel / LHV
 
         # Combustion stoichiometry
@@ -100,6 +115,7 @@ class NaturalGasBoiler(bst.Unit):
         flue_gas.empty()
         flue_gas.phase = 'g'
         flue_gas.T = self.flue_gas_T
+        flue_gas.P = 101325
 
         flue_gas.imol['CO2'] = n_CO2
         flue_gas.imol['H2O'] = n_H2O
@@ -108,6 +124,8 @@ class NaturalGasBoiler(bst.Unit):
 
         # Store results
         self.Q_required = Q_required
+        self.Q_fuel = Q_fuel
+        self.n_CH4 = n_CH4
     
     def _design(self):
         design = self.design_results
@@ -123,12 +141,27 @@ class NaturalGasBoiler(bst.Unit):
         Tc_in = cold_fluid.T                # K
         Tc_out = hot_fluid.T                # K
 
+        if Th_in <= Th_out:
+            raise ValueError("flue_gas_convective_T must be greater than flue_gas_T.")
+
         dT1 = Th_in - Tc_out
         dT2 = Th_out - Tc_in
 
+        if dT1 <= 0 or dT2 <= 0:
+            raise ValueError(
+                f"Invalid temperature driving force: "
+                f"dT1={dT1:.2f} K, dT2={dT2:.2f} K."
+            )
+
         LMTD = log_mean(dT2, dT1)
+        
         F = self.F
+        if F <= 0 or F > 1:
+            raise ValueError("F must be between 0 and 1.")
+
         U = self.U
+        if U <= 0:
+            raise ValueError("U must be positive.")
 
         U_kJ_h = U * 3.6
 
@@ -138,6 +171,7 @@ class NaturalGasBoiler(bst.Unit):
         Q_MW = Q / 3.6e6
 
         design["Heat duty kW"] = Q_kW
+        design["Heat duty"] = Q
         design["Heat absorbed"] = Q_MW
 
         design["Fuel duty"] = self.Q_fuel
@@ -155,3 +189,110 @@ class NaturalGasBoiler(bst.Unit):
         design["LMTD correction factor"] = F
         design["Overall heat transfer coefficient"] = U
         design["Convective heat transfer area"] = A
+    
+    @property
+    def base_cost(self):
+        """
+        """
+        if self._base_cost is None:
+            self._base_cost = (250000, 70000)     # USD
+        return self._base_cost
+
+    @base_cost.setter
+    def base_cost(self, value):
+        """
+        """
+        self._base_cost = value
+
+    @property
+    def base_area(self):
+        """
+        """
+        if self._base_area is None:
+            self._base_area = 100       # m2
+        return self._base_area
+
+    @base_area.setter
+    def base_area(self, value):
+        """
+        """
+        self._base_area = value
+
+    @property
+    def base_heat_adsorbed(self):
+        """
+        """
+        if self._base_heat_adsorbed is None:
+            self._base_heat_adsorbed = 1    # MW
+        return self._base_heat_adsorbed
+    
+    @base_heat_adsorbed.setter
+    def base_heat_adsorbed(self, value):
+        """
+        """
+        self._base_heat_adsorbed = value
+
+    @property
+    def base_n_cost(self):
+        """
+        """
+        if self._base_n_cost is None:
+            self._base_n_cost = (0.74, 0.71)
+        return self._base_n_cost
+    
+    @base_n_cost.setter
+    def base_n_cost(self, value):
+        """
+        """
+        self._base_n_cost = value
+    
+    @property
+    def base_CE(self):
+        """
+        """
+        if self._base_CE is None:
+            self._base_CE = 1000
+        return self._base_CE
+    
+    @base_CE.setter
+    def base_CE(self, value):
+        """
+        """
+        self._base_CE = value
+
+    def _cost(self):
+        # design parameters for cost correlations
+        heat_adsorbed = self.design_results['Heat absorbed']
+        area = self.design_results['Convective heat transfer area']
+
+        # Baseline purchase cost for furnace and heat exchanger
+        furnace = self.base_cost[0] * (heat_adsorbed / self.base_heat_adsorbed) ** self.base_n_cost[0]
+        heat_exchanger = self.base_cost[1] * (area / self.base_area) ** self.base_n_cost[1]
+
+        # Scale costs
+        base_CE = self.base_CE
+        current_CE = bst.CE
+
+        updated_furnace_cost = furnace * (current_CE / base_CE)
+        updated_heat_exchanger_cost = heat_exchanger * (current_CE / base_CE)
+
+        self.baseline_purchase_costs['Furnace'] = updated_furnace_cost
+        self.baseline_purchase_costs['Heat exchanger'] = updated_heat_exchanger_cost
+
+        # Bare module
+        delivery = 0.10
+        installation_heat_exchanger = 0.60
+        installation_furnace = 0.90
+        instrumentation_control = 0.50
+        piping = 0.68  
+        
+        heat_exchanger_BM = (1 + (delivery + installation_heat_exchanger + instrumentation_control + piping))
+        furnace_BM = (1 + (delivery + installation_furnace + instrumentation_control + piping))
+        
+        self.F_BM['Heat exchanger'] = heat_exchanger_BM
+        self.F_BM['Furnace'] = furnace_BM
+
+        # Material, pressure and temperature factor
+        self.F_P['Heat exchanger'] = self.F_M['Heat exchanger'] = self.F_D['Heat exchanger'] = 1.0
+
+        self.F_P['Furnace'] = self.F_M['Furnace'] = self.F_D['Furnace'] = 1.0

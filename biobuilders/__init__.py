@@ -31,6 +31,7 @@ from .units import (
     SeparationUnit,
     BatchEnzymaticTreatment,
     BiomassCHP,
+    NaturalGasBoiler,
     PelletMill,
 )
 
@@ -133,6 +134,7 @@ __all__ = (
     'SeparationUnit',
     'BatchEnzymaticTreatment',
     'BiomassCHP',
+    'NaturalGasBoiler',
     'PelletMill',
 
     # Tea
