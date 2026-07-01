@@ -4,6 +4,7 @@ import biosteam as bst
 import flexsolve as flx
 import numpy as np 
 from thermosteam import separations as sep
+from .boiler import NaturalGasBoiler
 
 __all__ = (
     "SprayDryer", "DrumDryer"
@@ -37,7 +38,14 @@ class SprayDryer(bst.Unit):
     """
 
     _N_ins = 2
+    _ins_size_is_fixed = False
     _N_outs = 2
+    _outs_size_is_fixed = False
+    
+    auxiliary_unit_names = (
+        'air_heater',
+    )
+
     _units = {
         "Evaporation rate": "kg/s",
         "Residence time": "s",
@@ -57,12 +65,12 @@ class SprayDryer(bst.Unit):
         P: float = 101325,
         residence_time: float = 30,
         gas_composition: dict = None,
-        utility_agent: str = 'low_pressure_steam',
+        utility_agent: str = 'natural_gas',
         peripheral_velocity: float = 161,
     ):
         self. moisture_content = moisture_content
         self.moisture_ID = moisture_ID
-        self.split = split
+        self._isplit = self.chemicals.isplit(split or {})
         self.dryer_efficiency = dryer_efficiency
         self.RH = RH
         self.T = T
@@ -72,22 +80,49 @@ class SprayDryer(bst.Unit):
         self.utility_agent = utility_agent
         self.peripheral_velocity = peripheral_velocity
 
+        if utility_agent == 'natural_gas':
+            self._load_auxiliaries()
+
         self._base_cost = None
         self._base_evaporation_capacity = None
         self._base_n_cost = None
         self._CE_base = None
 
+    def _load_auxiliaries(self):
+        self.air_heater = self.auxiliary(
+            'air_heater',
+            NaturalGasBoiler,
+            ins = (
+                'natural_gas',
+                'combustion_air',
+                self.ins[1]
+            ),
+        )
+
     def _get_moisture_vapor_pressure(self, T):
         chemical = self.thermo.chemicals[self.moisture_ID]
         return chemical.Psat(T)
+
+    @property
+    def isplit(self):
+        """Componentwise split indexer to wet gas."""
+        return self._isplit
+    
+    @property
+    def split(self):
+        """Componentwise split array to wet gas."""
+        return self._isplit.data
 
     def _run(self):
         """
         """
         design = self.design_results
         # Define the streams
-        feed, gas = self.ins
-        dryed, wet_gas = self.outs
+        feed = self.ins[0]
+        gas = self.ins[1]
+
+        dryed = self.outs[0]
+        wet_gas = self.outs[1]
         
         dryed.empty()
         wet_gas.empty()
@@ -131,8 +166,11 @@ class SprayDryer(bst.Unit):
         wet_gas.phase = gas.phase = 'g'
 
     def _design(self):
-        feed, gas = self.ins
-        dryed, wet_gas = self.outs
+        feed = self.ins[0]
+        gas = self.ins[1]
+
+        dryed = self.outs[0]
+        wet_gas = self.outs[1]
 
         design = self.design_results
 
@@ -142,8 +180,20 @@ class SprayDryer(bst.Unit):
 
         design["Dryer efficiency"] = self.dryer_efficiency
 
-        utility_agent = bst.settings.get_heating_agent(self.utility_agent)
-        self.add_heat_utility(Q, T_in = gas.T, agent = utility_agent)
+        if self.utility_agent != 'natural_gas':
+            utility_agent = bst.settings.get_heating_agent(self.utility_agent)
+            self.add_heat_utility(Q, T_in = gas.T, agent = utility_agent)
+        else:
+            # Simulate auxiliary to heat air    
+            T_hot_gas = gas.T + Q / (gas.F_mass * gas.Cp)
+            self.air_heater.hot_fluid_T = T_hot_gas
+            self.air_heater.hot_fluid_P = gas.P
+            self.air_heater.simulate()
+
+            self.ins[2].copy_like(self.air_heater.ins[0])
+            self.ins[3].copy_like(self.air_heater.ins[1])
+            
+            self.outs[2].copy_like(self.air_heater.outs[0])
 
         # Power utilities
         if self.peripheral_velocity is not None:
