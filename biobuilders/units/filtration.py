@@ -341,11 +341,19 @@ class MembraneFiltration(bst.Unit):
             # based on solids_concentration = kg solvent / kg retained solids
             solvent_retained = self.solids_concentration * solids_retained
 
-            if solvent_retained >= solvent_in:
+            if solvent_in <= 0:
                 raise ValueError(
-                    f"Not enough solvent '{solvent_in:.3f} kg/h' to achive the solvent retained '{solvent_retained:.3f} kg/h'."
+                    f"{self.ID}: No solvent available in feed. "
+                    f"solvent_IDs={self.solvent_IDs}"
                 )
 
+            if solvent_retained > solvent_in:
+                raise ValueError(
+                    f"{self.ID}: Not enough solvent. "
+                    f"Available: {solvent_in:.6e} kg/h; "
+                    f"required: {solvent_retained:.6e} kg/h."
+                )
+            
             fraction_in_mass = solvent_retained / solvent_in
 
             for chem in self.solvent_IDs:
@@ -393,6 +401,15 @@ class MembraneFiltration(bst.Unit):
 
                 retentate.imass[chem] += solvent_i_mass_retained
                 permeate.imass[chem] -= solvent_i_mass_retained
+
+        # Distribute solutes following solvent
+        for chem in liquid_solute_IDs:
+            solute_conc = feed.imass[chem] / solvent_in
+
+            retained_mass = sum(retentate.imass[chem] for chem in self.solvent_IDs)
+
+            retentate.imass[chem] += (solute_conc * retained_mass)
+            permeate.imass[chem] -= (solute_conc * retained_mass)
 
         # Pressure
         P_inlet = self._solve_pressure()
