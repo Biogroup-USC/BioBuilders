@@ -161,7 +161,7 @@ labor_per_equip = {
     "Continuous reactor": 0.5,          # Workers/unit/shift
 }
 
-def calculate_labor_requirements(equipment_type_N: dict = None, shifts: int = 3): #TODO Peters page 264 table
+def calculate_labor_requirements(equipment_type_N: dict = None, operators_per_shift_position: int = 4.8): #TODO Peters page 264 table
     """
 
     Calculate the labor requeriments depending on the number and type of equipments used in
@@ -219,10 +219,7 @@ def calculate_labor_requirements(equipment_type_N: dict = None, shifts: int = 3)
     labor_ceil = math.ceil(total_labor)
 
     # Return the total labor and the total labor per equipment
-    if shifts == 1:
-        return labor_ceil, labor_per_N_equip
-    elif shifts == 2 or shifts == 3:
-        return labor_ceil*shifts, labor_per_N_equip
+    return labor_ceil*operators_per_shift_position, labor_per_N_equip
 
 def calculate_mean_median_price(prices: list[float] = None, type: int = 0):
     """
