@@ -234,7 +234,7 @@ class MembraneFiltration(bst.Unit):
         'Module': 3,
     }
 
-    auxiliary_unit_names = ('pump')
+    auxiliary_unit_names = ('pump',)
 
     # Number of input streams
     _N_ins = 1
