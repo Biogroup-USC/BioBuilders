@@ -243,6 +243,11 @@ class MembraneFiltration(bst.Unit):
     # Results units
     _units = {
         "Area (total)": "m2",
+        "Module area": "m2",
+        "VCF": "times",
+        "LMH": "L/(m2 * h)",
+        "Mass flux": "kg/(m2 * h)",
+        "Volumetric flow": "m3/h",
     }
 
     def _init(
