@@ -3,6 +3,7 @@ from .centrifuge import SolidsSeparator
 
 __all__ = (
     'SieveBend',
+    'VibratingScreen',
 )
 
 class SieveBend(SolidsSeparator):
@@ -66,7 +67,7 @@ class SieveBend(SolidsSeparator):
     """
 
     _units = {
-        'Solids flow': 'g/s',
+        'Solids flow': 'kg/hr',
         'Area by solids loading': 'm2',
         'Screen area': 'm2',
     }
@@ -79,7 +80,9 @@ class SieveBend(SolidsSeparator):
         moisture_ID=None,
         solute_ID=None,
         strict_moisture_content=None,
-        solids_loading=2.5,
+        solids_loading=3.5*3600,
+        solid_IDs=None,
+
     ):
         super()._init(
             split=split,
@@ -91,7 +94,18 @@ class SieveBend(SolidsSeparator):
         )
 
         self.solids_loading = solids_loading
+        
 
+        if solid_IDs is None:
+            raise ValueError("Solid_IDs must contain at least one solid component.")
+        
+        if isinstance(solid_IDs, str):
+            solid_IDs = (solid_IDs,)
+        else:
+            solid_IDs = tuple(solid_IDs)
+        
+        self.solid_IDs = solid_IDs
+        
         self._base_cost = None
         self._base_n_cost = None
         self._base_area = None
@@ -101,16 +115,13 @@ class SieveBend(SolidsSeparator):
         feed = self.ins[0]
         design_results = self.design_results
 
-        moisture_ID = getattr(self, 'moisture_ID', '7732-18-5')
-
         # Solids flow: all mass except moisture.
-        solids_flow_kg_hr = feed.F_mass - feed.imass[moisture_ID]
-        solids_flow_g_s = solids_flow_kg_hr * 1000 / 3600
+        solids_flow_kg_hr = feed.imass[self.solid_IDs].sum()
 
-        A_solids = solids_flow_g_s / self.solids_loading
+        A_solids = solids_flow_kg_hr / self.solids_loading
         A_screen = A_solids
 
-        design_results['Solids flow'] = solids_flow_g_s
+        design_results['Solids flow'] = solids_flow_kg_hr
         design_results['Area by solids loading'] = A_solids
         design_results['Screen area'] = A_screen
 
@@ -199,3 +210,117 @@ class SieveBend(SolidsSeparator):
         ## Scale the costs using CEPCI
         ce_factor = bst.CE/self.CE_base
         self.baseline_purchase_costs['Sieve bend'] = self.baseline_purchase_costs['Sieve bend'] * ce_factor
+
+class VibratingScreen(SieveBend):
+    """
+    """
+
+    _units = {
+        'Solids flow': 'g/s',
+        'Area by solids loading': 'm2',
+        'Screen area': 'm2',
+        'Specific energy': 'kWh/kg'
+    }
+
+    def _init(
+        self, 
+        split, 
+        order=None, 
+        moisture_content=None, 
+        moisture_ID=None, 
+        solute_ID=None, 
+        strict_moisture_content=None, 
+        solids_loading=3.5*3600,
+        solid_IDs=None,
+    ):
+        super()._init(
+            split, order, moisture_content, moisture_ID, solute_ID, 
+            strict_moisture_content, solids_loading, solid_IDs
+        )
+    
+        self._specific_energy = None
+
+    @property
+    def specific_energy(self):
+        if self._specific_energy is None:
+            self._specific_energy = 0.0055
+        return self._specific_energy
+    
+    @specific_energy.setter
+    def specific_energy(self, value):
+        self._specific_energy = value
+
+    def _design(self):
+        feed = self.ins[0]
+        design_results = self.design_results
+
+        # Solids flow: all mass except moisture.
+        solids_flow_kg_hr = feed.imass[self.solid_IDs].sum()
+
+        A_solids = solids_flow_kg_hr / self.solids_loading
+        A_screen = A_solids
+
+        # power utilities
+        power = solids_flow_kg_hr * self.specific_energy
+        self.add_power_utility(power)
+
+        design_results['Solids flow'] = solids_flow_kg_hr
+        design_results['Area by solids loading'] = A_solids
+        design_results['Screen area'] = A_screen
+        design_results['Specific power'] = self.specific_energy
+    
+    @property
+    def base_cost(self):
+        """
+        """
+        if self._base_cost is None:
+            self._base_cost = 45000 # USD
+        return self._base_cost
+
+    @base_cost.setter
+    def base_cost(self, value):
+        """
+        """
+        self._base_cost = value
+
+    @property
+    def base_n_cost(self):
+        """
+        """
+        if self._base_n_cost is None:
+            self._base_n_cost = 0.62
+        return self._base_n_cost
+
+    @base_n_cost.setter
+    def base_n_cost(self, value):
+        """
+        """
+        self._base_n_cost = value
+
+    @property
+    def base_area(self):
+        """
+        """
+        if self._base_area is None:
+            self._base_area = 1.5   # m2
+        return self._base_area
+
+    @base_area.setter
+    def base_area(self, value):
+        """
+        """
+        self._base_area = value
+
+    @property
+    def CE_base(self):
+        """
+        """
+        if self._CE_base is None:
+            self._CE_base = 1000
+        return self._CE_base
+
+    @CE_base.setter
+    def CE_base(self, value):
+        """
+        """
+        self._CE_base = value

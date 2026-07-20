@@ -9,7 +9,7 @@ from .mixing import MixTank
 from .reactors import ContinuousStirredTankReactor
 from .extraction import ExtractionReactor,SLECbySplit,LLEbySplit
 from .filtration import RotaryVacuumFilter, MembraneFiltration
-from .sieving import SieveBend
+from .sieving import SieveBend, VibratingScreen
 from .flash import Flash
 from .distillation import BinaryDistillation
 from .separator import SeparationUnit
@@ -39,6 +39,7 @@ __all__ = (
     "LiquidsSettler",
     "MembraneFiltration",
     'SieveBend',
+    'VibratingScreen',
     "SeparationUnit",
     "BiomassCHP",
     "NaturalGasBoiler",
