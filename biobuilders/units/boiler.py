@@ -1,201 +1,205 @@
 import biosteam as bst
-from ..tools.mathtools.logmean import log_mean
 
 __all__ = (
     'NaturalGasBoiler',
 )
 
-class NaturalGasBoiler(bst.Unit): 
+class NaturalGasBoiler(bst.Facility): 
     """
     """
+    ticket_name = 'B'
+    network_priority = 1
+
     _N_ins = 3
-    _N_outs = 2
+    _N_outs = 4
 
     _units = {
-        "Heat duty": "kJ/hr",
-        "Heat duty kW": "kW",
-        "Heat absorbed": "MW",
-        "Fuel duty": "kJ/hr",
-        "Methane flow": "kmol/hr",
-        "Flue gas inlet temperature": "K",
-        "Flue gas outlet temperature": "K",
-        "Cold fluid inlet temperature": "K",
-        "Hot fluid outlet temperature": "K",
-        "Hot-end approach": "K",
-        "Cold-end approach": "K",
-        "LMTD": "K",
-        "LMTD correction factor": "",
-        "Overall heat transfer coefficient": "W/m2/K",
-        "Convective heat transfer area": "m2",
+        'Steam duty': 'kJ/hr',
+        'Steam generated': 'kmol/hr',
+        'Heat losses in flue gas': 'kJ/hr',
     }
 
-    def _init(
-        self,
+    def __init__(
+        self, 
+        ID='', 
+        ins=None, 
+        outs=(), 
+        thermo=None,
+        agent = None,
+        other_agents = None,
         excess_air: float = 0.20,
-        hot_fluid_T: float = 273.15 + 60.0,
-        hot_fluid_P: float = None,
-        flue_gas_T: float = 273.15 + 260,
-        thermal_efficiency: float = 0.85,
-        F: float = 1.0,
-        U: float = 30.0,
-        flue_gas_convective_T: float = 273.15 + 650,
-    ):
-        """
-        """
+        boiler_efficiency: float = 0.85,
+        natural_gas_price: float | None = None,
+        flue_gas_P: float = 101325
+    ):  
+        bst.Facility.__init__(self, ID, ins, outs, thermo)
         self.excess_air = excess_air
-        self.hot_fluid_T = hot_fluid_T
-        self.hot_fluid_P = hot_fluid_P
-        self.flue_gas_T = flue_gas_T
-        self.flue_gas_convective_T = flue_gas_convective_T
-        self.thermal_efficiency = thermal_efficiency
-        self.F = F
-        self.U = U
+        self.boiler_efficiency = boiler_efficiency
+
+        self.agent = agent  = agent or bst.settings.get_heating_agent('low_pressure_steam')
+        self.other_agents = [i for i in bst.settings.heating_agents if i is not agent] if other_agents is None else other_agents
+        self.steam_utilities = []
+
+        self.define_utility('Natural gas', self.natural_gas)
+        if natural_gas_price is not None:
+            self.natural_gas_price = natural_gas_price
+
+        self.flue_gas_P = flue_gas_P
 
         self._base_cost = None
+        self._base_steam_flow = None
         self._base_n_cost = None
-        self._base_heat_adsorbed = None
-        self._base_area = None
         self._base_CE = None
 
+    @property
+    def natural_gas(self):
+        """Natural gas calculated by the facility"""
+        return self.ins[0]
+
+    @property
+    def natural_gas_price(self):
+        """Price of natural gas [USD/kg]"""
+        return bst.stream_utility_prices['Natural gas']
+
+    @natural_gas_price.setter
+    def natural_gas_price(self, new_price):
+        bst.stream_utility_prices['Natural gas'] = new_price
+
+    @property
+    def combustion_air(self):
+        """Combustion air calculated by the facility"""
+        return self.ins[1]
+
+    @property
+    def flue_gas(self):
+        """Flue gas outlet"""
+        return self.outs[0]
+
     def _run(self):
-        
-        natural_gas, combustion_air, cold_fluid = self.ins
-        flue_gas, hot_fluid = self.outs
+        """Facilities are evaluated after process simulation"""
+        pass
 
-        # Calculate required duty
-        hot_fluid.copy_like(cold_fluid)
-        hot_fluid.T = self.hot_fluid_T
-        
-        if self.hot_fluid_P is None:
-            hot_fluid.P = cold_fluid.P
-        else:
-            hot_fluid.P = self.hot_fluid_P
+    def _load_steam_utilities(self):
+        """Collect HeatUtility objects supplied by this boiler"""
+        steam_utilities = self.steam_utilities
+        steam_utilities.clear()
 
-        Q_required = hot_fluid.H - cold_fluid.H
-        if Q_required <= 0:
-            raise ValueError(
-                f"{self.ID}: Q_required must be positive. "
-                "Check hot_fluid_T and cold_fluid.T."
-            )
+        agent = self.agent
+        units = self.other_units
+        for agent in (*self.other_agents, agent):
+            ID = agent.ID
+            for u in units:
+                for hu in u.heat_utilities:
+                    agent = hu.agent
+                    if agent and agent.ID == ID:
+                        steam_utilities.append(hu)
 
-        # Methane required
-        Q_fuel = Q_required / self.thermal_efficiency
+    def _solve_combustion(self, Q_required):
+        """Calculate natural gas, combustion air and flue gas."""
+        natural_gas = self.natural_gas
+        combustion_air = self.combustion_air
+        flue_gas = self.flue_gas
 
-        LHV = abs(self.thermo.chemicals.CH4.LHV)
-        n_CH4 = Q_fuel / LHV
+        # Natural gas energy required
+        Q_natural_gas = (Q_required / self.boiler_efficiency)
 
-        # Combustion stoichiometry
-        n_O2_stoich = 2.0 * n_CH4
-        n_CO2 = n_CH4
-        n_H2O = 2.0 * n_CH4
+        LHV = self.chemicals.CH4.LHV
 
-        # Excess air
-        n_O2_in = n_O2_stoich * (1.0 + self.excess_air)
+        n_CH4 = Q_natural_gas / LHV
+
+        # CH4 + 2 O2 -> CO2 + 2 H2O
+        n_O2_stoich = 2. * n_CH4
+
+        n_O2_in = n_O2_stoich * (1. + self.excess_air)
+
         n_O2_excess = n_O2_in - n_O2_stoich
 
-        # Dry air composition
-        n_N2_in = n_O2_in * (0.79 / 0.21)
+        n_N2_in = n_O2_in * 0.79 / 0.21
 
         # Natural gas stream
         natural_gas.empty()
+
         natural_gas.phase = 'g'
         natural_gas.T = 298.15
         natural_gas.P = 101325
+
         natural_gas.imol['CH4'] = n_CH4
 
         # Combustion air
         combustion_air.empty()
+
         combustion_air.phase = 'g'
         combustion_air.T = 298.15
-        combustion_air.P = 101325
+        combustion_air.P = 101325.0
+
         combustion_air.imol['O2'] = n_O2_in
         combustion_air.imol['N2'] = n_N2_in
 
         # Flue gas
         flue_gas.empty()
-        flue_gas.phase = 'g'
-        flue_gas.T = self.flue_gas_T
-        flue_gas.P = 101325
 
-        flue_gas.imol['CO2'] = n_CO2
-        flue_gas.imol['H2O'] = n_H2O
+        flue_gas.phase = 'g'
+        flue_gas.T = 298.15
+        flue_gas.P = self.flue_gas_P
+
+        flue_gas.imol['CO2'] = n_CH4
+        flue_gas.imol['Water'] = 2. * n_CH4
         flue_gas.imol['O2'] = n_O2_excess
         flue_gas.imol['N2'] = n_N2_in
 
-        # Store results
+        # Boiler efficiency represents all non-useful energy
+        # which is assigned to the flue gas
+        Q_loss = Q_natural_gas - Q_required
+        flue_gas.H += Q_loss
+
+        # Store important results
         self.Q_required = Q_required
-        self.Q_fuel = Q_fuel
+        self.Q_natural_gas = Q_natural_gas
         self.n_CH4 = n_CH4
-    
+
     def _design(self):
+        self._load_steam_utilities()
+
+        steam_supply = bst.HeatUtility.sum_by_agent(self.steam_utilities)
+        Q_required = sum(hu.duty for hu in steam_supply)
+        steam_flow = sum(hu.flow for hu in steam_supply)
+
+        if Q_required <= 0. or steam_flow <= 0.:
+            self.natural_gas.empty()
+            self.combustion_air.empty()
+            self.flue_gas.empty()
+            self.heat_utilities.clear()
+
+            self.Q_required = 0.0
+            self.Q_natural_gas = 0.0
+            self.n_CH4 = 0.0
+
+            design = self.design_results
+            
+            design['Steam duty'] = 0.0
+            design['Steam generated'] = 0.0
+            design['Heat losses in flue gas'] = 0.0
+            return
+
+        self._solve_combustion(Q_required)
+
+        for hu in steam_supply:
+            hu.reverse()
+
+        self.heat_utilities = steam_supply
+
         design = self.design_results
 
-        Q = self.Q_required # kJ/h
+        design['Steam duty'] = Q_required
+        design['Steam generated'] = steam_flow
+        design['Heat losses in flue gas'] = self.Q_natural_gas - self.Q_required
 
-        cold_fluid = self.ins[2]
-        hot_fluid = self.outs[1]
-
-        # Temperatures
-        Th_in = self.flue_gas_convective_T  # K, outlet of radiant section / inlet to convective section
-        Th_out = self.flue_gas_T            # K, outlet of convective section / stack
-        Tc_in = cold_fluid.T                # K
-        Tc_out = hot_fluid.T                # K
-
-        if Th_in <= Th_out:
-            raise ValueError("flue_gas_convective_T must be greater than flue_gas_T.")
-
-        dT1 = Th_in - Tc_out
-        dT2 = Th_out - Tc_in
-
-        if dT1 <= 0 or dT2 <= 0:
-            raise ValueError(
-                f"Invalid temperature driving force: "
-                f"dT1={dT1:.2f} K, dT2={dT2:.2f} K."
-            )
-
-        LMTD = log_mean(dT2, dT1)
-        
-        F = self.F
-        if F <= 0 or F > 1:
-            raise ValueError("F must be between 0 and 1.")
-
-        U = self.U
-        if U <= 0:
-            raise ValueError("U must be positive.")
-
-        U_kJ_h = U * 3.6
-
-        A = Q / (U_kJ_h * F * LMTD)
-
-        Q_kW = Q / 3600.0
-        Q_MW = Q / 3.6e6
-
-        design["Heat duty kW"] = Q_kW
-        design["Heat duty"] = Q
-        design["Heat absorbed"] = Q_MW
-
-        design["Fuel duty"] = self.Q_fuel
-        design["Methane flow"] = self.n_CH4
-
-        design["Flue gas inlet temperature"] = Th_in
-        design["Flue gas outlet temperature"] = Th_out
-        design["Cold fluid inlet temperature"] = Tc_in
-        design["Hot fluid outlet temperature"] = Tc_out
-
-        design["Hot-end approach"] = Th_in - Tc_out
-        design["Cold-end approach"] = Th_out - Tc_in
-
-        design["LMTD"] = LMTD
-        design["LMTD correction factor"] = F
-        design["Overall heat transfer coefficient"] = U
-        design["Convective heat transfer area"] = A
-    
     @property
     def base_cost(self):
         """
         """
         if self._base_cost is None:
-            self._base_cost = (250000, 70000)     # USD
+            self._base_cost = 500000    # USD
         return self._base_cost
 
     @base_cost.setter
@@ -205,39 +209,25 @@ class NaturalGasBoiler(bst.Unit):
         self._base_cost = value
 
     @property
-    def base_area(self):
+    def base_steam_flow(self):
         """
         """
-        if self._base_area is None:
-            self._base_area = 100       # m2
-        return self._base_area
+        if self._base_steam_flow is None:
+            self._base_steam_flow = 2.7 # kg/s
+        return self._base_steam_flow
 
-    @base_area.setter
-    def base_area(self, value):
+    @base_steam_flow.setter
+    def base_steam_flow(self, value):
         """
         """
-        self._base_area = value
-
-    @property
-    def base_heat_adsorbed(self):
-        """
-        """
-        if self._base_heat_adsorbed is None:
-            self._base_heat_adsorbed = 1    # MW
-        return self._base_heat_adsorbed
-    
-    @base_heat_adsorbed.setter
-    def base_heat_adsorbed(self, value):
-        """
-        """
-        self._base_heat_adsorbed = value
+        self._base_steam_flow = value
 
     @property
     def base_n_cost(self):
         """
         """
         if self._base_n_cost is None:
-            self._base_n_cost = (0.74, 0.71)
+            self._base_n_cost = 0.92
         return self._base_n_cost
     
     @base_n_cost.setter
@@ -262,37 +252,26 @@ class NaturalGasBoiler(bst.Unit):
 
     def _cost(self):
         # design parameters for cost correlations
-        heat_adsorbed = self.design_results['Heat absorbed']
-        area = self.design_results['Convective heat transfer area']
+        steam_flow_kg_s = self.design_results['Steam generated'] * 18.02 / 3600
 
-        # Baseline purchase cost for furnace and heat exchanger
-        furnace = self.base_cost[0] * (heat_adsorbed / self.base_heat_adsorbed) ** self.base_n_cost[0]
-        heat_exchanger = self.base_cost[1] * (area / self.base_area) ** self.base_n_cost[1]
+        # Baseline purchase cost
+        boiler = self.base_cost * (steam_flow_kg_s/self.base_steam_flow) ** self.base_n_cost
 
         # Scale costs
         base_CE = self.base_CE
         current_CE = bst.CE
 
-        updated_furnace_cost = furnace * (current_CE / base_CE)
-        updated_heat_exchanger_cost = heat_exchanger * (current_CE / base_CE)
+        updated_boiler = boiler * (current_CE / base_CE)
 
-        self.baseline_purchase_costs['Furnace'] = updated_furnace_cost
-        self.baseline_purchase_costs['Heat exchanger'] = updated_heat_exchanger_cost
+        self.baseline_purchase_costs['Boiler'] = updated_boiler
 
         # Bare module
         delivery = 0.10
-        installation_heat_exchanger = 0.60
-        installation_furnace = 0.90
+        installation = 0.90
         instrumentation_control = 0.50
         piping = 0.68  
         
-        heat_exchanger_BM = (1 + (delivery + installation_heat_exchanger + instrumentation_control + piping))
-        furnace_BM = (1 + (delivery + installation_furnace + instrumentation_control + piping))
-        
-        self.F_BM['Heat exchanger'] = heat_exchanger_BM
-        self.F_BM['Furnace'] = furnace_BM
+        self.F_BM['Boiler'] = 1 + (delivery + installation + instrumentation_control + piping)
 
         # Material, pressure and temperature factor
-        self.F_P['Heat exchanger'] = self.F_M['Heat exchanger'] = self.F_D['Heat exchanger'] = 1.0
-
-        self.F_P['Furnace'] = self.F_M['Furnace'] = self.F_D['Furnace'] = 1.0
+        self.F_P['Boiler'] = self.F_M['Boiler'] = self.F_D['Boiler'] = 1.0
