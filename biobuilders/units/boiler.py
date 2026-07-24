@@ -37,7 +37,7 @@ class NaturalGasBoiler(bst.Facility):
         self.boiler_efficiency = boiler_efficiency
 
         self.agent = agent  = agent or bst.settings.get_heating_agent('low_pressure_steam')
-        self.other_agents = [i for i in bst.settings.heating_agents if i is not agent] if other_agents is None else other_agents
+        self.other_agents = [i for i in bst.settings.heating_agents if i is not agent and not i.isfuel] if other_agents is None else other_agents
         self.steam_utilities = []
 
         self.define_utility('Natural gas', self.natural_gas)
@@ -157,12 +157,53 @@ class NaturalGasBoiler(bst.Facility):
         self.Q_natural_gas = Q_natural_gas
         self.n_CH4 = n_CH4
 
+    def _add_steam_streams_and_feed_water(self, steam_supply):
+        steam_outlets = {
+            'low_pressure_steam': self.outs[1],
+            'medium_pressure_steam': self.outs[2],
+            'high_pressure_steam': self.outs[3],
+        }
+
+        for steam_outlet in steam_outlets.values():
+            steam_outlet.empty()
+            steam_outlet.price = 0.0
+
+        water_in_flow = 0.0
+
+        for hu in steam_supply:
+            steam_outlet = steam_outlets.get(
+                hu.ID
+            )
+
+            if steam_outlet is None:
+                continue
+            
+            fresh_steam = hu.inlet_utility_stream
+
+            if fresh_steam is None:
+                continue
+            
+            steam_outlet.copy_like(
+                fresh_steam
+            )
+
+            steam_outlet.price = 0.0
+
+            water_in_flow += (
+                steam_outlet.imol['Water']
+            )
+
+        self.ins[2].imol['Water'] = water_in_flow
+
+        return water_in_flow
+
     def _design(self):
         self._load_steam_utilities()
 
         steam_supply = bst.HeatUtility.sum_by_agent(self.steam_utilities)
+        steam_flow = self._add_steam_streams_and_feed_water(steam_supply)
+        
         Q_required = sum(hu.duty for hu in steam_supply)
-        steam_flow = sum(hu.flow for hu in steam_supply)
 
         if Q_required <= 0. or steam_flow <= 0.:
             self.natural_gas.empty()
