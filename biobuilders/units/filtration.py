@@ -17,6 +17,7 @@ from math import ceil
 
 __all__ = (
     'RotaryVacuumFilter',
+    'MembraneFiltration',
 )
 class RotaryVacuumFilter(SolidsSeparator):
     """
@@ -231,7 +232,7 @@ class MembraneFiltration(bst.Unit):
 
     """
     _default_equipment_lifetime = {
-        'Module': 3,
+        'Membrane module': 3,
     }
 
     auxiliary_unit_names = ('pump',)
@@ -546,3 +547,4 @@ class MembraneFiltration(bst.Unit):
 
         ## Scale the costs using CEPCI
         self.baseline_purchase_costs['Membrane module'] *= bst.CE/self.CE_base
+        self.equipment_lifetime['Membrane module'] = self._default_equipment_lifetime['Membrane module']
