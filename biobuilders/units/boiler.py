@@ -206,22 +206,10 @@ class NaturalGasBoiler(bst.Facility):
         Q_required = sum(hu.duty for hu in steam_supply)
 
         if Q_required <= 0. or steam_flow <= 0.:
-            self.natural_gas.empty()
-            self.combustion_air.empty()
-            self.flue_gas.empty()
-            self.heat_utilities.clear()
-
-            self.Q_required = 0.0
-            self.Q_natural_gas = 0.0
-            self.n_CH4 = 0.0
-
-            design = self.design_results
-            
-            design['Steam duty'] = 0.0
-            design['Steam generated'] = 0.0
-            design['Heat losses in flue gas'] = 0.0
-            return
-
+            raise ValueError(
+                f"No steam demand in the system: 'Q_required' = {Q_required:.2f} kJ/hr | 'steam_flow = {steam_flow:.2f} kmol/hr."
+            )
+        
         self._solve_combustion(Q_required)
 
         for hu in steam_supply:
