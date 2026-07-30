@@ -17,7 +17,7 @@ from math import ceil
 
 __all__ = (
     'RotaryVacuumFilter',
-    'MembraneFiltration',
+    'MembraneConcentration',
 )
 class RotaryVacuumFilter(SolidsSeparator):
     """
@@ -183,52 +183,9 @@ class RotaryVacuumFilter(SolidsSeparator):
         """Return area in ft^2 given flow in kg/hr and filter rate in lb/day-ft^2."""
         return flow * 52.91 / filter_rate
 
-MEMBRANE_CAPACITY = {       # [1]
-    "Spiral": (0.1, 35),    # m2/module
-    "Fiber": (0.001, 5),    # m2/module
-    "Cassette": (0.05, 2.5) # m2/module
-}
-MEMBRANE_LMH = {
-    "Ultrafiltration": {
-        "Polysulfone_Hollow_Fibers": ((0.005 + 0.016)/2)*3600,  # L/h*m2
-        "Polysulfone_Spiral_Wound": ((0.08 + 0.14)/2)*3600,     # L/h*m2
-        "Polysulfone_Tubes": ((0.06 + 0.20)/2)*3600,            # L/h*m2
-    },
-}
-class MembraneFiltration(bst.Unit):
+
+class AbstractMembraneFiltration(bst.Unit, isabstract = True):
     """
-
-    This class simulates a filtration using a membrane system.
-
-    The solids retained must be specified, this solids are assumed to
-    be completely separated. In addition, all the solids must be defined
-    to calculate the solid loading which is used to estimate the power.
-
-    Parameters
-    ----------
-    ID : str
-        Unit name.
-    ins : tuple
-        Inlet streams.
-        * [0] feed.
-    outs : tuple
-        Outlet streams.
-        * [0] permeate.
-        * [1] retentate.
-    type : float
-        * [0] Ultrafiltration using polysulfone hollow fibers.
-        * [1] Ultrafiltration using polysulfone spiral wounds.
-        * [2] Ultrafiltration using polysulfone tubes.
-        * [3] Microfiltration.
-    solids_retained : list[str]
-        List of chemical IDs retained in the retentate.
-    solids : list[str]
-        List of chemical IDs of all solids. This is used
-        to calculate the solids loading.
-    solids_retentate_conc : float
-        Mass concentration of solids in the retentate used
-        to calculate the amount of water retained. Default to
-        0.60 kg DW/kg
 
     """
     _default_equipment_lifetime = {
@@ -245,7 +202,7 @@ class MembraneFiltration(bst.Unit):
     _units = {
         "Area (total)": "m2",
         "Module area": "m2",
-        "VCF": "times",
+        "Modules": "membrane modules",
         "LMH": "L/(m2 * h)",
         "Mass flux": "kg/(m2 * h)",
         "Volumetric flow": "m3/h",
@@ -253,32 +210,28 @@ class MembraneFiltration(bst.Unit):
 
     def _init(
         self,
-        split: dict = None,
-        pressure_drop: float = 120000,
-        permeate_pressure: float = 101325,
-        TMP: float = None,
-        LMH: float = None,
-        VCF: float = None,
-        solids_concentration: float = None,
-        module_area: float = None,
-        solids_retained: list[str] = [], 
-        solids_IDs: list[str] = [],
-        solvent_IDs: list = ["Water",],
-        ):
-        
-        self.split = split
+        rejection: dict[str, float] | None = None,
+        pressure_drop: float = 120_000,
+        permeate_pressure: float = 101_325,
+        TMP: float | None = None,
+        LMH: float | None = None,
+        module_area: float | None = None,
+        solvent_IDs: tuple[str, ...] | None = None,
+    ):
+        self.rejection = (
+            {} if rejection is None else rejection.copy()
+        )
         self.pressure_drop = pressure_drop
         self.permeate_pressure = permeate_pressure
         self.TMP = TMP
         self.LMH = LMH
-        self.VCF = VCF
-        self.solids_concentration = solids_concentration
         self.module_area = module_area
-        self.solids_retained = solids_retained
-        self.solids_IDs = solids_IDs
-        self.solvent_IDs = solvent_IDs
+        self.solvent_IDs = (
+            ("Water",)
+            if solvent_IDs is None
+            else tuple(solvent_IDs)
+        )
 
-        # Properties
         self._base_cost = None
         self._base_n_cost = None
         self._base_area = None
@@ -298,132 +251,33 @@ class MembraneFiltration(bst.Unit):
         tmp = self.TMP                      # Pa, average TMP
         p_permeate = self.permeate_pressure # Pa, permeate pressure
 
-        if p_drop < 0:
-            raise ValueError("pressure_drop must be positive: P_inlet - P_retentate.")
+        if p_drop is None or p_drop < 0:
+            raise ValueError(
+                f"{self.ID}: pressure_drop must be non-negative."
+            )
 
-        if tmp <= 0:
-            raise ValueError("TMP must be positive.")
+        if tmp is None or tmp <= 0:
+            raise ValueError(
+                f"{self.ID}: TMP must be greater than zero."
+            )
+
+        if p_permeate is None or p_permeate <= 0:
+            raise ValueError(
+                f"{self.ID}: permeate_pressure must be greater than zero."
+            )
 
         p_inlet = tmp + p_permeate + p_drop / 2
+        p_retentate = p_inlet - p_permeate
+
+        if p_retentate <= 0:
+            raise ValueError(
+                f"{self.ID}: calculated retentate pressure must be "
+                f"positive; received {p_retentate:.6g} Pa. "
+                "Decrease pressure_drop, increase TMP, or increase "
+                "permeate_pressure."
+            )
 
         return p_inlet
-
-    def _run(self):
-        
-        # Input stream
-        feed, = self.ins
-
-        # Output streams
-        permeate, retentate = self.outs
-        permeate.copy_like(feed)
-        retentate.empty()
-
-        # split components
-        for chem, split in self.split.items():
-            if chem in self.solvent_IDs:
-                continue
-            
-            rejection = split * permeate.imass[chem]
-            
-            retentate.imass[chem] += rejection
-            permeate.imass[chem] -= rejection
-
-        # Solutes follow the liquid
-        liquid_solute_IDs = [
-            chem.ID for chem in feed.chemicals
-            if chem.ID not in self.solvent_IDs
-            and chem.ID not in self.split.keys()
-            and feed.imass[chem.ID] > 0
-        ]
-
-        # Distribute solvent
-        solvent_in = sum(feed.imass[chem] for chem in self.solvent_IDs)
-        solvent_vol_in = sum(feed.ivol[chem] for chem in self.solvent_IDs)
-
-        if self.solids_concentration:
-            # Calculate solvent retained 
-            solids_retained = sum(retentate.imass[chem] for chem in self.solids_IDs)
-
-            # based on solids_concentration = kg solvent / kg retained solids
-            solvent_retained = self.solids_concentration * solids_retained
-
-            if solvent_in <= 0:
-                raise ValueError(
-                    f"{self.ID}: No solvent available in feed. "
-                    f"solvent_IDs={self.solvent_IDs}"
-                )
-
-            if solvent_retained > solvent_in:
-                raise ValueError(
-                    f"{self.ID}: Not enough solvent. "
-                    f"Available: {solvent_in:.6e} kg/h; "
-                    f"required: {solvent_retained:.6e} kg/h."
-                )
-            
-            fraction_in_mass = solvent_retained / solvent_in
-
-            for chem in self.solvent_IDs:
-                solvent_i_mass_retained = fraction_in_mass * feed.imass[chem]
-                
-                retentate.imass[chem] += solvent_i_mass_retained
-                permeate.imass[chem] -= solvent_i_mass_retained
-
-        else:
-            if self.VCF <= 0:
-                raise ValueError("VCF must be greater than zero.")
-            
-            # Target retentate volume based on volume concentration factor (VCF)
-            target_retentate_vol = feed.F_vol / self.VCF
-
-            # Calculate solvent volume needed
-            non_solvent_vol = retentate.F_vol
-            solvent_vol = target_retentate_vol - non_solvent_vol
-            
-            if solvent_vol < 0:
-                VCF_max = feed.F_vol / non_solvent_vol
-
-                raise ValueError(
-                    f"Target retentate volume ({target_retentate_vol:.6f} m3/h) "
-                    f"is smaller than the retained non-solvent volume "
-                    f"({non_solvent_vol:.6f} m3/h). "
-                    f"Maximum feasible VCF is {VCF_max:.4f}. "
-                    f"Decrease VCF or reduce rejection."
-                )
-
-            if solvent_vol >= solvent_vol_in:
-                raise ValueError(
-                    f"Not enough solvent. Available: {solvent_vol_in:.3f} m3/h; "
-                    f"required: {solvent_vol:.3f} m3/h."
-                )
-            
-            fraction_in_vol = solvent_vol / solvent_vol_in
-            
-            for chem in self.solvent_IDs:
-                solvent_i_vol_retained = fraction_in_vol * feed.ivol[chem]
-
-                # Convert volume to mass
-                rho_i = feed.imass[chem] / feed.ivol[chem]
-                solvent_i_mass_retained = solvent_i_vol_retained * rho_i
-
-                retentate.imass[chem] += solvent_i_mass_retained
-                permeate.imass[chem] -= solvent_i_mass_retained
-
-        # Distribute solutes following solvent
-        for chem in liquid_solute_IDs:
-            solute_conc = feed.imass[chem] / solvent_in
-
-            retained_mass = sum(retentate.imass[chem] for chem in self.solvent_IDs)
-
-            retentate.imass[chem] += (solute_conc * retained_mass)
-            permeate.imass[chem] -= (solute_conc * retained_mass)
-
-        # Pressure
-        P_inlet = self._solve_pressure()
-        permeate.P = self.permeate_pressure
-        retentate.P = P_inlet - self.pressure_drop
-
-        self.pump.P = P_inlet
-        self.pump.simulate()
 
     def _design(self):
         """
@@ -433,35 +287,38 @@ class MembraneFiltration(bst.Unit):
         permeate = self.outs[0]
         
         LMH = self.LMH
-
-        mass_flux = LMH * 1e-3 * permeate.rho   # kg/m2/h
-        
-        A = permeate.F_mass / mass_flux
-
-        # Design results
-        design = self.design_results
-        design["Area (total)"] = A
-        design["VCF"] = self.VCF
-        design["LMH"] = LMH
-        design["Mass flux"] = mass_flux
-
-        # Volumetric permeate flow
-        volumetric_flow = permeate.F_vol       # m3/h
-        design["Volumetric flow"] = volumetric_flow
-
-        # Module area
         module_area = self.module_area
+
+        if LMH is None or LMH <= 0:
+            raise ValueError(
+                f"{self.ID}: LMH must be greater than zero."
+            )
+
+        if module_area is None or module_area <= 0:
+            raise ValueError(
+                f"{self.ID}: module_area must be greater than zero."
+            )
+
+        A = permeate.F_vol * 1000 / LMH
+        mass_flux = LMH * 1e-3 * permeate.rho   # kg/m2/h
 
         if module_area <= 0:
             raise ValueError("Module area must be greater than zero.")
 
         modules = ceil(A / module_area)
 
+        # Design results
+        design = self.design_results
+        design["Area (total)"] = A
+        design["LMH"] = LMH
+        design["Mass flux"] = mass_flux
+        design["Volumetric flow"] = permeate.F_vol  # m3/h
         design["Module area"] = module_area
         design["Modules"] = modules
 
-        self.parallel["Module"] = modules
-    
+        # Auxiliary pump design
+        self.pump._design()
+
     @property
     def base_cost(self):
         """
@@ -548,3 +405,245 @@ class MembraneFiltration(bst.Unit):
         ## Scale the costs using CEPCI
         self.baseline_purchase_costs['Membrane module'] *= bst.CE/self.CE_base
         self.equipment_lifetime['Membrane module'] = self._default_equipment_lifetime['Membrane module']
+
+        # Auxiliar pump cost
+        self.pump._cost()
+
+class MembraneConcentration(AbstractMembraneFiltration):
+    """
+
+    """
+    # Number of input streams
+    _N_ins = 1
+
+    # Results units
+    _units = {
+        **AbstractMembraneFiltration._units,
+        "VCF": "times",
+    }
+
+    def _init(
+        self,
+        rejection: dict[str, float] | None = None,
+        pressure_drop: float = 120_000,
+        permeate_pressure: float = 101_325,
+        TMP: float | None = None,
+        LMH: float | None = None,
+        VCF: float | None = None,
+        solvent_to_solids_ratio: float | None = None,
+        module_area: float | None = None,
+        solids_IDs: tuple[str, ...] | None = None,
+        solvent_IDs: tuple[str, ...] | None = None,
+    ):
+        super()._init(
+            rejection=rejection,
+            pressure_drop=pressure_drop,
+            permeate_pressure=permeate_pressure,
+            TMP=TMP,
+            LMH=LMH,
+            module_area=module_area,
+            solvent_IDs=solvent_IDs,
+        )
+
+        if (VCF is None) == (solvent_to_solids_ratio is None):
+            raise ValueError(
+                f"{self.ID}: define exactly one of "
+                "'VCF' or 'solvent_to_solids_ratio'."
+            )
+
+        self.VCF = VCF
+        self.solvent_to_solids_ratio = solvent_to_solids_ratio
+        self.solids_IDs = (
+            () if solids_IDs is None else tuple(solids_IDs)
+        )
+
+    def _run(self):
+        feed, = self.ins
+        permeate, retentate = self.outs
+
+        # Initially, all feed components are placed in the permeate
+        permeate.copy_like(feed)
+
+        # Start with an empty retentate
+        retentate.copy_like(feed)
+        retentate.empty()
+
+        for chem, retentate_fraction in self.rejection.items():
+
+            # Solvents are distributed later to meet the VCF
+            # or solvent-to-solids ratio
+            if chem in self.solvent_IDs:
+                continue
+
+            if not 0.0 <= retentate_fraction <= 1.0:
+                raise ValueError(
+                    f"{self.ID}: rejection for {chem!r} must be "
+                    f"between 0 and 1; received {retentate_fraction}."
+                )
+
+            retained_mass = (
+                retentate_fraction * feed.imass[chem]
+            )
+
+            retentate.imass[chem] = retained_mass
+            permeate.imass[chem] = (
+                feed.imass[chem] - retained_mass
+            )
+
+        liquid_solute_IDs = [
+            chem.ID
+            for chem in feed.chemicals
+            if chem.ID not in self.solvent_IDs
+            and chem.ID not in self.rejection
+            and feed.imass[chem.ID] > 0
+        ]
+
+        # Solvents and unspecified solutes are distributed together
+        mobile_IDs = [
+            *self.solvent_IDs,
+            *liquid_solute_IDs,
+        ]
+
+        solvent_mass_in = sum(
+            feed.imass[chem]
+            for chem in self.solvent_IDs
+        )
+
+        if self.solvent_to_solids_ratio is not None:
+
+            if self.solvent_to_solids_ratio < 0:
+                raise ValueError(
+                    f"{self.ID}: solvent_to_solids_ratio "
+                    "cannot be negative."
+                )
+
+            if solvent_mass_in <= 0:
+                raise ValueError(
+                    f"{self.ID}: no solvent is available in the feed. "
+                    f"solvent_IDs={self.solvent_IDs}."
+                )
+
+            retained_solids = sum(
+                retentate.imass[chem]
+                for chem in self.solids_IDs
+            )
+
+            target_solvent_mass = (
+                self.solvent_to_solids_ratio
+                * retained_solids
+            )
+
+            mobile_fraction = (
+                target_solvent_mass
+                / solvent_mass_in
+            )
+
+            if not 0.0 <= mobile_fraction <= 1.0:
+                raise ValueError(
+                    f"{self.ID}: target solvent retention is infeasible. "
+                    f"Available solvent: {solvent_mass_in:.6g} kg/h; "
+                    f"required solvent: {target_solvent_mass:.6g} kg/h; "
+                    f"calculated fraction: {mobile_fraction:.6g}."
+                )
+
+        else:
+
+            if self.VCF is None or self.VCF < 1.0:
+                raise ValueError(
+                    f"{self.ID}: VCF must be greater than or equal to 1."
+                )
+
+            target_retentate_volume = (
+                feed.F_vol / self.VCF
+            )
+
+            # Volume already occupied by components with an explicit
+            # retentate fraction
+            fixed_retentate_volume = retentate.F_vol
+
+            # Initial volume of solvents and solutes following the liquid
+            mobile_volume_in = sum(
+                feed.ivol[chem]
+                for chem in mobile_IDs
+            )
+
+            if mobile_volume_in <= 0:
+                raise ValueError(
+                    f"{self.ID}: no mobile liquid is available "
+                    "to satisfy the specified VCF."
+                )
+
+            required_mobile_volume = (
+                target_retentate_volume
+                - fixed_retentate_volume
+            )
+
+            mobile_fraction = (
+                required_mobile_volume
+                / mobile_volume_in
+            )
+
+            if mobile_fraction < 0:
+
+                maximum_VCF = (
+                    feed.F_vol / fixed_retentate_volume
+                    if fixed_retentate_volume > 0
+                    else float("inf")
+                )
+
+                raise ValueError(
+                    f"{self.ID}: target retentate volume "
+                    f"({target_retentate_volume:.6g} m3/h) is smaller "
+                    f"than the volume occupied by retained components "
+                    f"({fixed_retentate_volume:.6g} m3/h). "
+                    f"Maximum feasible VCF: {maximum_VCF:.6g}."
+                )
+
+            if mobile_fraction > 1:
+                raise ValueError(
+                    f"{self.ID}: target retentate volume requires "
+                    "retaining more mobile liquid than is available. "
+                    f"Calculated mobile fraction: "
+                    f"{mobile_fraction:.6g}."
+                )
+
+        for chem in mobile_IDs:
+
+            retained_mass = (
+                mobile_fraction * feed.imass[chem]
+            )
+
+            retentate.imass[chem] = retained_mass
+            permeate.imass[chem] = (
+                feed.imass[chem] - retained_mass
+            )
+
+        P_inlet = self._solve_pressure()
+
+        permeate.P = self.permeate_pressure
+        retentate.P = (
+            P_inlet - self.pressure_drop
+        )
+
+        self.pump.P = P_inlet
+        self.pump._run()
+
+    def _design(self):
+        """
+        """
+        super()._design()
+        feed, = self.ins
+        retentate = self.outs[1]
+
+        if retentate.F_vol <= 0:
+            raise ValueError(
+                f"{self.ID}: retentate volume must be greater than zero."
+            )
+
+        self.design_results["VCF"] = (
+            feed.F_vol / retentate.F_vol
+        )
+
+class Diafiltration(AbstractMembraneFiltration):
+    """
+    """
