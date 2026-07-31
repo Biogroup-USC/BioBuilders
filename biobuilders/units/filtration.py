@@ -647,3 +647,8 @@ class MembraneConcentration(AbstractMembraneFiltration):
 class Diafiltration(AbstractMembraneFiltration):
     """
     """
+    def _init(self):
+        pass
+
+    def _run(self):
+            pass
