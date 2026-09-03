@@ -13,7 +13,7 @@ import biosteam as bst
 import numpy as np
 from .centrifuge import SolidsSeparator
 from typing import Literal
-from math import ceil
+from math import ceil, exp
 
 __all__ = (
     'RotaryVacuumFilter',
@@ -644,11 +644,138 @@ class MembraneConcentration(AbstractMembraneFiltration):
             feed.F_vol / retentate.F_vol
         )
 
-class Diafiltration(AbstractMembraneFiltration):
+class MembraneDiafiltration(AbstractMembraneFiltration):
     """
     """
-    def _init(self):
-        pass
+    _N_ins = 2
+
+    auxiliary_unit_names = (
+        *AbstractMembraneFiltration.auxiliary_unit_names,
+        'pump_buffer',
+    )
+
+    def _init(
+        self,
+        rejection,
+        N_trains,
+        batch_volume,
+        diavolumes,
+        loading_time,
+        unloading_time,
+        buffer_composition,
+        old_solvent_id,
+        new_solvent_id,
+        pressure_drop: float = 120_000.0,
+        permeate_pressure: float = 101_325.0,
+        TMP: float = None,
+        LMH: float = None,
+        module_area: float = None,
+    ):
+
+        super()._init(
+            rejection = rejection,
+            pressure_drop = pressure_drop,
+            permeate_pressure = permeate_pressure,
+            TMP = TMP,
+            LMH = LMH,
+            module_area = module_area,
+            solvent_IDs = (old_solvent_id, new_solvent_id),
+        )
+
+        if diavolumes <= 0.:
+            raise ValueError("diavolumes must be greater than zero.")
+
+        self.batch_volume = batch_volume
+        self.N_trains = N_trains
+        self.diavolumes = diavolumes
+        self.loading_time = loading_time
+        self.unloading_time = unloading_time
+        self.old_solvent_id = old_solvent_id
+        self.new_solvent_id = new_solvent_id
+        self.buffer_composition = buffer_composition
+
+    def _load_auxiliaries(self):
+        super()._load_auxiliaries()
+
+        self.pump_buffer = self.auxiliary(
+            "pump_buffer",
+            bst.Pump,
+            ins = self.ins[0],
+        )
+
 
     def _run(self):
-            pass
+
+        feed, buffer = self.ins
+        permeate, retentate = self.outs
+
+        retentate.empty()
+        permeate.empty()
+
+        # Diafiltration buffer
+        V_R = feed.F_vol
+        N = self.diavolumes
+
+        # Total buffer volume
+        V_D = N * V_R
+
+        # Buffer composition
+        w_buffer = self.buffer_composition
+
+        # Build buffer and scale it
+        buffer.empty()
+
+        for chem, w in w_buffer.items():
+            buffer.imass[chem] = w
+
+        scale = V_D / buffer.F_vol
+
+        buffer.F_mass *= scale
+
+        for chem in feed.chemicals:
+
+            chem_ID = chem.ID
+
+            if chem_ID in self.rejection:
+                Ri = self.rejection[chem_ID]
+                Si = 1. - Ri
+            else:
+                # Solvents are distributed equally
+                # Solutes with no specific rejection are assumed to be washed
+                Si = 1.
+
+            if Si > 1e-12: 
+                wash_factor = exp(-Si * N)
+
+                mass_retained = (
+                    feed.imass[chem_ID] * wash_factor +
+                    (buffer.imass[chem_ID] / (Si * N)) * (1 - wash_factor)
+                )     
+            else:
+                mass_retained = feed.imass[chem_ID] + buffer.imass[chem_ID]
+
+            total_mass_in = feed.imass[chem_ID] + buffer.imass[chem_ID]
+            retentate.imass[chem_ID] = mass_retained
+            permeate.imass[chem_ID] = total_mass_in - mass_retained
+
+    def _design(self):
+        super()._design()
+
+        feed, buffer = self.ins
+        permeate, retentate = self.outs
+
+        design = self.design_results
+        N = self.diavolumes
+        V_batch = self.batch_volume
+        N_trains = self.N_trains
+        
+        t_cycle = N_trains * V_batch / feed.F_vol
+        t_aux = self.loading_time + self.unloading_time
+        t_diaf = t_cycle - t_aux
+
+        total_area = design["Area (total)"]
+        
+        design["Diavolumes"] = N
+        design["Batch volume"] = V_batch
+        design["Number of trains"] = N_trains
+        design["Cycle time"] = t_cycle
