@@ -775,7 +775,7 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         retentate.P = self._solve_pressure() - self.pressure_drop
 
         # Outlet temperature
-        mixture = bst.Stream()
+        mixture = bst.Stream(None)
         mixture.mix_from([feed,buffer])
 
         permeate.T = retentate.T = mixture.T
