@@ -18,6 +18,7 @@ from math import ceil, exp
 __all__ = (
     'RotaryVacuumFilter',
     'MembraneConcentration',
+    'MembraneDiafiltration',
 )
 class RotaryVacuumFilter(SolidsSeparator):
     """

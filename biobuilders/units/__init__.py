@@ -8,7 +8,7 @@ from .evaporator import MultiEffectEvaporator
 from .mixing import MixTank
 from .reactors import ContinuousStirredTankReactor
 from .extraction import ExtractionReactor,SLECbySplit,LLEbySplit
-from .filtration import RotaryVacuumFilter, MembraneConcentration
+from .filtration import RotaryVacuumFilter, MembraneConcentration, MembraneDiafiltration
 from .sieving import SieveBend, VibratingScreen
 from .flash import Flash
 from .distillation import BinaryDistillation
@@ -38,6 +38,7 @@ __all__ = (
     "LLESettler",
     "LiquidsSettler",
     "MembraneConcentration",
+    "MembraneDiafiltration",
     'SieveBend',
     'VibratingScreen',
     "SeparationUnit",
