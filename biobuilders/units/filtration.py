@@ -267,7 +267,7 @@ class AbstractMembraneFiltration(bst.Unit, isabstract = True):
             )
 
         p_inlet = tmp + p_permeate + p_drop / 2
-        p_retentate = p_inlet - p_permeate
+        p_retentate = p_inlet - p_drop
 
         if p_retentate <= 0:
             raise ValueError(
@@ -649,15 +649,28 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
     """
     _N_ins = 2
 
-    auxiliary_unit_names = (
-        *AbstractMembraneFiltration.auxiliary_unit_names,
-        'pump_buffer',
-    )
+    auxiliary_unit_names = ()
+
+    _units = {
+        **AbstractMembraneFiltration._units,
+        "Batch volume": "m3",
+        "Batch scheduling interval": "h",
+        "Cycle time": "h",
+        "Diafiltration time": "h",
+        "Permeate flow per train": "m3/h",
+        "Required area per train": "m2",
+        "Installed area per train": "m2",
+        "Area (required total)": "m2",
+        "Average active trains": "",
+        "Recirculation flow per train": "m3/h",
+        "Recirculation pressure rise": "Pa",
+        "Recirculation power per train": "kW",
+        "Average recirculation power": "kW",
+    }
 
     def _init(
         self,
         rejection,
-        N_trains,
         batch_volume,
         diavolumes,
         loading_time,
@@ -669,7 +682,10 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         permeate_pressure: float = 101_325.0,
         TMP: float = None,
         LMH: float = None,
+        LMH_feed_flow: float = None,
         module_area: float = None,
+        N_trains: int = 2,        
+        pump_efficiency: float = 0.70,
     ):
 
         super()._init(
@@ -693,15 +709,11 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         self.old_solvent_id = old_solvent_id
         self.new_solvent_id = new_solvent_id
         self.buffer_composition = buffer_composition
+        self.LMH_feed_flow = LMH_feed_flow
+        self.pump_efficiency = pump_efficiency
 
     def _load_auxiliaries(self):
-        super()._load_auxiliaries()
-
-        self.pump_buffer = self.auxiliary(
-            "pump_buffer",
-            bst.Pump,
-            ins = self.ins[0],
-        )
+        pass
 
 
     def _run(self):
@@ -713,11 +725,11 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         permeate.empty()
 
         # Diafiltration buffer
-        V_R = feed.F_vol
+        Q_feed_avg = feed.F_vol
         N = self.diavolumes
 
         # Total buffer volume
-        V_D = N * V_R
+        Q_buffer_avg = N * Q_feed_avg
 
         # Buffer composition
         w_buffer = self.buffer_composition
@@ -728,7 +740,7 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         for chem, w in w_buffer.items():
             buffer.imass[chem] = w
 
-        scale = V_D / buffer.F_vol
+        scale = Q_buffer_avg / buffer.F_vol
 
         buffer.F_mass *= scale
 
@@ -758,24 +770,129 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
             retentate.imass[chem_ID] = mass_retained
             permeate.imass[chem_ID] = total_mass_in - mass_retained
 
-    def _design(self):
-        super()._design()
+        # Outlet pressure
+        permeate.P = self.permeate_pressure
+        retentate.P = self._solve_pressure() - self.pressure_drop
 
-        feed, buffer = self.ins
-        permeate, retentate = self.outs
+        # Outlet temperature
+        mixture = bst.Stream()
+        mixture.mix_from([feed,buffer])
+
+        permeate.T = retentate.T = mixture.T
+
+    def _design(self):
+
+        feed = self.ins[0]
 
         design = self.design_results
         N = self.diavolumes
         V_batch = self.batch_volume
         N_trains = self.N_trains
         
-        t_cycle = N_trains * V_batch / feed.F_vol
-        t_aux = self.loading_time + self.unloading_time
-        t_diaf = t_cycle - t_aux
+        delta_t_batch = V_batch/feed.F_vol
+        t_cycle = N_trains * delta_t_batch
 
-        total_area = design["Area (total)"]
-        
-        design["Diavolumes"] = N
+        t_aux = self.loading_time + self.unloading_time
+        t_df = t_cycle - t_aux
+
+        if t_df <= 0.:
+            raise ValueError(
+                f"{self.ID}: infeasible batch scheduling. "
+                f"Cycle time ({t_cycle:.3g} h) must be greater than "
+                f"loading + unloading time ({t_aux:.3g} h)."
+            )
+
+        Q_p_train = N * V_batch / t_df
+
+        A_train = 1000 * (Q_p_train/self.LMH)
+
+        modules_per_train = ceil(A_train/self.module_area)
+        A_installed_train = modules_per_train * self.module_area
+
+        total_modules = modules_per_train * N_trains
+        A_total_required = A_train * N_trains
+        A_total_installed = A_installed_train * N_trains
+
         design["Batch volume"] = V_batch
-        design["Number of trains"] = N_trains
+        design["Batch scheduling interval"] = delta_t_batch
         design["Cycle time"] = t_cycle
+        design["Diafiltration time"] = t_df
+
+        design["Permeate flow per train"] = Q_p_train
+
+        design["Required area per train"] = A_train
+        design["Installed area per train"] = A_installed_train
+        design["Area (required total)"] = A_total_required
+        design["Area (total)"] = A_total_installed
+
+        design["Modules"] = total_modules
+        design["Area (total)"] = A_total_installed
+
+        # utilities
+        f_overlap = t_df / delta_t_batch
+        Q_recirc_train = self.LMH_feed_flow * A_installed_train / 1000
+        deltaP_recirc = self._solve_pressure() - feed.P
+        power_recirc_train = Q_recirc_train * deltaP_recirc / (3.6e6 * self.pump_efficiency)
+        
+        power_recirc_pump = power_recirc_train * f_overlap
+
+        self.add_power_utility(power_recirc_pump)
+
+        design["Average active trains"] = f_overlap
+        design["Recirculation flow per train"] = Q_recirc_train
+        design["Recirculation pressure rise"] = deltaP_recirc
+        design["Recirculation power per train"] = power_recirc_train
+        design["Average recirculation power"] = power_recirc_pump
+
+    def _cost(self):
+        """
+        """
+        # Load all the design parameters needed to calculate the costs
+        area = self.design_results["Area (total)"]
+
+        # Calculate the baseline purchase cost for membrane module
+        ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
+        membranes_module = self.base_cost * (area/self.base_area)**self.base_n_cost
+
+        self.baseline_purchase_costs['Membrane module'] = membranes_module
+
+        ## The material, pressure and temperature factors are assumed to be 1
+        self.F_D['Membrane module'] = self.F_M['Membrane module'] = self.F_P['Membrane module'] = 1
+
+        ## The Bare module factor which account for installation costs is calculated as the sum of delivery, installation,
+        ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
+        ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
+        ### Factors
+        Delivery = 0.10
+        Installation = 0.80             # Filters
+        Instrumentation_Control = 0.50
+        Piping = 0.31                   # Solid-Fluid   
+        ### Calculate the bare module
+        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
+        self.F_BM['Membrane module'] = Bare_Module
+
+        ## Scale the costs using CEPCI
+        self.baseline_purchase_costs['Membrane module'] *= bst.CE/self.CE_base
+        self.equipment_lifetime['Membrane module'] = self._default_equipment_lifetime['Membrane module']
+
+        # Auxiliar pump cost
+        power_per_train = self.design_results['Recirculation power per train']
+        if power_per_train < 23.:
+            pump = 9500 * (power_per_train / 23.) ** 0.29
+        else:
+            pump = 9500 * (power_per_train / 23.) ** 0.79
+
+        self.baseline_purchase_costs['Recirculation pump'] = pump
+        self.baseline_purchase_costs['Recirculation pump'] *= bst.CE/self.CE_base
+        self.parallel['Recirculation pump'] = self.N_trains
+
+        self.F_D["Recirculation pump"] = 1.
+        self.F_M["Recirculation pump"] = 1.
+        self.F_P["Recirculation pump"] = 1.
+
+        Delivery = 0.10
+        Installation = 0.60
+        Instrumentation_Control = 0.50
+        Piping = 0.31
+
+        self.F_BM["Recirculation pump"] = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
