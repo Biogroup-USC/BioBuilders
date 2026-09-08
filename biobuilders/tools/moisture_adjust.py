@@ -174,7 +174,7 @@ def adjust_moisture_content(retentate, permeate, moisture_content, solvent_IDs=(
 
     if denominator <= 0.:
         raise InfeasibleRegion(
-            "The specified moisture cannot be reached by adding"
+            "The specified moisture cannot be reached by adding "
             "the available solvent-solute mixture"
         )
 

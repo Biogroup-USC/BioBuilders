@@ -250,3 +250,123 @@ class SolidsCentrifuge(SolidsSeparator):
 
         self.baseline_purchase_costs['Centrifuges'] = cost
         self.F_BM['Centrifuges'] = 2.03
+
+class Tricanter(bst.SolidLiquidsSplitCentrifuge):
+    """
+    """
+    _units = {
+        "Flow rate": "m3/hr",
+        "Solids loading": "kg/hr",
+    }
+
+    def _init(
+        self, 
+        aqueous_split, 
+        solids_split, 
+        moisture_content = 0.5,
+        kWh_per_kg = 0.0055,
+        solvent_IDs = (),
+        solute_IDs = (),
+        solids = (),
+    ):
+
+        super()._init(
+            aqueous_split, 
+            solids_split, 
+            moisture_content
+        )
+
+        self.kWh_per_kg = kWh_per_kg
+        self.solvent_IDs = solvent_IDs
+        self.solute_IDs = solute_IDs
+        self.solids = solids
+
+        self._base_flow = None
+        self._base_n_cost = None
+        self._base_cost = None
+        self._base_CE = None
+
+    def _run(self):
+        oil, aqueous, solids = self.outs
+        self.ins[0].split_to(aqueous, oil, self.aqueous_split)
+        aqueous.split_to(solids, aqueous, self.solids_split)
+        adjust_moisture_content(solids, aqueous, self.moisture_content, self.solvent_IDs, self.solute_IDs)
+
+    @property
+    def base_flow(self):
+        """
+        """
+        if self._base_flow is None:
+            self._base_flow = 3 * 3600 / 1000 # m3/h
+        return self._base_flow
+    @base_flow.setter
+    def base_flow(self,value):
+        """
+        """
+        self._base_flow = value
+        
+    
+    @property
+    def base_cost(self):
+        """
+        """
+        if self._base_cost is None:
+            self._base_cost = 320000    # USD
+        return self._base_cost
+    @base_cost.setter
+    def base_cost(self,value):
+        """
+        """
+        self._base_cost = value
+    
+    @property
+    def base_n_cost(self):
+        """
+        """
+        if self._base_n_cost is None:
+            self._base_n_cost = 0.47
+        return self._base_n_cost
+    @base_n_cost.setter
+    def base_n_cost(self, value):
+        """
+        """
+        self._base_n_cost = value
+    
+    @property
+    def base_CE(self):
+        """
+        """
+        if self._base_CE is None:
+            self._base_CE = 1000.0
+        return self._base_CE
+    @base_CE.setter
+    def base_CE(self, value):
+        """
+        """
+        self._base_CE = value
+
+    def _design(self):
+        feed, = self.ins
+        cake = self.outs[2]
+        Q = feed.F_vol
+        S = feed.imass[self.solids].sum() if self.solids else 0.
+
+        self.design_results["Flow rate"] = Q
+        self.design_results["Solids loading"] = S
+
+        self.power_utility(self.kWh_per_kg * S)
+
+    def _cost(self): 
+        feed_flow = self.design_results["Flow rate"]
+
+        centrifuge_cost = self.base_cost * (feed_flow / self.base_flow) ** self.base_n_cost
+        self.baseline_purchase_costs["Centrifuge"] = centrifuge_cost * (bst.CE/self.base_CE)
+
+        self.F_D["Centrifuge"] = self.F_M["Centrifuge"] = self.F_P["Centrifuge"] = 1.
+
+        Delivery = 0.10
+        Installation = 0.60
+        Instrumentation_Control = 0.50
+        Piping = 0.31
+
+        self.F_BM["Centrifuge"] = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
