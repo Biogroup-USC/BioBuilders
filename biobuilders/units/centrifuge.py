@@ -253,6 +253,83 @@ class SolidsCentrifuge(SolidsSeparator):
 
 class Tricanter(bst.SolidLiquidsSplitCentrifuge):
     """
+    Create a three-phase centrifuge (tricanter) that separates the feed
+    into an oil-rich liquid phase, an aqueous liquid phase, and a
+    solids-rich phase.
+
+    Component recovery to the aqueous phase is specified through
+    `aqueous_split`. The resulting aqueous stream is subsequently split
+    between the solids-rich and aqueous product streams according to
+    `solids_split`. The moisture content of the solids-rich product is
+    adjusted to the specified `moisture_content`.
+
+    Equipment cost is estimated from a reference centrifuge cost using
+    a capacity-based scaling correlation and corrected to the current
+    Chemical Engineering Plant Cost Index (CEPCI).
+
+    Parameters
+    ----------
+    ins :
+        Feed stream to the tricanter.
+
+    outs :
+        * [0] Oil-rich liquid product.
+        * [1] Aqueous liquid product.
+        * [2] Solids-rich product.
+
+    aqueous_split : float or array_like
+        Component-wise split fractions from the feed to the aqueous
+        intermediate stream. The remaining fraction is recovered in
+        the oil-rich product.
+
+    solids_split : float or array_like
+        Component-wise split fractions from the aqueous intermediate
+        stream to the solids-rich product. The remaining fraction is
+        recovered in the aqueous product.
+
+    moisture_content : float, optional
+        Mass fraction of liquid retained in the solids-rich product.
+        Defaults to 0.5.
+
+    kWh_per_kg : float, optional
+        Specific electricity consumption based on the solids loading
+        [kWh/kg]. Defaults to 0.0055.
+
+    solvent_IDs : Sequence[str], optional
+        IDs of solvent components that may be transferred between the
+        aqueous and solids-rich streams when adjusting the moisture
+        content.
+
+    solute_IDs : Sequence[str], optional
+        IDs of dissolved solute components considered during the
+        moisture-content adjustment.
+
+    solids : Sequence[str], optional
+        IDs of components treated as solids when calculating the solids
+        loading used for power consumption.
+
+    Notes
+    -----
+    The volumetric feed rate is used as the equipment sizing basis
+    [m3/hr], while the total mass flow of the components listed in
+    `solids` is used to estimate the electricity requirement [kg/hr].
+
+    The baseline purchase cost is calculated as:
+
+        C = C_base * (Q / Q_base) ** n
+
+    and subsequently corrected from the reference cost index
+    `base_CE` to the current BioSTEAM CEPCI.
+
+    The default reference values are:
+
+    * `base_flow = 10.8 m3/hr`
+    * `base_cost = 320,000 USD`
+    * `base_n_cost = 0.47`
+    * `base_CE = 1000`
+
+    The bare-module factor includes delivery, installation,
+    instrumentation and control, and piping contributions.
     """
     _units = {
         "Flow rate": "m3/hr",
