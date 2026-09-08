@@ -3,7 +3,7 @@ from .mill import BallMill, AttritionMill
 from .heatexchanger import ShellHeatExchanger
 from .extraction import *
 from .dryer import SprayDryer, DrumDryer
-from .centrifuge import SolidsCentrifuge
+from .centrifuge import SolidsCentrifuge, Tricanter
 from .evaporator import MultiEffectEvaporator
 from .mixing import MixTank
 from .reactors import ContinuousStirredTankReactor
@@ -28,6 +28,7 @@ __all__ = (
     "LLEbySplit",
     "SprayDryer",
     "SolidsCentrifuge",
+    "Tricanter",
     "DrumDryer",
     "MultiEffectEvaporator",
     "MixTank",

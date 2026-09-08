@@ -7,6 +7,7 @@ from ..tools.moisture_adjust import mix_and_split, adjust_moisture_content, mix_
 
 __all__ = (
     "SolidsCentrifuge",
+    "Tricanter",
 )
 
 # Code adapted from BioSTEAM (https://biosteam.readthedocs.io/), under the University of Illinois/NCSA Open Source License
