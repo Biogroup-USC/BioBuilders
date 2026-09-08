@@ -179,19 +179,21 @@ def adjust_moisture_content(retentate, permeate, moisture_content, solvent_IDs=(
         )
 
     liquid_transfer = numerator / denominator
-    liquid_retained = liquid_total_retentate + liquid_transfer
 
-    if abs(liquid_transfer) < 1e-12:
-        return
+    strict = True if strict is None else strict
 
-    if liquid_transfer < 0:
+    if liquid_transfer > liquid_total:
+        if strict:
+            raise InfeasibleRegion(
+                "Not enough solvent for the specified moisture."
+            )
+
         warn(
-            f"Retentate already has more solvent than required "
-            f"({liquid_total_retentate:.3g} kg/hr > {liquid_retained:.3g} kg/hr). "
-            "No solvent removal implemented."
+            "Not enough solvent: transferring all available solvent. "
+            "The specified moisture will not be reached."
         )
-        return
-    
+        liquid_transfer = liquid_total
+
     # Distribute solvents
     fraction_retained = liquid_transfer / liquid_total
     for ID in solvent_IDs:
@@ -202,16 +204,6 @@ def adjust_moisture_content(retentate, permeate, moisture_content, solvent_IDs=(
 
         if abs(permeate.imass[key_p]) < 1e-12:
             permeate.imass[key_p] = 0.
-
-        if permeate.imass[key_p] < 0:
-            if strict is None: strict = True
-            if strict:
-                raise InfeasibleRegion(
-                    f"not enough {ID} for the moisture_content specified."
-                )
-            else:
-                retentate.imass[key_r] -= permeate.imass[key_p]
-                permeate.imass[key_p] = 0.
 
     # Distribute solutes
     for solute, conc in solutes_conc.items():
