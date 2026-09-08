@@ -119,6 +119,28 @@ def adjust_moisture_content(retentate, permeate, moisture_content, solvent_IDs=(
         raise ValueError(
             f"moisture_content must be between 0 and 1, both included."
         )
+
+    mc = moisture_content
+
+    liquid_total_retentate = sum(
+        retentate.imass[get_key_for(retentate, ID, 'l')]
+        for ID in solvent_IDs
+    )
+
+    solids_retentate = retentate.F_mass - liquid_total_retentate
+    mc_factor = mc / (1 - mc)
+
+    numerator = mc_factor * solids_retentate - liquid_total_retentate
+
+    if abs(numerator) < 1e-12:
+        return
+
+    if numerator < 0:
+        warn(
+            "Retentate moisture exceeds the target. "
+            "No solvent removal implemented."
+        )
+        return
     
     # Total solvent in feed
     liquid_total = sum(permeate.imass[get_key_for(permeate, ID, 'l')] for ID in solvent_IDs)
@@ -131,8 +153,6 @@ def adjust_moisture_content(retentate, permeate, moisture_content, solvent_IDs=(
             )
         else:
             return
-
-    mc = moisture_content
 
     if solute_IDs:
         
@@ -150,11 +170,16 @@ def adjust_moisture_content(retentate, permeate, moisture_content, solvent_IDs=(
         solutes_total_conc = 0.
 
     # solve liquid needed to satisfy moisture
-    liquid_total_retentate = sum(retentate.imass[get_key_for(retentate, ID, 'l')] for ID in solvent_IDs)
-    solids_retentate = retentate.F_mass - liquid_total_retentate
-    mc_factor = mc/(1-mc)
-    liquid_retained = (mc_factor * solids_retentate) / (1 - mc_factor * solutes_total_conc)
-    liquid_transfer = liquid_retained - liquid_total_retentate
+    denominator = 1 - mc_factor * solutes_total_conc
+
+    if denominator <= 0.:
+        raise InfeasibleRegion(
+            "The specified moisture cannot be reached by adding"
+            "the available solvent-solute mixture"
+        )
+
+    liquid_transfer = numerator / denominator
+    liquid_retained = liquid_total_retentate + liquid_transfer
 
     if abs(liquid_transfer) < 1e-12:
         return
