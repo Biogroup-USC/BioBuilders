@@ -832,7 +832,10 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         # utilities
         f_overlap = t_df / delta_t_batch
         Q_recirc_train = self.LMH_feed_flow * A_installed_train / 1000
-        deltaP_recirc = self._solve_pressure() - feed.P
+
+        P_membrane_in = self._solve_pressure()
+        P_membrane_out = P_membrane_in - self.pressure_drop
+        deltaP_recirc = P_membrane_in - P_membrane_out
         power_recirc_train = Q_recirc_train * deltaP_recirc / (3.6e6 * self.pump_efficiency)
         
         power_recirc_pump = power_recirc_train * f_overlap
