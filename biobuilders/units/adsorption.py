@@ -67,6 +67,163 @@ def ergun_pressure_drop(
 
 class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the same calculation as TSA
     """
+    Create a gas monocomponent gas adsorption column to remove
+    a component, known as the adsorbate, from a gas stream using 
+    an adsorbent.
+
+    The adsoption capacity of the adsorption column (q_work) is
+    calculated as the difference between the adsoption capacity
+    (q_ads) and the regeneration capacity (q_regen). Both adsorption
+    capacities are determined using different isotherms, dual-site
+    langmuir-langmuir and langmuir are inside the model by default.
+
+    The geometry of the column is calculated by determining the bed
+    volume using the adsorbent mass, density and void fraction. Then,
+    the pressure drop is determined by Ergun equation.
+
+    Parameters
+    ----------
+    adsorbed_fraction : float
+        Fraction of the adsorbate adsorbed in the gas adsorption column.
+    t_ads : float
+        Adsorption time used to determine the duration of one cycle and to size
+        the column.
+    t_regen : float
+        Regeneration time used to determine the duration of one cycle and to size
+        the column.
+    isotherm_model : str
+        isotherm model used to calculate the adsorption capacity of the column. This
+        parameter must match one of the following models:
+
+        langmuir
+            pi : partial pressure [Pa] 
+                Calculated using the inlet stream concentration.
+            Kp : adsorption equilibrium constant [1/Pa0] 
+                Must be provided.
+            q_max : maximum equilibrium loading [mol/kg] 
+                Must be provided.
+            eq : pi * Kp * q_max / (1 + Kp + pi)
+        
+        langmuir-langmuir
+            pi : partial pressure [Pa] 
+                Calculated using the inlet stream concentration.
+            ka : adsorption equilibrium constant for cage alpha [1/Pa] 
+                Must be provided.
+            a_term : alpha term 
+                Must be provided.
+            kb : adsorption equilibrium constant for cage beta [1/Pa] 
+                Must be provided.
+            b_term : beta term 
+                Must be provided.
+            q_max: maximum equilibrium loading [mol/kg] 
+                Must be provided.
+            eq : a_term * q_max * (kb * pi) / (1 + kb * pi) + 
+            b_term * q_max * (ka * pi) / (1 + ka * pi)
+
+    isotherm_args : list | tuple
+        Arguments loaded into the isotherm model. Note that the order must much the
+        expected order of the model equation:
+
+            langmuir = (kp, q_max)
+            
+            langmuir-langmuir = (ka, a_term, kb, b_term, q_max)
+    
+    regeneration_isotherm_model : str
+        isotherm model used to calculate the regeneration capacity of the column. This
+        parameter must match one of the following models:
+
+        langmuir
+            pi : partial pressure [Pa] 
+                Calculated using the inlet stream concentration.
+            Kp : adsorption equilibrium constant [1/Pa0] 
+                Must be provided.
+            q_max : maximum equilibrium loading [mol/kg] 
+                Must be provided.
+            eq : pi * Kp * q_max / (1 + Kp + pi)
+        
+        langmuir-langmuir
+            pi : partial pressure [Pa] 
+                Calculated using the inlet stream concentration.
+            ka : adsorption equilibrium constant for cage alpha [1/Pa] 
+                Must be provided.
+            a_term : alpha term 
+                Must be provided.
+            kb : adsorption equilibrium constant for cage beta [1/Pa] 
+                Must be provided.
+            b_term : beta term 
+                Must be provided.
+            q_max: maximum equilibrium loading [mol/kg] 
+                Must be provided.
+            eq : a_term * q_max * (kb * pi) / (1 + kb * pi) + 
+            b_term * q_max * (ka * pi) / (1 + ka * pi)
+    
+    regeneration_isotherm_args : list | tuple
+        Arguments loaded into the isotherm model. Note that the order must much the
+        expected order of the model equation:
+
+            langmuir = (kp, q_max)
+            
+            langmuir-langmuir = (ka, a_term, kb, b_term, q_max)
+
+    void_fraction : float
+        Empty fraction of the adsorbent where the gas flows. This parameter is used
+        to estimate the pressure drop using Ergun, hence less void fraction is translated
+        into higher pressure drop.
+    
+    rho_adsorbent : float
+        Adsorbent density used to calculate the bed volume.
+
+    P_ads : float
+        Pressure at which the column is operated during the adsorption cycle.
+    P_regen : float
+        Pressure at which the column is operated during the regeneration. This parameter
+        is used to model the regeneration using the pressure swing approach, but this is
+        not yet implemented.
+    T_ads : float
+        Temperature at which the column is operated during adsorption cycle.
+    T_regen : float
+        Temperature at which the column is operated during the regeneration. This paramater
+        is used to model the regeneration using the temperature swing approach.
+    T_limit : float
+        Limit temperature of the adsorbent.
+    adsorbate : str
+        Compound adsorbed.
+    adsorbent : str
+        Adsorbent used. Must match one of the adsorbents in self.adsorbent_properties.
+        If other adsorbent is used, add its properties in self.adsorbent_properties.
+    vessel_material : str
+        material of the vessel. Default to 'Stainless steel 316'.
+    vessel_type : str
+        Configuratio of the vessel. Default to 'Vertical'.
+    isosteric_heat : float
+        Used to calculate the heat of desorption. Default to -45.95 kJ/mol.
+    N_columns : int
+        Number of columns used to operate in staggered mode.
+    particle_diameter : float
+        Diameter of particle used to determine the pressure drop using Ergun.
+    f_L : float
+        Fraction of the bed fully loaded after the adsorption cycle. Defaults
+        to 0.7.
+
+    Attributes
+    ----------
+    adsorbate_chemical : bst.Chemical
+        Adsorbate chemical object from BioSTEAM.
+    regeneration
+        Boolean to decide if there is regeneration or not.
+    fraction_inert_packed
+
+    L_D_ratio
+        Lenght-diameter ratio to design the pressure vessel.
+    base_cost
+        Cost of an adsorption column with certain capacity.
+    base_n_cost
+        Exponent `n` used for the cost correlation.
+    base_adsorbent_mass
+        Base capacity for the base cost.
+    base_CE
+        Chemical engineering plant cost index which corresponds to
+        the base cost.
     """ 
     auxiliary_unit_names = (
         'feed_heater',
@@ -139,7 +296,6 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
         T_ads = None,
         T_regen = None,
         T_limit = None,
-        regeneration_fluid = None,
         adsorbate = None,
         vessel_material = 'Stainless steel 316',
         vessel_type = 'Vertical',
@@ -204,7 +360,6 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
         self.particle_diameter = particle_diameter
         self.f_L = f_L
 
-        self.regeneration_fluid = regeneration_fluid
         self.isosteric_heat = isosteric_heat
 
         key = isotherm_model.lower()
