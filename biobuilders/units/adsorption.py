@@ -555,14 +555,18 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
             P_regen = P_in
             q_regen = 0.
 
-            spent_adsorbent.imol[adsorbate] = na_removed_ads_step / t_cycle
+            spent_adsorbent.imol[adsorbate] = na_removed_rate
         
         q_work = max((q_ads - q_regen) * self.f_L, 1e-12)
         q_work_kmol = q_work / 1000
 
         # Adsorbent mass per column
         mass_adsorbent = na_removed_ads_step / q_work_kmol
-        column_results = self._calculate_bed_geometry_and_pressure_drop(feed,mass_adsorbent)
+        conditioned_feed = bst.Stream()
+        conditioned_feed.copy_like(feed)
+        conditioned_feed.T = self.T_ads
+        conditioned_feed.P = self.P_ads
+        column_results = self._calculate_bed_geometry_and_pressure_drop(conditioned_feed,mass_adsorbent)
 
         # Outlet stream
         P_out = P_in - column_results['Pressure drop']
@@ -1010,7 +1014,7 @@ class LiquidAdsorptionColumn(PressureVessel, bst.Unit):
 
     isotherm_models = {
         "langmuir": equilibrium_loading_Langmuir_isotherm_liquid,
-        "bi-langmuir": equilibrium_loading_BiLangmuir_isotherm_liquid,
+        "bilangmuir": equilibrium_loading_BiLangmuir_isotherm_liquid,
     }
 
     # Parameters from Mota et al. at 298 K.
@@ -1031,7 +1035,7 @@ class LiquidAdsorptionColumn(PressureVessel, bst.Unit):
         t_ads: float = None,
         t_regen: float = 0.0,
         isotherm_args: list = None,
-        isotherm_model: str = "bi-langmuir",
+        isotherm_model: str = "bilangmuir",
         void_fraction=None,
         rho_adsorbent=None,
         P_ads=None,
@@ -1046,7 +1050,7 @@ class LiquidAdsorptionColumn(PressureVessel, bst.Unit):
         N_columns=3,
         particle_diameter=None,
         f_L=0.7,
-        desorption_recovery: float = 0.90,
+        desorption_efficiency: float = 0.90,
     ):
         if N_columns not in (2, 3):
             raise ValueError("only 2 or 3 columns are valid configurations")
@@ -1066,8 +1070,8 @@ class LiquidAdsorptionColumn(PressureVessel, bst.Unit):
         if not 0 < f_L <= 1:
             raise ValueError("f_L must be > 0 and <= 1")
 
-        if not 0 <= desorption_recovery <= 1:
-            raise ValueError("desorption_recovery must be between 0 and 1")
+        if not 0 <= desorption_efficiency <= 1:
+            raise ValueError("desorption_efficiency must be between 0 and 1")
 
         if adsorbent not in self.adsorbent_properties:
             if rho_adsorbent is None or void_fraction is None or particle_diameter is None:
@@ -1100,7 +1104,7 @@ class LiquidAdsorptionColumn(PressureVessel, bst.Unit):
             )
 
         if isotherm_args is None:
-            if key == "bi-langmuir" and adsorbate in self.default_bilangmuir_args_298K:
+            if key == "bilangmuir" and adsorbate in self.default_bilangmuir_args_298K:
                 isotherm_args = self.default_bilangmuir_args_298K[adsorbate]
             else:
                 raise ValueError(
@@ -1124,7 +1128,7 @@ class LiquidAdsorptionColumn(PressureVessel, bst.Unit):
         self.rho_adsorbent = rho_adsorbent
         self.particle_diameter = particle_diameter
         self.f_L = f_L
-        self.desorption_recovery = desorption_recovery
+        self.desorption_efficiency = desorption_efficiency
 
         self.N_columns = N_columns
         self.vessel_material = vessel_material
@@ -1291,8 +1295,14 @@ class LiquidAdsorptionColumn(PressureVessel, bst.Unit):
 
         C_ads = self._calculate_concentration_g_per_L(feed)
         q_ads = self.isotherm_model(C_ads, *self.isotherm_args)  # kg/kg
+        q_loaded = self.f_L * q_ads
 
-        q_work = max(q_ads * self.f_L, 1e-12)  # kg/kg
+        if self.regeneration:
+            q_residual = (1.0 - self.desorption_efficiency) * q_loaded
+        else:
+            q_residual = 0.
+
+        q_work = q_loaded - q_residual  # kg/kg
         mass_adsorbent = ma_removed_ads_step / q_work  # kg dry resin/column
 
         column_results = self._calculate_bed_geometry_and_pressure_drop(
@@ -1314,13 +1324,9 @@ class LiquidAdsorptionColumn(PressureVessel, bst.Unit):
             spent_fluid.T = T_regen
 
             # Steady-state averaged desorption.
-            ma_desorbed_rate = ma_removed_rate * self.desorption_recovery
-            ma_unrecovered_rate = ma_removed_rate * (1.0 - self.desorption_recovery)
+            ma_desorbed_rate = ma_removed_rate
 
             spent_fluid.imass[adsorbate] += ma_desorbed_rate
-
-            if ma_unrecovered_rate > 0.0:
-                spent_adsorbent.imass[adsorbate] = ma_unrecovered_rate
         else:
             # No regeneration: removed adsorbate leaves with spent adsorbent/loss.
             spent_adsorbent.imass[adsorbate] = ma_removed_rate
