@@ -286,7 +286,7 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
 
     isotherm_models = {
         'langmuir': equilibrium_loading_Langmuir_isotherm_gas,
-        'langmuir-langmuir': equilibrium_loading_Langmuir_dual_site_isotherm_gas,
+        'bilangmuir': equilibrium_loading_Langmuir_dual_site_isotherm_gas,
     }
 
     # Pa*m3/mol/K
@@ -602,12 +602,15 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
         if self.regeneration:
             flow_gas = regeneration_fluid.F_mass
             Cp_gas = regeneration_fluid.Cp     
+            Cp_adsorbent = self.adsorbent_properties[self.adsorbent]['specific heat']
             
-            heat_desorption = na_removed_ads_step * 1000 * abs(self.isosteric_heat) / self.t_regen
-            heat_adsorbent = mass_adsorbent/self.t_regen * self.adsorbent_properties[self.adsorbent]['specific heat'] * (self.T_regen - self.T_ads)
-            heat_required = heat_desorption + heat_adsorbent
-            
-            T_in = self.T_regen - heat_required / (flow_gas * Cp_gas)
+            energy_desorption = na_removed_ads_step * 1000 * abs(self.isosteric_heat)
+            energy_adsorbent = mass_adsorbent * Cp_adsorbent * (self.T_regen - self.T_ads)
+
+            regeneration_interval = self.t_ads
+            heat_required = (energy_desorption + energy_adsorbent) / regeneration_interval
+
+            T_in = self.T_regen + heat_required / (flow_gas * Cp_gas)
             heat_gas_heater = flow_gas * Cp_gas * (T_in - regeneration_fluid.T)
 
             self.regen_gas_heater.simulate(
