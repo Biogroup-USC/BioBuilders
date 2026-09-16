@@ -44,8 +44,8 @@ def equilibrium_loading_Langmuir_dual_site_isotherm_gas(
     b_term, # Beta term
     q_max,  # Maximum equilibrium loading [mol/kg]
 ):
-    first_term = a_term * q_max * (kb * pi) / (1 + kb * pi)
-    second_term = b_term * q_max * (ka * pi) / (1 + ka * pi)
+    first_term = b_term * q_max * (kb * pi) / (1 + kb * pi)
+    second_term = a_term * q_max * (ka * pi) / (1 + ka * pi)
     return first_term + second_term
 
 # Pressure drop determination [7]
@@ -129,8 +129,8 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
                 Must be provided.
             q_max: maximum equilibrium loading [mol/kg] 
                 Must be provided.
-            eq : a_term * q_max * (kb * pi) / (1 + kb * pi) + 
-            b_term * q_max * (ka * pi) / (1 + ka * pi)
+            eq : b_term * q_max * (kb * pi) / (1 + kb * pi) + 
+            a_term * q_max * (ka * pi) / (1 + ka * pi)
 
     isotherm_args : list | tuple
         Arguments loaded into the isotherm model. Note that the order must much the
