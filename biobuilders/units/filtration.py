@@ -568,7 +568,6 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         "Recirculation pressure rise": "Pa",
         "Recirculation power per train": "kW",
         "Average recirculation power": "kW",
-        "Average pressurization power": "kW",
         "Average active trains": "",
     }
 
@@ -672,8 +671,7 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
             permeate.imass[chem_ID] = total_mass_in - mass_retained
 
         # Outlet pressure
-        permeate.P = self.permeate_pressure
-        retentate.P = self._solve_pressure() - self.pressure_drop
+        permeate.P = retentate.P = self.permeate_pressure
 
         # Outlet temperature
         mixture = bst.Stream(None)
@@ -733,26 +731,26 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         f_overlap = t_df / delta_t_batch
         Q_recirc_train = self.LMH_feed_flow * A_train / 1000
 
-        # Initial presurization
-        P_initial = feed.P
-        P_tank = self._solve_pressure()
+        P_memb_in = self._solve_pressure()
+        P_tank = 101325
 
-        delta_press = P_tank - P_initial
-        E_press_batch = delta_press * V_batch / (3.6e6 * self.pump_efficiency)
-        av_pressurization_power = E_press_batch / delta_t_batch
+        P_memb_out = P_memb_in - self.pressure_drop
+        if P_memb_out < P_tank:
+            raise ValueError(
+                f"{self.ID} membrane outlet pressure "
+                f"({P_memb_out:.3g} Pa) is lower than the tank pressure "
+                f"({P_tank:.3g} Pa)."
+            )
 
-        P_membrane_out = P_tank - self.pressure_drop
-        deltaP_recirc = P_tank - P_membrane_out
-        power_recirc_train = Q_recirc_train * deltaP_recirc / (3.6e6 * self.pump_efficiency)
-        
+        deltaP = P_memb_in - P_tank
+        power_recirc_train = Q_recirc_train * deltaP / (3.6e6 * self.pump_efficiency)
         power_recirc_pump = power_recirc_train * f_overlap
 
-        self.add_power_utility(power_recirc_pump+av_pressurization_power)
+        self.add_power_utility(power_recirc_pump)
 
         design["Average active trains"] = f_overlap
         design["Recirculation flow per train"] = Q_recirc_train
-        design["Recirculation pressure rise"] = deltaP_recirc
+        design["Recirculation pressure rise"] = deltaP
         design["Recirculation power per train"] = power_recirc_train
         design["Average recirculation power"] = power_recirc_pump
-        design["Average pressurization power"] = av_pressurization_power
         design["Pump power per train"] = power_recirc_train
