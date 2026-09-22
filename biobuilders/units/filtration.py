@@ -243,7 +243,7 @@ class AbstractMembraneFiltration(bst.Unit, isabstract = True):
         self._base_cost = None
         self._base_n_cost = None
         self._base_area = None
-        self._CE_base = None
+        self._base_CE = None
 
     def _solve_pressure(self):
         p_drop = self.pressure_drop         # Pa, P_inlet - P_retentate
@@ -377,18 +377,18 @@ class AbstractMembraneFiltration(bst.Unit, isabstract = True):
         self._base_area = value
 
     @property
-    def CE_base(self):
+    def base_CE(self):
         """
         """
-        if self._CE_base is None:
-            self._CE_base = 1000
-        return self._CE_base
+        if self._base_CE is None:
+            self._base_CE = 1000
+        return self._base_CE
 
-    @CE_base.setter
-    def CE_base(self, value):
+    @base_CE.setter
+    def base_CE(self, value):
         """
         """
-        self._CE_base = value
+        self._base_CE = value
 
     def _cost(self):
         """
@@ -414,11 +414,11 @@ class AbstractMembraneFiltration(bst.Unit, isabstract = True):
         Instrumentation_Control = 0.50
         Piping = 0.31                   # Solid-Fluid   
         ### Calculate the bare module
-        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
-        self.F_BM['Membrane train'] = Bare_Module
+        bare_module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
+        self.F_BM['Membrane train'] = bare_module
 
         ## Scale the costs using CEPCI
-        self.baseline_purchase_costs['Membrane train'] *= bst.CE/self.CE_base
+        self.baseline_purchase_costs['Membrane train'] *= bst.CE/self.base_CE
         self.equipment_lifetime['Membrane train'] = self._default_equipment_lifetime['Membrane train']
 
         # Auxiliar pump cost
@@ -429,7 +429,7 @@ class AbstractMembraneFiltration(bst.Unit, isabstract = True):
             pump = 9500 * (power_per_train / 23.) ** 0.79
 
         self.baseline_purchase_costs['Pump'] = pump
-        self.baseline_purchase_costs['Pump'] *= bst.CE/self.CE_base
+        self.baseline_purchase_costs['Pump'] *= bst.CE/self.base_CE
 
         self.F_D["Pump"] = 1.
         self.F_M["Pump"] = 1.
@@ -569,6 +569,9 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         "Recirculation power per train": "kW",
         "Average recirculation power": "kW",
         "Average active trains": "",
+        "Total process vessel volume": "m3",
+        "Working volume fraction": "",
+        "Agitator power per train": "kW",
     }
 
     def _init(
@@ -615,6 +618,9 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         self.new_solvent_id = new_solvent_id
         self.buffer_composition = buffer_composition
         self.LMH_feed_flow = LMH_feed_flow
+
+        self._kW_per_m3 = None
+        self._W_volume = None
 
     def _run(self):
 
@@ -746,7 +752,11 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         power_recirc_train = Q_recirc_train * deltaP / (3.6e6 * self.pump_efficiency)
         power_recirc_pump = power_recirc_train * f_overlap
 
-        self.add_power_utility(power_recirc_pump)
+        # Agitator
+        self.parallel["Agitator"] = N_installed
+        power_agitator = self.kW_per_m3 * V_batch * f_overlap
+
+        self.add_power_utility(power_recirc_pump+power_agitator)
 
         design["Average active trains"] = f_overlap
         design["Recirculation flow per train"] = Q_recirc_train
@@ -754,3 +764,73 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         design["Recirculation power per train"] = power_recirc_train
         design["Average recirculation power"] = power_recirc_pump
         design["Pump power per train"] = power_recirc_train
+        design["Total process vessel volume"] = V_batch / self.W_volume
+        design["Working volume fraction"] = self.W_volume
+        design["Agitator power per train"] = power_agitator/f_overlap
+
+        # Process vessel
+        self.parallel["Process vessel"] = N_installed
+
+    @property
+    def kW_per_m3(self):
+        """
+        Volumetric power [kW/m3] of the process tank.
+        """
+        if self._kW_per_m3 is None:
+            self._kW_per_m3 = (0.2 + 1.5)/2 # Rules of the Thumb
+        return self._kW_per_m3
+    @kW_per_m3.setter
+    def kW_per_m3(self, value):
+        """
+        Volumetric power [kW/m3] of the process tank.
+        """
+        self._kW_per_m3 = value
+
+    @property
+    def W_volume(self):
+        """
+        Working volume ratio of the process tank.
+        """
+        if self._W_volume is None:
+            self._W_volume = 0.85
+        return self._W_volume
+    @W_volume.setter
+    def W_volume(self, value):
+        """
+        Working volume ratio of the process tank.
+        """
+        self._W_volume = value
+
+    def _cost(self):
+        super()._cost()
+
+        # Process vessel cost
+        V_total = self.design_results['Batch volume'] / self.W_volume
+        process_vessel = 14_000 * (V_total / 20.)**0.71
+        
+        self.baseline_purchase_costs['Process vessel'] = process_vessel
+        self.baseline_purchase_costs['Process vessel'] *= bst.CE/self.base_CE
+
+        self.F_D["Process vessel"] = 1.
+        self.F_M["Process vessel"] = 2.0
+        self.F_P["Process vessel"] = 1.
+
+        Delivery = 0.10
+        Installation = 0.60
+        Instrumentation_Control = 0.50
+        Piping = 0.31
+
+        self.F_BM["Process vessel"] = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
+
+        # Agitator cost
+        kW = self.kW_per_m3 * self.design_results['Batch volume']
+        n_agitator = 0.42 if kW < 1.75 else 0.52
+        agitator = 6_000 * (kW / 1.75)**n_agitator
+
+        self.baseline_purchase_costs['Agitator'] = agitator
+        self.baseline_purchase_costs['Agitator'] *= bst.CE/self.base_CE
+
+        self.F_D["Agitator"] = 1.
+        self.F_M["Agitator"] = 1.19
+        self.F_P["Agitator"] = 1.
+        self.F_BM["Agitator"] = 1.
