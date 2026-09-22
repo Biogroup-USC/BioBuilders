@@ -190,10 +190,8 @@ class AbstractMembraneFiltration(bst.Unit, isabstract = True):
 
     """
     _default_equipment_lifetime = {
-        'Membrane module': 3,
+        'Membrane train': 3,
     }
-
-    auxiliary_unit_names = ('pump',)
 
     # Number of input streams
     _N_ins = 1
@@ -201,12 +199,16 @@ class AbstractMembraneFiltration(bst.Unit, isabstract = True):
     _N_outs = 2
     # Results units
     _units = {
-        "Area (total)": "m2",
-        "Module area": "m2",
-        "Modules": "membrane modules",
+        "Area (active total)": "m2",
+        "Area (per train)": "m2",
+        "Area (installed total)": "m2",
+        "Active trains": "",
+        "Standby trains": "",
+        "Installed trains": "",
         "LMH": "L/(m2 * h)",
         "Mass flux": "kg/(m2 * h)",
         "Volumetric flow": "m3/h",
+        "Pump power per train": "kW",
     }
 
     def _init(
@@ -216,7 +218,10 @@ class AbstractMembraneFiltration(bst.Unit, isabstract = True):
         permeate_pressure: float = 101_325,
         TMP: float | None = None,
         LMH: float | None = None,
-        module_area: float | None = None,
+        N_trains: int = 2,
+        N_standby: int = 1,
+        pump_efficiency: float = 0.70,
+        
         solvent_IDs: tuple[str, ...] | None = None,
     ):
         self.rejection = (
@@ -226,7 +231,9 @@ class AbstractMembraneFiltration(bst.Unit, isabstract = True):
         self.permeate_pressure = permeate_pressure
         self.TMP = TMP
         self.LMH = LMH
-        self.module_area = module_area
+        self.N_trains = N_trains
+        self.N_standby = N_standby
+        self.pump_efficiency = pump_efficiency
         self.solvent_IDs = (
             ("Water",)
             if solvent_IDs is None
@@ -237,15 +244,6 @@ class AbstractMembraneFiltration(bst.Unit, isabstract = True):
         self._base_n_cost = None
         self._base_area = None
         self._CE_base = None
-
-        self._load_auxiliaries()
-
-    def _load_auxiliaries(self):
-        self.pump = self.auxiliary(
-            "pump",
-            bst.Pump,
-            ins = self.ins[0],
-        )
 
     def _solve_pressure(self):
         p_drop = self.pressure_drop         # Pa, P_inlet - P_retentate
@@ -280,45 +278,61 @@ class AbstractMembraneFiltration(bst.Unit, isabstract = True):
 
         return p_inlet
 
+    def _recovery(self, rejection, vcf):
+        sieving = 1 - rejection
+        return (1 / (1 + sieving * (vcf - 1)))
+    
     def _design(self):
         """
         """
         # The area is calculated using the permeate following the next
         # equation: LMH = Q/A
-        permeate = self.outs[0]
+        permeate, retentate = self.outs
+        feed, = self.ins
         
         LMH = self.LMH
-        module_area = self.module_area
 
         if LMH is None or LMH <= 0:
             raise ValueError(
                 f"{self.ID}: LMH must be greater than zero."
             )
 
-        if module_area is None or module_area <= 0:
-            raise ValueError(
-                f"{self.ID}: module_area must be greater than zero."
-            )
-
-        A = permeate.F_vol * 1000 / LMH
+        A = permeate.F_vol * 1000 / LMH         # m2
         mass_flux = LMH * 1e-3 * permeate.rho   # kg/m2/h
 
-        if module_area <= 0:
-            raise ValueError("Module area must be greater than zero.")
+        # Scheduling
+        N_backup = self.N_standby
+        N_duty = self.N_trains
+        N_installed = N_duty + N_backup
+        self.parallel['Membrane train'] = N_installed
 
-        modules = ceil(A / module_area)
+        # Total installed
+        active_area = A
+        required_area_per_train = active_area / N_duty
+        total_installed_area = required_area_per_train * N_installed
+
+        # Pump
+        self.parallel['Pump'] = N_installed
+        Q_per_active_train = feed.F_vol / N_duty
+        P_obj = self._solve_pressure()
+
+        deltaP_per_train = P_obj - feed.P
+        power_per_train = deltaP_per_train * Q_per_active_train / (3.6e6 * self.pump_efficiency)
+        power_filtration = power_per_train * N_duty
+        self.add_power_utility(power_filtration)
 
         # Design results
         design = self.design_results
-        design["Area (total)"] = A
-        design["LMH"] = LMH
+        design["Area (active total)"] = active_area
+        design["Area (per train)"] = required_area_per_train
+        design["Area (installed total)"] = total_installed_area
+        design["Active trains"] = self.N_trains
+        design["Standby trains"] = N_backup
+        design["Installed trains"] = N_installed
+        design["LMH"] = permeate.F_vol * 1000 / A
         design["Mass flux"] = mass_flux
-        design["Volumetric flow"] = permeate.F_vol  # m3/h
-        design["Module area"] = module_area
-        design["Modules"] = modules
-
-        # Auxiliary pump design
-        self.pump._design()
+        design["Volumetric flow"] = permeate.F_vol
+        design["Pump power per train"] = power_per_train
 
     @property
     def base_cost(self):
@@ -380,16 +394,16 @@ class AbstractMembraneFiltration(bst.Unit, isabstract = True):
         """
         """
         # Load all the design parameters needed to calculate the costs
-        area = self.design_results["Area (total)"]
+        area = self.design_results["Area (per train)"]
 
         # Calculate the baseline purchase cost for membrane module
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        membranes_module = self.base_cost * (area/self.base_area)**self.base_n_cost
+        membrane_train = self.base_cost * (area/self.base_area)**self.base_n_cost
 
-        self.baseline_purchase_costs['Membrane module'] = membranes_module
+        self.baseline_purchase_costs['Membrane train'] = membrane_train
 
         ## The material, pressure and temperature factors are assumed to be 1
-        self.F_D['Membrane module'] = self.F_M['Membrane module'] = self.F_P['Membrane module'] = 1
+        self.F_D['Membrane train'] = self.F_M['Membrane train'] = self.F_P['Membrane train'] = 1
 
         ## The Bare module factor which account for installation costs is calculated as the sum of delivery, installation,
         ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
@@ -401,14 +415,32 @@ class AbstractMembraneFiltration(bst.Unit, isabstract = True):
         Piping = 0.31                   # Solid-Fluid   
         ### Calculate the bare module
         Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
-        self.F_BM['Membrane module'] = Bare_Module
+        self.F_BM['Membrane train'] = Bare_Module
 
         ## Scale the costs using CEPCI
-        self.baseline_purchase_costs['Membrane module'] *= bst.CE/self.CE_base
-        self.equipment_lifetime['Membrane module'] = self._default_equipment_lifetime['Membrane module']
+        self.baseline_purchase_costs['Membrane train'] *= bst.CE/self.CE_base
+        self.equipment_lifetime['Membrane train'] = self._default_equipment_lifetime['Membrane train']
 
         # Auxiliar pump cost
-        self.pump._cost()
+        power_per_train = self.design_results['Pump power per train']
+        if power_per_train < 23.:
+            pump = 9500 * (power_per_train / 23.) ** 0.29
+        else:
+            pump = 9500 * (power_per_train / 23.) ** 0.79
+
+        self.baseline_purchase_costs['Pump'] = pump
+        self.baseline_purchase_costs['Pump'] *= bst.CE/self.CE_base
+
+        self.F_D["Pump"] = 1.
+        self.F_M["Pump"] = 1.
+        self.F_P["Pump"] = 1.
+
+        Delivery = 0.10
+        Installation = 0.60
+        Instrumentation_Control = 0.50
+        Piping = 0.31
+
+        self.F_BM["Pump"] = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
 
 class MembraneConcentration(AbstractMembraneFiltration):
     """
@@ -431,10 +463,10 @@ class MembraneConcentration(AbstractMembraneFiltration):
         TMP: float | None = None,
         LMH: float | None = None,
         VCF: float | None = None,
-        solvent_to_solids_ratio: float | None = None,
-        module_area: float | None = None,
-        solids_IDs: tuple[str, ...] | None = None,
+        N_trains: int = 2,
+        N_standby: int = 1,
         solvent_IDs: tuple[str, ...] | None = None,
+        pump_efficiency: float = 0.70,
     ):
         super()._init(
             rejection=rejection,
@@ -442,21 +474,13 @@ class MembraneConcentration(AbstractMembraneFiltration):
             permeate_pressure=permeate_pressure,
             TMP=TMP,
             LMH=LMH,
-            module_area=module_area,
+            N_trains=N_trains,
+            N_standby=N_standby,
             solvent_IDs=solvent_IDs,
+            pump_efficiency=pump_efficiency,
         )
-
-        if (VCF is None) == (solvent_to_solids_ratio is None):
-            raise ValueError(
-                f"{self.ID}: define exactly one of "
-                "'VCF' or 'solvent_to_solids_ratio'."
-            )
 
         self.VCF = VCF
-        self.solvent_to_solids_ratio = solvent_to_solids_ratio
-        self.solids_IDs = (
-            () if solids_IDs is None else tuple(solids_IDs)
-        )
 
     def _run(self):
         feed, = self.ins
@@ -469,155 +493,39 @@ class MembraneConcentration(AbstractMembraneFiltration):
         retentate.copy_like(feed)
         retentate.empty()
 
-        for chem, retentate_fraction in self.rejection.items():
+        # Distribute solutes based on rejection
+        vcf = self.VCF
+        for chem in feed.chemicals:
+            chem_id = chem.ID
 
-            # Solvents are distributed later to meet the VCF
-            # or solvent-to-solids ratio
-            if chem in self.solvent_IDs:
+            if chem_id in self.solvent_IDs:
                 continue
+            elif chem_id in self.rejection:
+                rejection = self.rejection[chem_id]
+            else:
+                rejection = 0.
 
-            if not 0.0 <= retentate_fraction <= 1.0:
+            if not 0.0 <= rejection <= 1.0:
                 raise ValueError(
-                    f"{self.ID}: rejection for {chem!r} must be "
-                    f"between 0 and 1; received {retentate_fraction}."
+                    f"{self.ID}: rejection for {chem_id!r} must be "
+                    f"between 0 and 1; received {rejection}."
                 )
+            
+            recovery = self._recovery(rejection, vcf)
+            
+            retentate.imass[chem_id] = recovery * feed.imass[chem_id]
+            permeate.imass[chem_id] = feed.imass[chem_id] - retentate.imass[chem_id]
 
-            retained_mass = (
-                retentate_fraction * feed.imass[chem]
-            )
+        # Distribute solvents
+        Q_F = feed.F_vol
+        Q_solutes_R = retentate.F_vol
+        Q_solvent_R = (Q_F - Q_solutes_R * vcf) / vcf
 
-            retentate.imass[chem] = retained_mass
-            permeate.imass[chem] = (
-                feed.imass[chem] - retained_mass
-            )
-
-        liquid_solute_IDs = [
-            chem.ID
-            for chem in feed.chemicals
-            if chem.ID not in self.solvent_IDs
-            and chem.ID not in self.rejection
-            and feed.imass[chem.ID] > 0
-        ]
-
-        # Solvents and unspecified solutes are distributed together
-        mobile_IDs = [
-            *self.solvent_IDs,
-            *liquid_solute_IDs,
-        ]
-
-        solvent_mass_in = sum(
-            feed.imass[chem]
-            for chem in self.solvent_IDs
-        )
-
-        if self.solvent_to_solids_ratio is not None:
-
-            if self.solvent_to_solids_ratio < 0:
-                raise ValueError(
-                    f"{self.ID}: solvent_to_solids_ratio "
-                    "cannot be negative."
-                )
-
-            if solvent_mass_in <= 0:
-                raise ValueError(
-                    f"{self.ID}: no solvent is available in the feed. "
-                    f"solvent_IDs={self.solvent_IDs}."
-                )
-
-            retained_solids = sum(
-                retentate.imass[chem]
-                for chem in self.solids_IDs
-            )
-
-            target_solvent_mass = (
-                self.solvent_to_solids_ratio
-                * retained_solids
-            )
-
-            mobile_fraction = (
-                target_solvent_mass
-                / solvent_mass_in
-            )
-
-            if not 0.0 <= mobile_fraction <= 1.0:
-                raise ValueError(
-                    f"{self.ID}: target solvent retention is infeasible. "
-                    f"Available solvent: {solvent_mass_in:.6g} kg/h; "
-                    f"required solvent: {target_solvent_mass:.6g} kg/h; "
-                    f"calculated fraction: {mobile_fraction:.6g}."
-                )
-
-        else:
-
-            if self.VCF is None or self.VCF < 1.0:
-                raise ValueError(
-                    f"{self.ID}: VCF must be greater than or equal to 1."
-                )
-
-            target_retentate_volume = (
-                feed.F_vol / self.VCF
-            )
-
-            # Volume already occupied by components with an explicit
-            # retentate fraction
-            fixed_retentate_volume = retentate.F_vol
-
-            # Initial volume of solvents and solutes following the liquid
-            mobile_volume_in = sum(
-                feed.ivol[chem]
-                for chem in mobile_IDs
-            )
-
-            if mobile_volume_in <= 0:
-                raise ValueError(
-                    f"{self.ID}: no mobile liquid is available "
-                    "to satisfy the specified VCF."
-                )
-
-            required_mobile_volume = (
-                target_retentate_volume
-                - fixed_retentate_volume
-            )
-
-            mobile_fraction = (
-                required_mobile_volume
-                / mobile_volume_in
-            )
-
-            if mobile_fraction < 0:
-
-                maximum_VCF = (
-                    feed.F_vol / fixed_retentate_volume
-                    if fixed_retentate_volume > 0
-                    else float("inf")
-                )
-
-                raise ValueError(
-                    f"{self.ID}: target retentate volume "
-                    f"({target_retentate_volume:.6g} m3/h) is smaller "
-                    f"than the volume occupied by retained components "
-                    f"({fixed_retentate_volume:.6g} m3/h). "
-                    f"Maximum feasible VCF: {maximum_VCF:.6g}."
-                )
-
-            if mobile_fraction > 1:
-                raise ValueError(
-                    f"{self.ID}: target retentate volume requires "
-                    "retaining more mobile liquid than is available. "
-                    f"Calculated mobile fraction: "
-                    f"{mobile_fraction:.6g}."
-                )
-
-        for chem in mobile_IDs:
-
-            retained_mass = (
-                mobile_fraction * feed.imass[chem]
-            )
-
-            retentate.imass[chem] = retained_mass
-            permeate.imass[chem] = (
-                feed.imass[chem] - retained_mass
-            )
+        Q_solvent_F = sum(feed.ivol[ID] for ID in self.solvent_IDs)
+        solvent_fraction_R = Q_solvent_R / Q_solvent_F
+        for chem_id in self.solvent_IDs:
+            retentate.imass[chem_id] = solvent_fraction_R * feed.imass[chem_id]
+            permeate.imass[chem_id] = feed.imass[chem_id] - retentate.imass[chem_id]
 
         P_inlet = self._solve_pressure()
 
@@ -625,9 +533,6 @@ class MembraneConcentration(AbstractMembraneFiltration):
         retentate.P = (
             P_inlet - self.pressure_drop
         )
-
-        self.pump.P = P_inlet
-        self.pump._run()
 
     def _design(self):
         """
@@ -659,14 +564,12 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         "Cycle time": "h",
         "Diafiltration time": "h",
         "Permeate flow per train": "m3/h",
-        "Required area per train": "m2",
-        "Installed area per train": "m2",
-        "Area (required total)": "m2",
-        "Average active trains": "",
         "Recirculation flow per train": "m3/h",
         "Recirculation pressure rise": "Pa",
         "Recirculation power per train": "kW",
         "Average recirculation power": "kW",
+        "Average pressurization power": "kW",
+        "Average active trains": "",
     }
 
     def _init(
@@ -684,18 +587,20 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         TMP: float = None,
         LMH: float = None,
         LMH_feed_flow: float = None,
-        module_area: float = None,
-        N_trains: int = 2,        
+        N_trains: int = 2,
+        N_standby: int = 1,        
         pump_efficiency: float = 0.70,
     ):
 
         super()._init(
-            rejection = rejection,
-            pressure_drop = pressure_drop,
-            permeate_pressure = permeate_pressure,
-            TMP = TMP,
-            LMH = LMH,
-            module_area = module_area,
+            rejection=rejection,
+            pressure_drop=pressure_drop,
+            permeate_pressure=permeate_pressure,
+            TMP=TMP,
+            LMH=LMH,
+            N_trains=N_trains,
+            N_standby=N_standby,
+            pump_efficiency=pump_efficiency,
             solvent_IDs = (old_solvent_id, new_solvent_id),
         )
 
@@ -711,11 +616,6 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         self.new_solvent_id = new_solvent_id
         self.buffer_composition = buffer_composition
         self.LMH_feed_flow = LMH_feed_flow
-        self.pump_efficiency = pump_efficiency
-
-    def _load_auxiliaries(self):
-        pass
-
 
     def _run(self):
 
@@ -788,10 +688,14 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         design = self.design_results
         N = self.diavolumes
         V_batch = self.batch_volume
-        N_trains = self.N_trains
+
+        N_duty = self.N_trains
+        N_standby = self.N_standby
+        N_installed = N_duty + N_standby
+        self.parallel["Membrane train"] = N_installed
         
         delta_t_batch = V_batch/feed.F_vol
-        t_cycle = N_trains * delta_t_batch
+        t_cycle = N_duty * delta_t_batch
 
         t_aux = self.loading_time + self.unloading_time
         t_df = t_cycle - t_aux
@@ -806,13 +710,8 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
         Q_p_train = N * V_batch / t_df
 
         A_train = 1000 * (Q_p_train/self.LMH)
-
-        modules_per_train = ceil(A_train/self.module_area)
-        A_installed_train = modules_per_train * self.module_area
-
-        total_modules = modules_per_train * N_trains
-        A_total_required = A_train * N_trains
-        A_total_installed = A_installed_train * N_trains
+        A_required = A_train * N_duty
+        A_total_installed = A_train * N_installed
 
         design["Batch volume"] = V_batch
         design["Batch scheduling interval"] = delta_t_batch
@@ -821,82 +720,39 @@ class MembraneDiafiltration(AbstractMembraneFiltration):
 
         design["Permeate flow per train"] = Q_p_train
 
-        design["Required area per train"] = A_train
-        design["Installed area per train"] = A_installed_train
-        design["Area (required total)"] = A_total_required
-        design["Area (total)"] = A_total_installed
+        design["Area (per train)"] = A_train
+        design["Area (active total)"] = A_required
+        design["Area (installed total)"] = A_total_installed
 
-        design["Modules"] = total_modules
-        design["Area (total)"] = A_total_installed
+        design["Active trains"] = N_duty
+        design["Standby trains"] = N_standby
+        design["Installed trains"] = N_installed
 
-        # utilities
+        # Pump
+        self.parallel['Pump'] = N_installed
         f_overlap = t_df / delta_t_batch
-        Q_recirc_train = self.LMH_feed_flow * A_installed_train / 1000
+        Q_recirc_train = self.LMH_feed_flow * A_train / 1000
 
-        P_membrane_in = self._solve_pressure()
-        P_membrane_out = P_membrane_in - self.pressure_drop
-        deltaP_recirc = P_membrane_in - P_membrane_out
+        # Initial presurization
+        P_initial = feed.P
+        P_tank = self._solve_pressure()
+
+        delta_press = P_tank - P_initial
+        E_press_batch = delta_press * V_batch / (3.6e6 * self.pump_efficiency)
+        av_pressurization_power = E_press_batch / delta_t_batch
+
+        P_membrane_out = P_tank - self.pressure_drop
+        deltaP_recirc = P_tank - P_membrane_out
         power_recirc_train = Q_recirc_train * deltaP_recirc / (3.6e6 * self.pump_efficiency)
         
         power_recirc_pump = power_recirc_train * f_overlap
 
-        self.add_power_utility(power_recirc_pump)
+        self.add_power_utility(power_recirc_pump+av_pressurization_power)
 
         design["Average active trains"] = f_overlap
         design["Recirculation flow per train"] = Q_recirc_train
         design["Recirculation pressure rise"] = deltaP_recirc
         design["Recirculation power per train"] = power_recirc_train
         design["Average recirculation power"] = power_recirc_pump
-
-    def _cost(self):
-        """
-        """
-        # Load all the design parameters needed to calculate the costs
-        area = self.design_results["Area (total)"]
-
-        # Calculate the baseline purchase cost for membrane module
-        ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        membranes_module = self.base_cost * (area/self.base_area)**self.base_n_cost
-
-        self.baseline_purchase_costs['Membrane module'] = membranes_module
-
-        ## The material, pressure and temperature factors are assumed to be 1
-        self.F_D['Membrane module'] = self.F_M['Membrane module'] = self.F_P['Membrane module'] = 1
-
-        ## The Bare module factor which account for installation costs is calculated as the sum of delivery, installation,
-        ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
-        ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
-        ### Factors
-        Delivery = 0.10
-        Installation = 0.80             # Filters
-        Instrumentation_Control = 0.50
-        Piping = 0.31                   # Solid-Fluid   
-        ### Calculate the bare module
-        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
-        self.F_BM['Membrane module'] = Bare_Module
-
-        ## Scale the costs using CEPCI
-        self.baseline_purchase_costs['Membrane module'] *= bst.CE/self.CE_base
-        self.equipment_lifetime['Membrane module'] = self._default_equipment_lifetime['Membrane module']
-
-        # Auxiliar pump cost
-        power_per_train = self.design_results['Recirculation power per train']
-        if power_per_train < 23.:
-            pump = 9500 * (power_per_train / 23.) ** 0.29
-        else:
-            pump = 9500 * (power_per_train / 23.) ** 0.79
-
-        self.baseline_purchase_costs['Recirculation pump'] = pump
-        self.baseline_purchase_costs['Recirculation pump'] *= bst.CE/self.CE_base
-        self.parallel['Recirculation pump'] = self.N_trains
-
-        self.F_D["Recirculation pump"] = 1.
-        self.F_M["Recirculation pump"] = 1.
-        self.F_P["Recirculation pump"] = 1.
-
-        Delivery = 0.10
-        Installation = 0.60
-        Instrumentation_Control = 0.50
-        Piping = 0.31
-
-        self.F_BM["Recirculation pump"] = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
+        design["Average pressurization power"] = av_pressurization_power
+        design["Pump power per train"] = power_recirc_train
