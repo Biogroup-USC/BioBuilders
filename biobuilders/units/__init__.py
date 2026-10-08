@@ -6,7 +6,7 @@ from .dryer import SprayDryer, DrumDryer
 from .centrifuge import SolidsCentrifuge, Tricanter
 from .evaporator import MultiEffectEvaporator
 from .mixing import MixTank
-from .reactors import ContinuousStirredTankReactor
+from .reactors import ContinuousStirredTankReactor, BatchAgitatedReactor
 from .extraction import ExtractionReactor,SLECbySplit,LLEbySplit
 from .filtration import RotaryVacuumFilter, MembraneConcentration, MembraneDiafiltration
 from .sieving import SieveBend, VibratingScreen
@@ -33,6 +33,7 @@ __all__ = (
     "MultiEffectEvaporator",
     "MixTank",
     "ContinuousStirredTankReactor",
+    "BatchAgitatedReactor",
     "RotaryVacuumFilter",
     "Flash",
     "BinaryDistillation",
