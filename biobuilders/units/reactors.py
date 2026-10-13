@@ -493,17 +493,21 @@ class BatchAgitatedReactor(bst.Unit):
 
             # MultiStream
             mixture = bst.Stream()
-            mixture.phases = 'gl'
+            mixture.phases = ('g','l')
             
             all_ins = gases +  [feed]
 
             mixture.mix_from(all_ins)
+
+            mixture.P = self.operating_P
+            mixture.T = self.operating_T
 
             # Reaction
             self.reaction(mixture)
 
             # Split phases
             effluent, vent = self.outs
+            mixture.vle(P=self.operating_P,T=self.operating_T)
             bst.separations.phase_split(mixture, (vent, effluent))
         else:
             # Ensure no gas stream was provided
@@ -518,11 +522,14 @@ class BatchAgitatedReactor(bst.Unit):
             feed.mix_from(ins)
 
             # Reaction
-            self.reaction(feed)
-
-            # output
             effluent = self.outs[0]
             effluent.copy_like(feed)
+
+            self.reaction(effluent)
+
+            # output T and P
+            effluent.T = self.operating_T
+            effluent.P = self.operating_P
     
     @property
     def V_wf(self):
@@ -566,20 +573,21 @@ class BatchAgitatedReactor(bst.Unit):
         time = self.time                                    # h
         time_loading = self.time_loading                    # h
         time_CIP = self.time_CIP                            # h
+        N_reactors = self.N_reactors
         
-        # Total time
-        total_time = time + time_loading + time_CIP         # h
+        # cycle time
+        cycle_time = time + time_loading + time_CIP         # h
+        delta_t_batch = cycle_time / N_reactors
         
         V_wf = self.V_wf        
         V_max = self.V_max                                  # m3
-        N_reactors = self.N_reactors
         
         # Verify minimun 2 reactores
         if N_reactors < 2:
             raise ValueError("Minimum 2 reactors needed to semicontinuous mode. current: '{}'".format(N_reactors))
         
         # Liquid volume of each reactor
-        V_0 = inputs_F_vol * total_time * 1/(N_reactors-1)
+        V_0 = inputs_F_vol * delta_t_batch
         
         # Total volume of each reactor
         V_total = V_0/V_wf
@@ -597,7 +605,8 @@ class BatchAgitatedReactor(bst.Unit):
         # Add the power utility
         if self.kW_per_m3 is not None:
             volumetric_power = self.kW_per_m3
-            power = volumetric_power * V_0
+            f_overlap = time / delta_t_batch
+            power = f_overlap * volumetric_power * V_0
         else:
             raise ValueError("kW_per_m3 must be provided to calculate power requirements."
                              "In case you have no data, use `agitator_volumetric_power_determination`"
