@@ -17,6 +17,7 @@ from .biomass_CHP import BiomassCHP
 from .boiler import NaturalGasBoiler
 from .pellet import PelletMill
 from .adsorption import GasAdsorptionColumn, LiquidAdsorptionColumn
+from .storage import ProcessVessel
 
 __all__ = (
     "BatchEnzymaticTreatment",
@@ -32,6 +33,7 @@ __all__ = (
     "DrumDryer",
     "MultiEffectEvaporator",
     "MixTank",
+    "ProcessVessel",
     "ContinuousStirredTankReactor",
     "BatchAgitatedReactor",
     "RotaryVacuumFilter",
