@@ -101,6 +101,7 @@ class ContinuousStirredTankReactor(bst.Unit):
               tau: float = None,
               operating_T: float = 298.15,
               operating_P: float = 101325,
+              gas_transfer_efficiency: dict = None,
               kW_per_m3: float = None,
               vent_out: bool = False,
               ):
@@ -111,6 +112,7 @@ class ContinuousStirredTankReactor(bst.Unit):
         self.tau = tau
         self.operating_T = operating_T
         self.operating_P = operating_P
+        self.gas_transfer_efficiency = dict(gas_transfer_efficiency or {})
         self.kW_per_m3 = kW_per_m3
         self.vent_out = vent_out
         
@@ -157,6 +159,13 @@ class ContinuousStirredTankReactor(bst.Unit):
             mixture.phases = 'gl'
             mixture.mix_from(all_inputs)
 
+            # Mass transfer from gas phase to liquid phase
+            for chem, transfer in self.gas_transfer_efficiency.items():
+                chem_flow = mixture.imass['g', chem]
+                chem_transfer = chem_flow * transfer
+                mixture.imass['g', chem] = chem_flow - chem_transfer
+                mixture.imass['l', chem] = chem_transfer
+            
             # React
             mixture.T = self.operating_T
             mixture.P = self.operating_P
@@ -169,6 +178,13 @@ class ContinuousStirredTankReactor(bst.Unit):
             # Mix all input streams
             feed.mix_from(ins)
 
+            # Mass transfer from gas phase to liquid phase
+            for chem, transfer in self.gas_transfer_efficiency.items():
+                chem_flow = mixture.imass['g', chem]
+                chem_transfer = chem_flow * transfer
+                mixture.imass['g', chem] = chem_flow - chem_transfer
+                mixture.imass['l', chem] = chem_transfer
+            
             # React
             effluent = self.outs[0]
             effluent.copy_like(feed)
