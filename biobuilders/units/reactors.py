@@ -102,6 +102,7 @@ class ContinuousStirredTankReactor(bst.Unit):
               operating_T: float = 298.15,
               operating_P: float = 101325,
               gas_transfer_efficiency: dict = None,
+              kW_per_m3_h: float = None,
               kW_per_m3: float = None,
               vent_out: bool = False,
               ):
@@ -114,6 +115,7 @@ class ContinuousStirredTankReactor(bst.Unit):
         self.operating_P = operating_P
         self.gas_transfer_efficiency = dict(gas_transfer_efficiency or {})
         self.kW_per_m3 = kW_per_m3
+        self.kW_per_m3_h = kW_per_m3_h
         self.vent_out = vent_out
         
         # Properties
@@ -242,14 +244,22 @@ class ContinuousStirredTankReactor(bst.Unit):
         Design['Hydraulic retention time'] = tau            # h
         
         # Add the power utility
+        power = 0.
         if self.kW_per_m3 is not None:
             volumetric_power = self.kW_per_m3
-            power = volumetric_power * V_0
+            power_agitation = volumetric_power * V_0
+            power += power_agitation
         else:
             raise ValueError("kW_per_m3 must be provided to calculate power requirements."
                              "In case you have no data, use `agitator_volumetric_power_determination`"
                              "to stimate the volumetric power.")
-        
+
+        gas_streams = sort_streams_by_phases(self.ins,'g')
+        if gas_streams:
+            volumetric_flow_power = self.kW_per_m3_h
+            power_aireation = volumetric_flow_power * sum(s.F_vol for s in gas_streams)
+            power += power_aireation
+
         self.add_power_utility(power)
 
         # Add the heat utility assuming that the process is adiabatic
@@ -456,6 +466,7 @@ class BatchAgitatedReactor(bst.Unit):
               operating_T: float = 298.15,
               operating_P: float = 101325,
               kW_per_m3: float = None,
+              kW_per_m3_h: float = None,
               N_reactors: int = 2,
               vent_out: bool = False
               ):
@@ -470,6 +481,7 @@ class BatchAgitatedReactor(bst.Unit):
         self.operating_P = operating_P
         self.N_reactors = N_reactors
         self.kW_per_m3 = kW_per_m3
+        self.kW_per_m3_h = kW_per_m3_h
         self.vent_out = vent_out
         
         # Attributes
@@ -619,15 +631,23 @@ class BatchAgitatedReactor(bst.Unit):
         self.parallel['Reactor'] = N_reactors
 
         # Add the power utility
+        power = 0.
+        f_overlap = time / delta_t_batch
         if self.kW_per_m3 is not None:
             volumetric_power = self.kW_per_m3
-            f_overlap = time / delta_t_batch
-            power = f_overlap * volumetric_power * V_0
+            power_agitation = f_overlap * volumetric_power * V_0
+            power += power_agitation
         else:
             raise ValueError("kW_per_m3 must be provided to calculate power requirements."
                              "In case you have no data, use `agitator_volumetric_power_determination`"
                              "to stimate the volumetric power.")
-        
+
+        gas_streams = sort_streams_by_phases(self.ins,'g')
+        if gas_streams:
+            volumetric_flow_power = self.kW_per_m3_h
+            power_aireation = volumetric_flow_power * sum(s.F_vol for s in gas_streams)
+            power += power_aireation
+
         self.add_power_utility(power)
 
         # Add the heat utility assuming that the process is adiabatic
