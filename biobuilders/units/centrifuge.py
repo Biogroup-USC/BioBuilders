@@ -234,8 +234,8 @@ class SolidsCentrifuge(SolidsSeparator):
             lb_warning(self, 'Solids loading', ts, 'ton/hr', lb)
         self.design_results['Number of centrifuges'] = ceil(ts/ub)
         self.design_results['Flow rate'] = self.F_vol_in
-        F_mass_in = self.F_mass_in
-        self.power_utility(F_mass_in * self.kWh_per_kg)
+        solid_mass_flow = sum([s.imass[solids].sum() for s in self.ins if not s.isempty()]) # Total solids
+        self.power_utility(solid_mass_flow * self.kWh_per_kg)
     
     def _cost(self):
         solids_loading = self.design_results['Solids loading']
