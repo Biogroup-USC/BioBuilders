@@ -105,6 +105,7 @@ class ContinuousStirredTankReactor(bst.Unit):
               kW_per_m3_h: float = None,
               kW_per_m3: float = None,
               vent_out: bool = False,
+              include_heat_of_reaction: bool = False,
               ):
         """
         """
@@ -117,6 +118,7 @@ class ContinuousStirredTankReactor(bst.Unit):
         self.kW_per_m3 = kW_per_m3
         self.kW_per_m3_h = kW_per_m3_h
         self.vent_out = vent_out
+        self.include_heat_of_reaction = include_heat_of_reaction
         
         # Properties
         self._reactor_load = None
@@ -166,7 +168,7 @@ class ContinuousStirredTankReactor(bst.Unit):
                 chem_flow = mixture.imass['g', chem]
                 chem_transfer = chem_flow * transfer
                 mixture.imass['g', chem] = chem_flow - chem_transfer
-                mixture.imass['l', chem] = chem_transfer
+                mixture.imass['l', chem] += chem_transfer
             
             # React
             mixture.T = self.operating_T
@@ -179,13 +181,6 @@ class ContinuousStirredTankReactor(bst.Unit):
         else:
             # Mix all input streams
             feed.mix_from(ins)
-
-            # Mass transfer from gas phase to liquid phase
-            for chem, transfer in self.gas_transfer_efficiency.items():
-                chem_flow = mixture.imass['g', chem]
-                chem_transfer = chem_flow * transfer
-                mixture.imass['g', chem] = chem_flow - chem_transfer
-                mixture.imass['l', chem] = chem_transfer
             
             # React
             effluent = self.outs[0]
@@ -262,12 +257,14 @@ class ContinuousStirredTankReactor(bst.Unit):
 
         self.add_power_utility(power)
 
-        # Add the heat utility assuming that the process is adiabatic
-        Tf = self.operating_T               # K
-        Ti = load.T                         # K
-        Cp = load.Cp                        # kJ/(kg*K)
-        duty = Cp * (Tf-Ti) * load.F_mass   # kJ/h
-        self.add_heat_utility(duty, T_in = Ti, T_out = Tf)
+        # Add heating utilities
+        duty = self.H_out - self.H_in
+
+        if self.include_heat_of_reaction:
+            duty += self.Hf_out - self.Hf_in
+
+        Tf = self.operating_T
+        self.add_heat_utility(duty, T_in = Tf, T_out = Tf)
 
     @property
     def base_cost(self):
@@ -468,7 +465,8 @@ class BatchAgitatedReactor(bst.Unit):
               kW_per_m3: float = None,
               kW_per_m3_h: float = None,
               N_reactors: int = 2,
-              vent_out: bool = False
+              vent_out: bool = False,
+              include_heat_of_reaction: bool = False,
               ):
         """
         """
@@ -483,7 +481,7 @@ class BatchAgitatedReactor(bst.Unit):
         self.kW_per_m3 = kW_per_m3
         self.kW_per_m3_h = kW_per_m3_h
         self.vent_out = vent_out
-        
+        self.include_heat_of_reaction = include_heat_of_reaction
         # Attributes
         self._reactor_load = None
         self._V_wf = None
@@ -651,10 +649,12 @@ class BatchAgitatedReactor(bst.Unit):
         self.add_power_utility(power)
 
         # Add the heat utility assuming that the process is adiabatic
+        duty = self.H_out - self.H_in
+        if self.include_heat_of_reaction:
+            duty += self.Hf_out - self.Hf_in
+
         Tf = self.operating_T                   # K
-        Ti = feed.T                             # K
-        Duty = feed.Cp * (Tf-Ti) * feed.F_mass  # kJ/h
-        self.add_heat_utility(Duty, T_in = Ti, T_out = Tf)
+        self.add_heat_utility(duty, T_in = Tf, T_out = Tf)
     
     @property
     def base_cost(self):

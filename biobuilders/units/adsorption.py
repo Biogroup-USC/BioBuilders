@@ -44,8 +44,8 @@ def equilibrium_loading_Langmuir_dual_site_isotherm_gas(
     b_term, # Beta term
     q_max,  # Maximum equilibrium loading [mol/kg]
 ):
-    first_term = b_term * q_max * (kb * pi) / (1 + kb * pi)
-    second_term = a_term * q_max * (ka * pi) / (1 + ka * pi)
+    first_term = a_term * q_max * (kb * pi) / (1 + kb * pi)
+    second_term = b_term * q_max * (ka * pi) / (1 + ka * pi)
     return first_term + second_term
 
 # Pressure drop determination [7]
@@ -597,34 +597,47 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
 
         # Utilities
         ## Feed conditioning duty
+        self.feed_heater.T = self.T_ads
         self.feed_heater.simulate(
-            run=False,
-            design_kwargs=dict(duty=heat_feed)
+            run=True,
         )
+        feed_to_bed = self.feed_heater.outs[0]
+
+        self._Q_adsorption = 0.
+        self._Q_bed_cooling = 0.
         
         ## Bed regeneration
-        if self.regeneration:
-            flow_gas = regeneration_fluid.F_mass
-            Cp_gas = regeneration_fluid.Cp     
+        if self.regeneration:    
             Cp_adsorbent = self.adsorbent_properties[self.adsorbent]['specific heat']
-            
-            energy_desorption = na_removed_ads_step * 1000 * abs(self.isosteric_heat)
-            energy_adsorbent = mass_adsorbent * Cp_adsorbent * (self.T_regen - self.T_ads)
 
-            regeneration_interval = self.t_ads
-            heat_required = (energy_desorption + energy_adsorbent) / regeneration_interval
-
-            T_in = self.T_regen + heat_required / (flow_gas * Cp_gas)
-            heat_gas_heater = flow_gas * Cp_gas * (T_in - regeneration_fluid.T)
-
-            self.regen_gas_heater.simulate(
-                run=False,
-                design_kwargs=dict(duty=heat_gas_heater)
+            self._Q_adsorption = (
+                -na_removed_rate * 1000.0 * abs(self.isosteric_heat)
             )
 
-            if T_in > self.T_limit:
+            self._Q_bed_cooling = (
+                -mass_adsorbent * Cp_adsorbent * (self.T_regen - self.T_ads) / self.t_ads
+            )
+
+            bed_enthalpy_gain = (
+                feed_to_bed.H - outlet.H + self._Q_adsorption
+            )
+
+            hot_purge_enthalpy = (
+                spent_fluid.H - bed_enthalpy_gain - self._Q_bed_cooling
+            )
+
+            heater = self.regen_gas_heater
+            heater.H = hot_purge_enthalpy
+            heater.T = None
+            heater.simulate(
+                run=True,
+            )
+
+            hot_purge_temperature = heater.outs[0].T
+            if self.T_limit is not None and hot_purge_temperature > self.T_limit:
                 warn(
-                    f"Temperature of regeneration gas is above the maximum temperature of '{self.adsorbent}'. T_in: {T_in:.2f} | T_limit: {self.T_limit:.2f}"
+                    f"Hot purge temperature ({hot_purge_temperature:.2f} K) "
+                    f"exceeds the adsorbent limit ({self.T_limit:.2f} K)."
                 )
 
     @staticmethod
@@ -668,6 +681,13 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
         if not 2.5 <= length_diameter <= 3.5:
             warn(
                 f"Bed length / diameter ratio is outside the target range [2.5, 3.5]. Current: {length_diameter}"
+            )
+
+        if self._Q_bed_cooling < 0.0:
+            self.add_heat_utility(
+                self._Q_bed_cooling,
+                T_in = self.T_regen,
+                T_out = self.T_ads,
             )
 
         # Bed related results
