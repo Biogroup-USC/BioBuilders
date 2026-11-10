@@ -520,8 +520,6 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
         feed_in = feed.F_mol
         na_in = feed.imol[adsorbate]
 
-        heat_feed = feed.F_mass * feed.Cp * (self.T_ads - feed.T)
-
         # Outlet adsorbate
         na_out = (1-self.adsorbed_fraction) * na_in
         na_out = min(max(na_out,0.),na_in)
@@ -565,7 +563,7 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
         conditioned_feed = bst.Stream()
         conditioned_feed.copy_like(feed)
         conditioned_feed.T = self.T_ads
-        conditioned_feed.P = self.P_ads
+        conditioned_feed.P = P_in
         column_results = self._calculate_bed_geometry_and_pressure_drop(conditioned_feed,mass_adsorbent)
 
         # Outlet stream
@@ -576,6 +574,13 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
         outlet.P = P_out
         outlet.T = self.T_ads
         outlet.imol[adsorbate] = na_out
+
+        # Adsorption heat transferred to the treated gas [kJ/h]
+        self._heat_adsorption_release = (
+            na_removed_rate * 1000.0 * abs(self.isosteric_heat)
+        )
+
+        outlet.H += self._heat_adsorption_release
 
         # Variables considered in _design
         self._M_ads = mass_adsorbent
@@ -610,16 +615,12 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
         if self.regeneration:    
             Cp_adsorbent = self.adsorbent_properties[self.adsorbent]['specific heat']
 
-            self._Q_adsorption = (
-                -na_removed_rate * 1000.0 * abs(self.isosteric_heat)
-            )
-
             self._Q_bed_cooling = (
                 -mass_adsorbent * Cp_adsorbent * (self.T_regen - self.T_ads) / self.t_ads
             )
 
             bed_enthalpy_gain = (
-                feed_to_bed.H - outlet.H + self._Q_adsorption
+                feed_to_bed.H - outlet.H
             )
 
             hot_purge_enthalpy = (
@@ -665,7 +666,7 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
         else:
             P_regen = P_ads
 
-        vessel_pressure = max(max(P_ads, P_regen) - 101325, 0.)
+        vessel_pressure = max(max(P_ads, P_regen), 0.)
 
         self._design_and_cost_pressure_vessel(
             pressure=vessel_pressure,
@@ -673,8 +674,10 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
             length=self._L_vessel_tt,
             pressure_units='Pa',
             length_units='m',
-            n_vessels=self.N_columns
         )
+
+        self.parallel[f"{self.vessel_type} pressure vessel"] = self.N_columns
+        self.parallel['Platform and ladders'] = self.N_columns
 
         # L/D check
         length_diameter = self._L_bed / self._D_col
@@ -723,7 +726,7 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
     @property
     def base_n_cost_vessel(self):
         if self._base_n_cost_vessel is None:
-            self._base_n_cost_vessel = 0.51     # $ [4]
+            self._base_n_cost_vessel = 0.32     # $ [4]
         return self._base_n_cost_vessel
     
     @base_n_cost_vessel.setter
@@ -752,17 +755,26 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
 
     def _cost(self):
         baseline_purchase_costs = self.baseline_purchase_costs
+        design = self.design_results
         
         # Adsorbent cost
-        total_ads = self.design_results["Total adsorbent"]
+        total_ads = design["Total adsorbent"]
         adsorbent_cost_per_kg = self.adsorbent_cost[self.adsorbent]
-        baseline_purchase_costs['Adsorbent initial charge'] = adsorbent_cost_per_kg * total_ads
+        
+        baseline_purchase_costs['Adsorbent initial charge'] = (
+            adsorbent_cost_per_kg * total_ads
+        )
+        self.F_BM['Adsorbent initial charge'] = 1.
+        
         if self.regeneration:
             lifetime = self._default_equipment_lifetime[self.adsorbent]
             self.equipment_lifetime['Adsorbent initial charge'] = lifetime
 
         # Equipment
-        vessel = f"{self.vessel_type} pressure vessel x{self.N_columns}"
+        adsorbent_mass = design["Adsorbent per column"]
+        vessel_purchase_cost = self.base_cost_vessel * (adsorbent_mass/self.base_adsorbent_mass)**self.base_n_cost_vessel
+
+        vessel = f"{self.vessel_type} pressure vessel"
         adsorbent_mass = self.design_results['Adsorbent per column']
         vessel_purchase_cost = self.base_cost_vessel * (adsorbent_mass/self.base_adsorbent_mass)**self.base_n_cost_vessel
         baseline_purchase_costs[vessel] = vessel_purchase_cost
@@ -773,7 +785,7 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
         ## Bare module
         delivery = 0.10                 # - [9]
         installation = 0.90             # Metal tanks [9]
-        instrumentation_Control = 0.50  # - [9]
+        instrumentation_Control = 0.00  # Already included
         piping = 0.68                   # Fluid [9]   
 
         bare_module = (1 + (delivery + installation + instrumentation_Control + piping))
