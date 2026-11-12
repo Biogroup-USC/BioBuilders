@@ -201,10 +201,6 @@ def _get_levels(Zm, levels=None, n_round: int = 1):
     
     else:
         levels_arr = np.asarray(levels, dtype=float)
-    
-    print("levels_arr:", levels_arr)
-    print("Z min:", np.nanmin(Zm))
-    print("Z max:", np.nanmax(Zm))
 
     return np.round(levels_arr, n_round)
 
