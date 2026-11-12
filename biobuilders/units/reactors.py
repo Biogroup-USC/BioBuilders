@@ -127,7 +127,7 @@ class ContinuousStirredTankReactor(bst.Unit):
         self._base_cost = None
         self._base_volume = None
         self._base_n_cost = None
-        self._CE_base = None
+        self._base_CE = None
 
     @property
     def reactor_load(self):
@@ -271,7 +271,7 @@ class ContinuousStirredTankReactor(bst.Unit):
         """
         """
         if self._base_cost is None:
-            self._base_cost = 75000.0   # USD
+            self._base_cost = 37_500.   # USD
         return self._base_cost
     
     @base_cost.setter
@@ -309,18 +309,18 @@ class ContinuousStirredTankReactor(bst.Unit):
         self._base_n_cost = value
     
     @property
-    def CE_base(self):
+    def base_CE(self):
         """
         """
-        if self._CE_base is None:
-            self._CE_base = 1000.0
-        return self._CE_base
+        if self._base_CE is None:
+            self._base_CE = 1000.0
+        return self._base_CE
     
-    @CE_base.setter
-    def CE_base(self, value):
+    @base_CE.setter
+    def base_CE(self, value):
         """
         """
-        self._CE_base = value
+        self._base_CE = value
     
     def _cost(self):
         """
@@ -331,8 +331,8 @@ class ContinuousStirredTankReactor(bst.Unit):
         # Calculate the baseline purchase cost for each reactor
         ## The base cost accounts for jacketed agitated vessel. 
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Reactor_Purchase_Cost = self.base_cost * (V_reactor/self.base_volume)**self.base_n_cost        
-        self.baseline_purchase_costs['Reactor'] = Reactor_Purchase_Cost
+        reactor = self.base_cost * (V_reactor/self.base_volume)**self.base_n_cost        
+        self.baseline_purchase_costs['Reactor'] = reactor
         
         ## The material, pressure and temperature factor are assumed to be 1
         self.F_D['Reactor'] = self.F_M['Reactor'] = self.F_P['Reactor'] = 1
@@ -341,17 +341,19 @@ class ContinuousStirredTankReactor(bst.Unit):
         ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
         ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
         ### Factors
-        Delivery = 0.10
-        Installation = 0.60             # Metal tanks
-        Instrumentation_Control = 0.50
-        Piping = 0.31                   # Solid-Fluid   
+        delivery = 0.10
+        installation = 0.60                             # Metal tanks
+        instrumentation_control = 0.26 * (1 + delivery)
+        piping = 0.31                                   # Solid-Fluid   
+        
         ### Calculate the bare module
-        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
-        self.F_BM['Reactor'] = Bare_Module
+        F = self.F_D['Reactor'] * self.F_M['Reactor'] * self.F_P['Reactor']
+        F_BM_eq = 1 + (delivery + installation + instrumentation_control + piping) * F
+        self.F_BM['Reactor'] = F_BM_eq
 
         ## Scale the costs using CEPCI
-        CE_base = self.CE_base
-        self.baseline_purchase_costs['Reactor'] *= bst.CE/CE_base
+        base_CE = self.base_CE
+        self.baseline_purchase_costs['Reactor'] *= bst.CE/base_CE
 
 class BatchAgitatedReactor(bst.Unit):
     """
@@ -482,6 +484,7 @@ class BatchAgitatedReactor(bst.Unit):
         self.kW_per_m3_h = kW_per_m3_h
         self.vent_out = vent_out
         self.include_heat_of_reaction = include_heat_of_reaction
+        
         # Attributes
         self._reactor_load = None
         self._V_wf = None
@@ -489,7 +492,7 @@ class BatchAgitatedReactor(bst.Unit):
         self._base_cost = None
         self._base_volume = None
         self._base_n_cost = None
-        self._CE_base = None
+        self._base_CE = None
 
     @property
     def reactor_load(self):
@@ -661,7 +664,7 @@ class BatchAgitatedReactor(bst.Unit):
         """
         """
         if self._base_cost is None:
-            self._base_cost = 75000.0   # USD
+            self._base_cost = 37_500.0   # USD
         return self._base_cost
     
     @base_cost.setter
@@ -699,18 +702,18 @@ class BatchAgitatedReactor(bst.Unit):
         self._base_n_cost = value
     
     @property
-    def CE_base(self):
+    def base_CE(self):
         """
         """
-        if self._CE_base is None:
-            self._CE_base = 1000.0
-        return self._CE_base
+        if self._base_CE is None:
+            self._base_CE = 1000.0
+        return self._base_CE
     
-    @CE_base.setter
-    def CE_base(self, value):
+    @base_CE.setter
+    def base_CE(self, value):
         """
         """
-        self._CE_base = value
+        self._base_CE = value
     
     def _cost(self):
         """
@@ -721,8 +724,8 @@ class BatchAgitatedReactor(bst.Unit):
         # Calculate the baseline purchase cost for each reactor
         ## The base cost accounts for jacketed agitated vessel. 
         ## Reference: Rules of the Thumb in Engineering Practice: Appendix D / DOI: 10.1002/9783527611119.
-        Reactor_Purchase_Cost = self.base_cost * (V_reactor/self.base_volume)**self.base_n_cost        
-        self.baseline_purchase_costs['Reactor'] = Reactor_Purchase_Cost
+        reactor = self.base_cost * (V_reactor/self.base_volume)**self.base_n_cost        
+        self.baseline_purchase_costs['Reactor'] = reactor
         
         ## The material, pressure and temperature factor are assumed to be 1
         self.F_D['Reactor'] = self.F_M['Reactor'] = self.F_P['Reactor'] = 1
@@ -731,14 +734,16 @@ class BatchAgitatedReactor(bst.Unit):
         ## piping, instrumentation and controls. The percentages are obtained from the Chapter 6 of the next book:
         ## Peters, Max S, Klaus D Timmerhaus, and Ronald E West. Plant Design and Economics for Chemical Engineers. 5th ed International. New York: McGraw-Hill, 2004.
         ### Factors
-        Delivery = 0.10
-        Installation = 0.60             # Metal tanks
-        Instrumentation_Control = 0.50
-        Piping = 0.31                   # Solid-Fluid   
+        delivery = 0.10
+        installation = 0.60             # Metal tanks
+        instrumentation_control = 0.26 * (1 + delivery)
+        piping = 0.31                   # Solid-Fluid   
+        
         ### Calculate the bare module
-        Bare_Module = (1 + (Delivery + Installation + Instrumentation_Control + Piping))
-        self.F_BM['Reactor'] = Bare_Module
+        F = self.F_D['Reactor'] * self.F_M['Reactor'] * self.F_P['Reactor']
+        F_BM_eq = 1 + (delivery + installation + instrumentation_control + piping) * F
+        self.F_BM['Reactor'] = F_BM_eq
 
         ## Scale the costs using CEPCI
-        CE_Base = self.CE_base
-        self.baseline_purchase_costs['Reactor'] *= bst.CE/CE_Base
+        base_CE = self.base_CE
+        self.baseline_purchase_costs['Reactor'] *= bst.CE/base_CE

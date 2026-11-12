@@ -67,7 +67,7 @@ class ProcessVessel(bst.Unit):
         """
         """
         if self._base_cost is None:
-            self._base_cost = 17000.0   # USD
+            self._base_cost = 37_500.0   # USD
         return self._base_cost
     
     @base_cost.setter
@@ -81,7 +81,7 @@ class ProcessVessel(bst.Unit):
         """
         """
         if self._base_volume is None:
-            self._base_volume = 1.5     # m3
+            self._base_volume = 3.     # m3
         return self._base_volume
 
     @base_volume.setter
@@ -95,7 +95,7 @@ class ProcessVessel(bst.Unit):
         """
         """
         if self._base_n_cost is None:
-            self._base_n_cost = 0.93
+            self._base_n_cost = 0.53
         return self._base_n_cost
 
     @base_n_cost.setter
