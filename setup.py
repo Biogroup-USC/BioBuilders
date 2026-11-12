@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='biobuilders',
-    version='0.4.1',
+    version='0.4.2',
     author= "Isaac, Andrea",
     author_email= "isaacleis.garrote@usc.es",
     description = 'Library to perform biorefinery and value chain assestment',  

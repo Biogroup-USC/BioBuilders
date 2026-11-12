@@ -224,8 +224,8 @@ class ContourAnalysis:
                 if reset_each_run:
                     px.setter(float(restore_px))
                     py.setter(float(restore_py))
-                    self.system.empty_recycles()
                     self.system.simulate()
+                    self.system.empty_recycles()
 
                 s0 = time.perf_counter()
                 try:
