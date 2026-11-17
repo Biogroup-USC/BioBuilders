@@ -118,7 +118,7 @@ class MixTank(Tank):
         """
         """
         if self._base_cost is None:
-            self._base_cost = 75000.0   # USD
+            self._base_cost = 37_500.0   # USD
         return self._base_cost
     
     @base_cost.setter
