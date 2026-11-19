@@ -726,7 +726,7 @@ class GasAdsorptionColumn(PressureVessel, bst.Unit):    #TODO Add PSA and the sa
     @property
     def base_n_cost_vessel(self):
         if self._base_n_cost_vessel is None:
-            self._base_n_cost_vessel = 0.32     # $ [4]
+            self._base_n_cost_vessel = 0.51     # $ [4]
         return self._base_n_cost_vessel
     
     @base_n_cost_vessel.setter
